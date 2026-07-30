@@ -1,0 +1,21 @@
+Motor de recomendaciones con IA &
+redistribución de demanda
+
+Problema :Los sistemas de recomendación
+priorizan la conversión y satisfacción
+del usuario.
+Concentración de visitantes en destinos y experiencias ya populares.
+Incremento de fenómenos de overtourism y masificación turística.
+Mayor presión sobre infraestructuras y recursos del destino.
+Distribución desigual de los flujos turísticos y del gasto.
+Menor impacto económico en zonas y activos con potencial de crecimiento.
+
+Objetivo:
+Motor de recomendación turística impulsado por IA.
+Personalización de experiencias según intereses y contexto del
+viajero.
+Integración de criterios de sostenibilidad en las
+recomendaciones.
+Redistribución inteligente de los flujos turísticos.
+Promoción de destinos alternativos y zonas menos saturadas.
+Impulso de temporadas bajas y productos turísticos emergentes.
