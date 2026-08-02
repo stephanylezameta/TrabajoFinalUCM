@@ -1,0 +1,215 @@
+# =============================================================================
+# Configuración global del Motor de Recomendación Turística TUI
+# =============================================================================
+
+# ---------------------------------------------------------------------------
+# Scraping
+# ---------------------------------------------------------------------------
+scraping:
+  # Frecuencia de refresco: diaria para fuentes primarias, mensual para estadísticas
+  refresh_interval_hours: 24
+  max_refresh_interval_days: 7
+
+  # Política de reintentos (DECISIÓN-001)
+  retry:
+    max_attempts: 3
+    backoff_seconds: [1, 2, 4]
+
+  # Mercados TUI (DECISIÓN-003)
+  tui_markets:
+    es:
+      base_url: "https://www.tui.es"
+      language: "es"
+      currency: "EUR"
+    de:
+      base_url: "https://www.tui.com"
+      language: "de"
+      currency: "EUR"
+    uk:
+      base_url: "https://www.tui.co.uk"
+      language: "en"
+      currency: "GBP"
+      # Tipo de cambio GBP → EUR configurable
+      gbp_to_eur_rate: 1.17
+
+  # Selenium headless
+  selenium:
+    headless: true
+    page_load_timeout_seconds: 30
+    implicit_wait_seconds: 5
+    user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+
+  # Reddit (DECISIÓN-004)
+  reddit:
+    subreddits:
+      - "travel"
+      - "solotravel"
+      - "backpacking"
+      - "Flights"
+      - "TravelHacks"
+      - "vacation"
+    posts_per_subreddit: 100
+    rate_limit_per_minute: 100
+
+  # Fuentes estadísticas
+  eurostat:
+    base_url: "https://ec.europa.eu/eurostat/api/dissemination/statistics/1.0"
+    dataset_tourism: "tour_occ_nim"
+  ine:
+    base_url: "https://servicios.ine.es/wstempus/js/ES"
+    operation_id: "EOH"
+
+  # Umbral de exclusión por atributos vacíos (RF-1.8)
+  exclusion_threshold: 0.30
+
+# ---------------------------------------------------------------------------
+# Embeddings (DECISIÓN-006, 007, 008)
+# ---------------------------------------------------------------------------
+embeddings:
+  # Modelo principal — pendiente DECISIÓN-006b
+  model_name: "paraphrase-multilingual-MiniLM-L12-v2"
+  model_version: "1.0"
+  model_source: "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
+  embedding_dim: 384  # 384 para MiniLM, 1024 para e5-large
+
+  # Tamaño de lote para embeddings masivos (NF-2.3)
+  batch_size: 64
+
+  # Fusión semántica paquete + reseñas (DECISIÓN-007)
+  fusion:
+    package_weight: 0.6
+    review_weight: 0.4
+
+  # Pesos de atributos numéricos en el vector híbrido (DECISIÓN-008)
+  hybrid_weights:
+    precio_norm: 1.0
+    duracion_norm: 0.5
+    nivel_ocupacion: 1.5
+    accesibilidad_norm: 0.8
+    estrellas_norm: 0.7
+    num_valoraciones_norm: 0.6
+    sostenibilidad: 1.0
+
+# ---------------------------------------------------------------------------
+# Modelo Recomendador (Bloque 4)
+# ---------------------------------------------------------------------------
+modelo:
+  # Semilla aleatoria global (NF-3.1)
+  random_seed: 42
+
+  # Partición train/test
+  test_size: 0.20
+
+  # LightFM
+  lightfm:
+    loss: "warp"
+    epochs: 30
+    num_threads: 4
+    num_components: 64
+
+  # Cosine baseline
+  cosine:
+    interaction_weights:
+      valoracion: 1.0
+      reserva: 0.8
+      visualizacion: 0.3
+
+# ---------------------------------------------------------------------------
+# TDRS — Tourism Demand Redistribution Score (RF-6.1, 6.2)
+# ---------------------------------------------------------------------------
+tdrs:
+  # Pesos w1..w8; Σ|wi| debe ser 1.0
+  pesos:
+    w1_afinidad: 0.20
+    w2_capacidad: 0.10
+    w3_accesibilidad: 0.10
+    w4_impacto_local: 0.10
+    w5_temporada_baja: 0.15
+    w6_diversificacion: 0.10
+    w7_ocupacion: 0.15
+    w8_sensibilidad_ambiental: 0.10
+
+  # Umbral de ocupación máxima (RF-6.4)
+  ocupacion_maxima_threshold: 0.85
+
+# ---------------------------------------------------------------------------
+# Re-ranking (RF-7.1, 7.2, 7.5)
+# ---------------------------------------------------------------------------
+reranking:
+  k_recomendaciones: 10
+
+  escenarios:
+    tradicional:
+      alpha: 1.0
+      beta: 0.0
+      gamma: 0.0
+      delta: 0.0
+      lambda_sat: 0.0
+    redistribucion_moderada:
+      alpha: 0.5
+      beta: 0.2
+      gamma: 0.1
+      delta: 0.1
+      lambda_sat: 0.1
+    redistribucion_intensiva:
+      alpha: 0.3
+      beta: 0.3
+      gamma: 0.15
+      delta: 0.15
+      lambda_sat: 0.1
+
+  # Cobertura mínima de destinos distintos en ranking intensivo (RF-7.3)
+  min_destinos_distintos_pct: 0.30
+
+# ---------------------------------------------------------------------------
+# LLM (Bloque 5)
+# ---------------------------------------------------------------------------
+llm:
+  model_name: "gpt-4o-mini"
+  model_version: "2024-07-18"
+  api_timeout_seconds: 10
+  max_tokens_respuesta: 300
+
+  # Presupuesto de tokens
+  budget:
+    max_tokens_por_llamada: 800
+    alerta_tokens_totales: 100000
+
+  # Umbral TDRS para mención de sostenibilidad (RF-8.3)
+  tdrs_sostenibilidad_threshold: 0.6
+
+  fallback:
+    activar_automaticamente: true
+
+# ---------------------------------------------------------------------------
+# Base de datos (DECISIÓN-009)
+# ---------------------------------------------------------------------------
+bd:
+  # URL configurable vía variable de entorno DATABASE_URL
+  default_url: "sqlite:///data/tui_recomendador.db"
+  echo_sql: false
+  pool_size: 5
+  max_overflow: 10
+
+# ---------------------------------------------------------------------------
+# Detección de oportunidades de mercado (RF-10.2)
+# ---------------------------------------------------------------------------
+oportunidades:
+  umbral_indicador: 0.20
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+logging:
+  nivel: "INFO"
+  fichero: "logs/pipeline.log"
+  formato: "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
+
+# ---------------------------------------------------------------------------
+# API (FastAPI)
+# ---------------------------------------------------------------------------
+api:
+  host: "0.0.0.0"
+  port: 8000
+  reload: false
+  latencia_alerta_factor: 2.0  # Alerta si latencia > 2x P95 (NF-4.2)

@@ -1,0 +1,246 @@
+{
+  "pbtResults": {},
+  "executionHistory": {
+    "1.1 Crear estructura de carpetas y configuración base del proyecto": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785669557938
+      },
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785669641104
+      }
+    ],
+    "1.2 Implementar los modelos de datos SQLAlchemy y la capa de base de datos": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785669645061
+      },
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670553093
+      }
+    ],
+    "1.3 Implementar el módulo `DataCleaner` (limpiador de datos)": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785669645880
+      },
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670153305
+      }
+    ],
+    "1.6 Implementar los scrapers de TUI (tres mercados)": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670559595
+      },
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670566803
+      },
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785674320198
+      }
+    ],
+    "1.7 Implementar los scrapers de fuentes secundarias y terciarias": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670559709
+      },
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785674325500
+      },
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785674900737
+      }
+    ],
+    "1.8 Implementar el `ScraperOrchestrator` y el script de ejecución": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670559819
+      },
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785674326700
+      },
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785674901805
+      }
+    ],
+    "2. Checkpoint Bloque 1 — Verificar pipeline de ingestión": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670559921
+      }
+    ],
+    "3.1 Implementar `TextEmbedder` con soporte multilingüe": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670560011
+      }
+    ],
+    "3.3 Implementar `ReviewAggregator`, `SemanticFuser` y `HybridVectorBuilder`": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670560106
+      }
+    ],
+    "3.4 Implementar la capa de almacenamiento vectorial (Chroma)": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670560190
+      }
+    ],
+    "4. Checkpoint Bloque 2 — Verificar generación de embeddings": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670560278
+      }
+    ],
+    "5.1 Implementar el generador de usuarios sintéticos": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670560385
+      }
+    ],
+    "5.2 Implementar los modelos Pydantic y la app FastAPI": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670560465
+      }
+    ],
+    "6.1 Implementar el modelo baseline de afinidad por similitud de coseno": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670560548
+      }
+    ],
+    "6.2 Implementar el modelo avanzado de afinidad con LightFM": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670560628
+      }
+    ],
+    "6.4 Implementar el `TDRSCalculator`": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670560715
+      }
+    ],
+    "6.6 Implementar el `ReRankingEngine` y `ExplainabilityBuilder`": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670560799
+      }
+    ],
+    "6.8 Implementar `MarketOpportunityDetector` y `TerritorialImpactSimulator`": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670560886
+      }
+    ],
+    "6.9 Implementar la evaluación y comparación de modelos": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670560977
+      }
+    ],
+    "7. Checkpoint Bloque 4 — Verificar núcleo algorítmico": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670561072
+      }
+    ],
+    "8.1 Implementar `LLMAdapter` con gestión de errores y fallback": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670561172
+      }
+    ],
+    "8.2 Implementar `PromptBuilder` y `FallbackTemplateEngine`": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670561263
+      }
+    ],
+    "8.3 Implementar `LLMResponseValidator`, `TokenCounter` y `UsageLogger`": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670561348
+      }
+    ],
+    "9.1 Implementar `APIClient` y configuración de la app Streamlit": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670561433
+      }
+    ],
+    "9.2 Implementar el formulario de perfil y la comparativa de escenarios (`App_Usuario`)": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670561523
+      }
+    ],
+    "9.3 Implementar el `Dashboard_TUI`": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670561607
+      }
+    ],
+    "10. Checkpoint Final — Verificar sistema completo": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785670561701
+      }
+    ],
+    "1. Bloque 1 — Scraping y Limpieza de Datos": [
+      {
+        "executionId": "3784c9d0-d651-4ff8-b64b-62591b1536fc",
+        "chatSessionId": "sess_a8904469-7a02-404e-920c-529d28eafcfd",
+        "timestamp": 1785674901891
+      }
+    ]
+  }
+}

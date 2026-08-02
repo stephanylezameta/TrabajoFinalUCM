@@ -1,6 +1,6 @@
 # Documento de Requisitos
 
-## Introducción
+## Introduction
 
 El presente documento especifica los requisitos funcionales y no funcionales del **Motor de Recomendación Turística con IA** desarrollado para TUI como Trabajo de Fin de Máster. El sistema combina personalización del viajero, criterios de sostenibilidad y redistribución inteligente de flujos turísticos para recomendar paquetes all-inclusive (vuelo + hotel + destino) en zonas del Mediterráneo y el Caribe.
 
@@ -34,9 +34,9 @@ El alcance del prototipo abarca: recolección de datos mediante scraping, proces
 
 ---
 
-## Requisitos
+## Requirements
 
-### Requisito 1: Extracción de datos de paquetes turísticos
+### Requirement 1: Extracción de datos de paquetes turísticos
 
 **User Story:** Como ingeniero de datos, quiero extraer automáticamente información de paquetes turísticos de la web de TUI y fuentes públicas, para disponer de un catálogo actualizado de experiencias del Mediterráneo y el Caribe con el que entrenar y operar el modelo.
 
@@ -52,7 +52,7 @@ El alcance del prototipo abarca: recolección de datos mediante scraping, proces
 8. IF un registro carece de más del 30% de sus atributos obligatorios tras la limpieza, THEN THE Limpiador SHALL marcarlo como inválido y SHALL excluirlo del conjunto de datos de entrenamiento, registrando el motivo de exclusión.
 
 
-### Requisito 2: Generación de perfiles de usuario
+### Requirement 2: Generación de perfiles de usuario
 
 **User Story:** Como científico de datos, quiero construir perfiles de viajero a partir de datos reales (reseñas, comportamiento de reserva) y usuarios sintéticos generados, para disponer de datos suficientes con los que entrenar el modelo recomendador en un contexto de TFM.
 
@@ -65,7 +65,7 @@ El alcance del prototipo abarca: recolección de datos mediante scraping, proces
 5. IF dos Perfiles_Viajero presentan valores idénticos en todos sus atributos, THEN THE Sistema SHALL conservar únicamente uno de ellos y SHALL registrar el número de duplicados eliminados.
 
 
-### Requisito 3: Generación de embeddings y representación semántica
+### Requirement 3: Generación de embeddings y representación semántica
 
 **User Story:** Como científico de datos, quiero convertir las descripciones textuales de paquetes y las reseñas de usuarios en representaciones vectoriales, para que el modelo pueda capturar similitudes semánticas entre experiencias y preferencias.
 
@@ -79,7 +79,7 @@ El alcance del prototipo abarca: recolección de datos mediante scraping, proces
 6. FOR ALL pares de descripciones de Paquetes semánticamente equivalentes (mismo destino, misma categoría, misma temporada), el Sistema SHALL producir vectores de embedding cuya similitud coseno sea superior a 0,85.
 
 
-### Requisito 4: Almacenamiento y gestión de datos (Data Engineering)
+### Requirement 4: Almacenamiento y gestión de datos (Data Engineering)
 
 **User Story:** Como ingeniero de datos, quiero centralizar todos los datos del sistema en una base de datos estructurada, para garantizar consistencia, trazabilidad y eficiencia en el acceso durante el entrenamiento y la inferencia.
 
@@ -93,7 +93,7 @@ El alcance del prototipo abarca: recolección de datos mediante scraping, proces
 6. IF la conexión con el Repositorio falla durante una operación de escritura, THEN THE Sistema SHALL reintentar la operación un máximo de 3 veces con intervalos exponenciales de 1, 2 y 4 segundos, y SHALL registrar el fallo definitivo si los 3 reintentos fallan.
 
 
-### Requisito 5: Modelo de Afinidad Usuario-Experiencia
+### Requirement 5: Modelo de Afinidad Usuario-Experiencia
 
 **User Story:** Como científico de datos, quiero calcular una puntuación de afinidad entre cada viajero y cada paquete turístico, para disponer de una señal base de relevancia personalizada sobre la que aplicar el TDRS.
 
@@ -108,7 +108,7 @@ El alcance del prototipo abarca: recolección de datos mediante scraping, proces
 7. FOR ALL usuarios con Perfiles_Viajero idénticos, THE Modelo_Afinidad SHALL producir rankings de Afinidad idénticos (propiedad determinista).
 
 
-### Requisito 6: Cálculo del Tourism Demand Redistribution Score (TDRS)
+### Requirement 6: Cálculo del Tourism Demand Redistribution Score (TDRS)
 
 **User Story:** Como investigador de sostenibilidad turística, quiero calcular el TDRS de cada experiencia candidata para un usuario, para evaluar si la recomendación es adecuada desde la perspectiva de redistribución territorial y sostenibilidad.
 
@@ -124,7 +124,7 @@ El alcance del prototipo abarca: recolección de datos mediante scraping, proces
 6. FOR ALL configuraciones de pesos en las que w₁ > 0 y w₇ > 0, el TDRS de un Paquete con Afinidad máxima (1,0) y Ocupación máxima (1,0) SHALL ser menor que el TDRS del mismo Paquete con Afinidad máxima y Ocupación mínima (0,0), manteniendo constantes el resto de variables.
 
 
-### Requisito 7: Re-ranking dinámico y generación del ranking final
+### Requirement 7: Re-ranking dinámico y generación del ranking final
 
 **User Story:** Como product manager de TUI, quiero que el sistema produzca un ranking final de recomendaciones que equilibre la relevancia para el usuario con los objetivos de redistribución y sostenibilidad, para poder comparar distintas estrategias de recomendación.
 
@@ -141,7 +141,7 @@ El alcance del prototipo abarca: recolección de datos mediante scraping, proces
 7. WHEN el Score_Final de dos Experiencias difiere en menos de 0,001, THE Motor_Reranking SHALL resolver el empate por orden alfabético del identificador de Experiencia para garantizar resultados reproducibles.
 
 
-### Requisito 8: Integración con LLM para generación de lenguaje natural
+### Requirement 8: Integración con LLM para generación de lenguaje natural
 
 **User Story:** Como viajero, quiero recibir una explicación en lenguaje natural de por qué se me recomienda cada paquete, para entender el razonamiento del sistema y sentir que la recomendación está personalizada para mí.
 
@@ -155,7 +155,7 @@ El alcance del prototipo abarca: recolección de datos mediante scraping, proces
 6. THE LLM_Adapter SHALL aceptar como parámetro configurable el nombre y versión del modelo LLM a utilizar, sin requerir modificación del código fuente.
 
 
-### Requisito 9: Explicabilidad de las recomendaciones
+### Requirement 9: Explicabilidad de las recomendaciones
 
 **User Story:** Como viajero, quiero conocer los factores concretos que determinan cada recomendación, para poder evaluar si se ajusta a mis preferencias y confiar en el sistema.
 
@@ -167,7 +167,7 @@ El alcance del prototipo abarca: recolección de datos mediante scraping, proces
 4. THE Sistema SHALL generar la explicación de cada recomendación en menos de 200 ms adicionales al tiempo de generación del ranking.
 
 
-### Requisito 10: Detección de oportunidades de mercado para TUI
+### Requirement 10: Detección de oportunidades de mercado para TUI
 
 **User Story:** Como analista de TUI, quiero identificar destinos infrautilizados con potencial de demanda latente, para orientar estrategias comerciales hacia productos y zonas con mayor capacidad de absorción de visitantes.
 
@@ -180,7 +180,7 @@ El alcance del prototipo abarca: recolección de datos mediante scraping, proces
 5. THE Sistema SHALL asociar a cada destino con oportunidad el perfil de usuario más frecuentemente afín a ese destino, para facilitar la segmentación en campañas comerciales.
 
 
-### Requisito 11: Simulación de impacto territorial
+### Requirement 11: Simulación de impacto territorial
 
 **User Story:** Como investigador, quiero comparar la distribución de la demanda turística bajo distintas estrategias de recomendación, para cuantificar el impacto del motor redistributivo frente a un sistema tradicional.
 
@@ -193,7 +193,7 @@ El alcance del prototipo abarca: recolección de datos mediante scraping, proces
 5. THE Sistema SHALL completar la simulación sobre 500 usuarios en menos de 60 segundos en un entorno de ejecución con al menos 4 núcleos de CPU.
 
 
-### Requisito 12: Aplicación de usuario final (App_Usuario)
+### Requirement 12: Aplicación de usuario final (App_Usuario)
 
 **User Story:** Como viajero, quiero acceder a una aplicación web donde introducir mis preferencias y recibir recomendaciones de paquetes turísticos personalizadas, para decidir mi próximo viaje con TUI de forma sencilla.
 
@@ -207,7 +207,7 @@ El alcance del prototipo abarca: recolección de datos mediante scraping, proces
 6. IF el backend no está disponible, THEN THE App_Usuario SHALL mostrar un mensaje de error comprensible al usuario y SHALL registrar el fallo en el log de la aplicación.
 
 
-### Requisito 13: Dashboard analítico para TUI (Dashboard_TUI)
+### Requirement 13: Dashboard analítico para TUI (Dashboard_TUI)
 
 **User Story:** Como analista de TUI, quiero acceder a un dashboard con métricas de redistribución, diversidad y oportunidades de mercado, para monitorizar el comportamiento del motor y orientar decisiones estratégicas.
 
@@ -221,7 +221,7 @@ El alcance del prototipo abarca: recolección de datos mediante scraping, proces
 6. THE Dashboard_TUI SHALL permitir exportar todas las métricas mostradas en formato CSV con un único clic.
 
 
-### Requisito 14: Evaluación y comparación de modelos
+### Requirement 14: Evaluación y comparación de modelos
 
 **User Story:** Como científico de datos, quiero evaluar y comparar sistemáticamente las variantes del modelo recomendador, para seleccionar la configuración que mejor equilibra relevancia, diversidad y redistribución.
 
