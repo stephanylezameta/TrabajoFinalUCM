@@ -7,8 +7,8 @@ Exportaciones públicas disponibles mediante import directo:
 
 Exportaciones lazy (se importan al acceder por primera vez):
     - TUISpider, calcular_temporada, crear_spider_es/de/uk (requiere selenium)
-    - TripAdvisorScraper (requiere bs4)
-    - RedditCollector (requiere praw)
+    - TripAdvisorScraper (requiere selenium)
+    - RedditCollector (requiere selenium)
     - BookingOccupancyScraper (requiere selenium)
     - StatisticsClient (requiere requests)
     - ScraperOrchestrator, ExtractionReport

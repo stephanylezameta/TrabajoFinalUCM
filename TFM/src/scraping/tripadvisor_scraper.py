@@ -1,7 +1,7 @@
 """
 Scraper de reseñas de TripAdvisor para destinos turísticos.
 
-Extrae reseñas públicas mediante BeautifulSoup + requests, detecta el idioma
+Extrae reseñas públicas mediante Selenium (Chrome headless), detecta el idioma
 con langdetect y devuelve registros normalizados listos para persistir.
 
 Requisitos cubiertos: RF-1.7 (fuentes externas de reseñas)
@@ -10,53 +10,107 @@ Requisitos cubiertos: RF-1.7 (fuentes externas de reseñas)
 from __future__ import annotations
 
 import logging
+import re
+import time
 from datetime import datetime
 from typing import Any
 
-import requests
-from bs4 import BeautifulSoup
-
 logger = logging.getLogger(__name__)
+
+# Importación condicional de Selenium para que los tests no fallen sin él
+try:
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.common.by import By
+    from selenium.webdriver.support import expected_conditions as EC
+    from selenium.webdriver.support.ui import WebDriverWait
+
+    SELENIUM_DISPONIBLE = True
+except ImportError:
+    SELENIUM_DISPONIBLE = False
+    logger.debug(
+        "TripAdvisorScraper: Selenium no está instalado. "
+        "El scraper retornará listas vacías."
+    )
 
 
 class TripAdvisorScraper:
     """Scraper de reseñas de TripAdvisor para un destino turístico.
 
-    Realiza búsquedas en TripAdvisor y extrae el texto, puntuación y fecha
-    de las reseñas públicas disponibles. Es robusto ante fallos de red:
-    nunca lanza excepciones no controladas, devuelve lista vacía si falla.
+    Utiliza Selenium con Chrome headless para navegar TripAdvisor,
+    buscar un destino y extraer reseñas con texto, puntuación y fecha.
+    Es robusto ante fallos de red o del navegador: nunca lanza
+    excepciones no controladas, devuelve lista vacía si falla.
 
     Attributes:
-        base_url: URL base de TripAdvisor para búsquedas.
-        timeout: Tiempo máximo de espera por petición HTTP en segundos.
-        headers: Cabeceras HTTP utilizadas en las peticiones.
+        timeout: Tiempo máximo de espera para carga de elementos en segundos.
+        headless: Si True, ejecuta Chrome sin interfaz gráfica.
     """
 
     BASE_URL = "https://www.tripadvisor.es"
 
-    def __init__(self, timeout: int = 15) -> None:
-        """Inicializa el scraper con configuración de timeout y cabeceras.
+    def __init__(self, timeout: int = 15, headless: bool = True) -> None:
+        """Inicializa el scraper con configuración de timeout.
 
         Args:
-            timeout: Tiempo máximo de espera por petición HTTP en segundos.
+            timeout: Tiempo máximo de espera para carga de elementos (segundos).
+            headless: Ejecutar Chrome sin interfaz gráfica.
         """
         self.timeout = timeout
-        self.headers: dict[str, str] = {
-            "User-Agent": (
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                "AppleWebKit/537.36 (KHTML, like Gecko) "
-                "Chrome/120.0.0.0 Safari/537.36"
-            ),
-            "Accept-Language": "es-ES,es;q=0.9,en;q=0.8",
-        }
+        self.headless = headless
+        self.user_agent = (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/120.0.0.0 Safari/537.36"
+        )
+
+    def _crear_driver(self) -> Any | None:
+        """Crea e inicializa un WebDriver de Chrome con opciones configuradas.
+
+        Returns:
+            Instancia de webdriver.Chrome configurada, o None si falla.
+        """
+        if not SELENIUM_DISPONIBLE:
+            logger.warning(
+                "TripAdvisorScraper: Selenium no disponible, no se puede crear driver."
+            )
+            return None
+
+        try:
+            opciones = Options()
+            if self.headless:
+                opciones.add_argument("--headless=new")
+            opciones.add_argument("--no-sandbox")
+            opciones.add_argument("--disable-dev-shm-usage")
+            opciones.add_argument(f"--user-agent={self.user_agent}")
+            opciones.add_argument("--disable-blink-features=AutomationControlled")
+            opciones.add_argument("--disable-gpu")
+            opciones.add_argument("--window-size=1920,1080")
+            opciones.add_argument("--lang=es-ES")
+            opciones.add_experimental_option(
+                "excludeSwitches", ["enable-automation"]
+            )
+
+            driver = webdriver.Chrome(options=opciones)
+            driver.set_page_load_timeout(self.timeout * 2)
+            driver.implicitly_wait(3)
+
+            logger.debug("TripAdvisorScraper: WebDriver creado correctamente.")
+            return driver
+
+        except Exception as exc:
+            logger.warning(
+                "TripAdvisorScraper: no se pudo crear WebDriver: %s", exc
+            )
+            return None
 
     def extraer_resenas(
         self, destino: str, limite: int = 50
     ) -> list[dict[str, Any]]:
         """Extrae reseñas de TripAdvisor para un destino dado.
 
-        Busca el destino en TripAdvisor, navega a la página de reseñas
-        y extrae texto, puntuación y fecha hasta alcanzar el límite.
+        Navega a la búsqueda de TripAdvisor, localiza la página del destino,
+        accede a las reseñas y extrae texto, puntuación y fecha hasta el límite.
 
         Args:
             destino: Nombre del destino turístico a buscar (e.g. "Mallorca").
@@ -69,52 +123,62 @@ class TripAdvisorScraper:
                 - texto_original (str): Texto completo de la reseña.
                 - idioma (str): Código de idioma detectado (e.g. "es", "en").
                 - puntuacion (float | None): Puntuación 1-5 si disponible.
-                - fecha_publicacion (str | None): Fecha de publicación ISO.
-                - url_fuente (str): URL de la página de la reseña.
+                - fecha_publicacion (str | None): Fecha de publicación.
+                - url_fuente (str): URL de la página donde se extrajo la reseña.
                 - fecha_extraccion (str): Marca temporal ISO de extracción.
 
-            Retorna lista vacía si la conexión falla o no se encuentran reseñas.
+            Retorna lista vacía si Selenium no está disponible o la conexión falla.
         """
+        if not SELENIUM_DISPONIBLE:
+            logger.warning(
+                "TripAdvisorScraper: Selenium no instalado. "
+                "Retornando lista vacía para destino='%s'.",
+                destino,
+            )
+            return []
+
         resenas: list[dict[str, Any]] = []
+        driver = self._crear_driver()
+
+        if driver is None:
+            logger.warning(
+                "TripAdvisorScraper: no se pudo crear WebDriver. "
+                "Retornando lista vacía para destino='%s'.",
+                destino,
+            )
+            return []
 
         try:
-            # Paso 1: Buscar el destino
-            url_busqueda = f"{self.BASE_URL}/Search"
-            params = {"q": destino, "searchSessionId": "", "sid": ""}
-
             logger.info(
                 "TripAdvisorScraper: buscando reseñas para destino='%s' (limite=%d)",
                 destino,
                 limite,
             )
 
-            response = requests.get(
-                url_busqueda,
-                params=params,
-                headers=self.headers,
-                timeout=self.timeout,
+            # Paso 1: Buscar el destino
+            url_busqueda = f"{self.BASE_URL}/Search?q={destino}"
+            driver.get(url_busqueda)
+
+            # Esperar a que carguen los resultados de búsqueda
+            wait = WebDriverWait(driver, self.timeout)
+            wait.until(
+                EC.presence_of_element_located((By.TAG_NAME, "body"))
             )
-            response.raise_for_status()
+            time.sleep(2)  # Pausa para renderizado dinámico
 
-            soup = BeautifulSoup(response.text, "html.parser")
+            # Paso 2: Buscar links a páginas de destino/hotel
+            url_destino = self._encontrar_link_destino(driver, destino)
 
-            # Paso 2: Extraer reseñas de la página de resultados
-            # Buscamos contenedores de reseñas típicos de TripAdvisor
-            review_containers = soup.find_all(
-                "div", class_=lambda c: c and "review" in c.lower()
-            )
+            if url_destino:
+                # Paso 3: Navegar a la página del destino/reseñas
+                driver.get(url_destino)
+                time.sleep(2)
 
-            if not review_containers:
-                # Intentar selectores alternativos
-                review_containers = soup.find_all("div", attrs={"data-reviewid": True})
-
-            for container in review_containers[:limite]:
-                resena = self._parsear_resena(container, destino)
-                if resena is not None:
-                    resenas.append(resena)
-
-                if len(resenas) >= limite:
-                    break
+                # Paso 4: Extraer reseñas de la página
+                resenas = self._extraer_resenas_pagina(driver, destino, limite)
+            else:
+                # Intentar extraer reseñas directamente de la página de búsqueda
+                resenas = self._extraer_resenas_pagina(driver, destino, limite)
 
             logger.info(
                 "TripAdvisorScraper: %d reseña(s) extraída(s) para '%s'",
@@ -122,24 +186,6 @@ class TripAdvisorScraper:
                 destino,
             )
 
-        except requests.exceptions.ConnectionError as exc:
-            logger.warning(
-                "TripAdvisorScraper: error de conexión para destino='%s': %s",
-                destino,
-                exc,
-            )
-        except requests.exceptions.Timeout as exc:
-            logger.warning(
-                "TripAdvisorScraper: timeout para destino='%s': %s",
-                destino,
-                exc,
-            )
-        except requests.exceptions.HTTPError as exc:
-            logger.warning(
-                "TripAdvisorScraper: error HTTP para destino='%s': %s",
-                destino,
-                exc,
-            )
         except Exception as exc:
             logger.warning(
                 "TripAdvisorScraper: error inesperado para destino='%s': %s",
@@ -147,48 +193,153 @@ class TripAdvisorScraper:
                 exc,
             )
 
+        finally:
+            try:
+                driver.quit()
+            except Exception:
+                pass
+
         return resenas
 
-    def _parsear_resena(
-        self, container: Any, destino: str
-    ) -> dict[str, Any] | None:
-        """Extrae los datos de una reseña individual desde un contenedor HTML.
+    def _encontrar_link_destino(
+        self, driver: Any, destino: str
+    ) -> str | None:
+        """Busca el link a la página principal del destino en los resultados.
 
         Args:
-            container: Elemento BeautifulSoup con la reseña.
-            destino: Nombre del destino para incluir en el registro.
+            driver: Instancia de WebDriver con la página de búsqueda cargada.
+            destino: Nombre del destino buscado.
 
         Returns:
-            Diccionario con los campos de la reseña, o None si no se pudo parsear.
+            URL completa de la página del destino, o None si no se encontró.
+        """
+        try:
+            # Buscar links que apunten a páginas de destino, hotel o atracción
+            links = driver.find_elements(By.TAG_NAME, "a")
+            destino_lower = destino.lower()
+
+            patrones_url = [
+                "/Tourism-",
+                "/Hotel_Review-",
+                "/Attraction_Review-",
+                "/ShowUserReviews-",
+            ]
+
+            for link in links:
+                try:
+                    href = link.get_attribute("href") or ""
+                    texto_link = link.text.lower()
+
+                    # Verificar si el link es relevante para el destino
+                    if any(patron in href for patron in patrones_url):
+                        if destino_lower in texto_link or destino_lower in href.lower():
+                            return href
+                except Exception:
+                    continue
+
+            # Buscar cualquier link con el nombre del destino
+            for link in links:
+                try:
+                    href = link.get_attribute("href") or ""
+                    if (
+                        self.BASE_URL in href
+                        and any(patron in href for patron in patrones_url)
+                    ):
+                        return href
+                except Exception:
+                    continue
+
+        except Exception as exc:
+            logger.debug(
+                "TripAdvisorScraper: error buscando link de destino: %s", exc
+            )
+
+        return None
+
+    def _extraer_resenas_pagina(
+        self, driver: Any, destino: str, limite: int
+    ) -> list[dict[str, Any]]:
+        """Extrae reseñas de la página actualmente cargada en el driver.
+
+        Busca contenedores de reseñas con diversos selectores CSS y extrae
+        texto, puntuación y fecha de cada una.
+
+        Args:
+            driver: Instancia de WebDriver con una página cargada.
+            destino: Nombre del destino para incluir en los registros.
+            limite: Número máximo de reseñas a extraer.
+
+        Returns:
+            Lista de diccionarios con los campos de reseña.
+        """
+        resenas: list[dict[str, Any]] = []
+        url_actual = driver.current_url
+
+        try:
+            # Selectores para contenedores de reseña en TripAdvisor
+            selectores_resena = [
+                "[data-reviewid]",
+                "[class*='review-container']",
+                "[class*='reviewSelector']",
+                "[class*='Review__container']",
+                "div[class*='review']",
+                "[class*='_T'] [class*='biGQs']",
+            ]
+
+            contenedores = []
+            for selector in selectores_resena:
+                try:
+                    contenedores = driver.find_elements(By.CSS_SELECTOR, selector)
+                    if contenedores:
+                        break
+                except Exception:
+                    continue
+
+            if not contenedores:
+                # Último intento: buscar por XPath elementos con texto largo
+                contenedores = driver.find_elements(
+                    By.XPATH,
+                    "//div[.//span[string-length(text()) > 50]]"
+                )
+
+            for contenedor in contenedores[:limite]:
+                resena = self._parsear_resena_elemento(contenedor, destino, url_actual)
+                if resena is not None:
+                    resenas.append(resena)
+                if len(resenas) >= limite:
+                    break
+
+        except Exception as exc:
+            logger.debug(
+                "TripAdvisorScraper: error extrayendo reseñas de página: %s", exc
+            )
+
+        return resenas
+
+    def _parsear_resena_elemento(
+        self, elemento: Any, destino: str, url_actual: str
+    ) -> dict[str, Any] | None:
+        """Parsea un elemento HTML de reseña individual.
+
+        Args:
+            elemento: Elemento WebElement que contiene la reseña.
+            destino: Nombre del destino.
+            url_actual: URL de la página actual.
+
+        Returns:
+            Diccionario con los campos de la reseña, o None si no es parseable.
         """
         try:
             # Extraer texto de la reseña
-            texto_elem = container.find(
-                "q", class_=lambda c: c and "review" in str(c).lower()
-            )
-            if texto_elem is None:
-                texto_elem = container.find("p")
-            if texto_elem is None:
-                texto_elem = container.find("span", class_=lambda c: c and "text" in str(c).lower())
-
-            if texto_elem is None or not texto_elem.get_text(strip=True):
+            texto = self._extraer_texto_resena(elemento)
+            if not texto or len(texto.strip()) < 20:
                 return None
 
-            texto = texto_elem.get_text(strip=True)
+            # Extraer puntuación (burbujas/estrellas)
+            puntuacion = self._extraer_puntuacion(elemento)
 
-            # Extraer puntuación (típicamente en un span con clase bubble_rating)
-            puntuacion = self._extraer_puntuacion(container)
-
-            # Extraer fecha de publicación
-            fecha_publicacion = self._extraer_fecha(container)
-
-            # Extraer URL
-            link_elem = container.find("a", href=True)
-            url_fuente = (
-                f"{self.BASE_URL}{link_elem['href']}"
-                if link_elem
-                else self.BASE_URL
-            )
+            # Extraer fecha
+            fecha_publicacion = self._extraer_fecha(elemento)
 
             # Detectar idioma
             idioma = self._detectar_idioma(texto)
@@ -196,78 +347,161 @@ class TripAdvisorScraper:
             return {
                 "destino_nombre": destino,
                 "fuente": "tripadvisor",
-                "texto_original": texto,
+                "texto_original": texto.strip(),
                 "idioma": idioma,
                 "puntuacion": puntuacion,
                 "fecha_publicacion": fecha_publicacion,
-                "url_fuente": url_fuente,
+                "url_fuente": url_actual,
                 "fecha_extraccion": datetime.utcnow().isoformat(),
             }
 
         except Exception as exc:
             logger.debug(
-                "TripAdvisorScraper: no se pudo parsear reseña: %s", exc
+                "TripAdvisorScraper: no se pudo parsear elemento de reseña: %s", exc
             )
             return None
 
-    def _extraer_puntuacion(self, container: Any) -> float | None:
-        """Extrae la puntuación numérica de un contenedor de reseña.
+    def _extraer_texto_resena(self, elemento: Any) -> str | None:
+        """Extrae el texto principal de una reseña desde un elemento HTML.
 
         Args:
-            container: Elemento BeautifulSoup con la reseña.
+            elemento: Elemento WebElement que contiene la reseña.
 
         Returns:
-            Puntuación como float (1-5) o None si no se encuentra.
+            Texto de la reseña o None si no se encuentra.
         """
-        # Buscar span con clase que contenga 'bubble' o 'rating'
-        rating_elem = container.find(
-            "span", class_=lambda c: c and ("bubble" in str(c) or "rating" in str(c))
-        )
-        if rating_elem:
-            # Intentar extraer del atributo class (e.g. "bubble_50" = 5.0)
-            for clase in rating_elem.get("class", []):
-                if "bubble_" in clase:
-                    try:
-                        valor = int(clase.split("_")[-1])
-                        return valor / 10.0
-                    except (ValueError, IndexError):
-                        pass
+        # Selectores para texto de reseña
+        selectores_texto = [
+            "q",
+            "span[class*='QewHA']",
+            "span[class*='review-text']",
+            "[class*='partial_entry']",
+            "[class*='reviewText']",
+            "p",
+            "span",
+        ]
 
-        # Buscar en atributo aria-label o title
-        for attr in ("aria-label", "title"):
-            elem = container.find(attrs={attr: True})
-            if elem:
-                texto_attr = elem.get(attr, "")
-                for parte in texto_attr.split():
-                    try:
-                        valor = float(parte.replace(",", "."))
-                        if 1.0 <= valor <= 5.0:
-                            return valor
-                    except ValueError:
-                        continue
+        for selector in selectores_texto:
+            try:
+                elems = elemento.find_elements(By.CSS_SELECTOR, selector)
+                for elem in elems:
+                    texto = elem.text.strip()
+                    if len(texto) >= 20:
+                        return texto
+            except Exception:
+                continue
+
+        # Último intento: texto completo del contenedor
+        try:
+            texto_completo = elemento.text.strip()
+            if len(texto_completo) >= 20:
+                # Tomar solo las primeras líneas que suelen ser la reseña
+                lineas = texto_completo.split("\n")
+                texto_resena = " ".join(
+                    linea for linea in lineas if len(linea) > 15
+                )
+                if len(texto_resena) >= 20:
+                    return texto_resena
+        except Exception:
+            pass
 
         return None
 
-    def _extraer_fecha(self, container: Any) -> str | None:
+    def _extraer_puntuacion(self, elemento: Any) -> float | None:
+        """Extrae la puntuación numérica (burbujas) de un elemento de reseña.
+
+        TripAdvisor usa clases CSS como 'bubble_50' (= 5.0 estrellas) o
+        atributos aria-label con la puntuación.
+
+        Args:
+            elemento: Elemento WebElement que contiene la reseña.
+
+        Returns:
+            Puntuación como float (1.0-5.0) o None si no se encuentra.
+        """
+        try:
+            # Buscar SVG o span con clase 'bubble' (sistema de burbujas)
+            bubble_elems = elemento.find_elements(
+                By.CSS_SELECTOR,
+                "[class*='bubble'], [class*='rating'], [class*='Bubble'], svg[class*='UctUV']"
+            )
+            for bubble in bubble_elems:
+                # Intentar extraer del atributo class
+                clases = bubble.get_attribute("class") or ""
+                match = re.search(r"bubble_(\d+)", clases)
+                if match:
+                    valor = int(match.group(1))
+                    return valor / 10.0
+
+                # Intentar desde aria-label
+                aria = bubble.get_attribute("aria-label") or ""
+                match_aria = re.search(r"(\d[.,]?\d?)\s*(de|of|out)", aria)
+                if match_aria:
+                    valor_str = match_aria.group(1).replace(",", ".")
+                    valor_f = float(valor_str)
+                    if 1.0 <= valor_f <= 5.0:
+                        return valor_f
+
+                # Intentar desde title
+                title = bubble.get_attribute("title") or ""
+                match_title = re.search(r"(\d[.,]?\d?)", title)
+                if match_title:
+                    valor_str = match_title.group(1).replace(",", ".")
+                    valor_f = float(valor_str)
+                    if 1.0 <= valor_f <= 5.0:
+                        return valor_f
+
+        except Exception as exc:
+            logger.debug(
+                "TripAdvisorScraper: error extrayendo puntuación: %s", exc
+            )
+
+        return None
+
+    def _extraer_fecha(self, elemento: Any) -> str | None:
         """Extrae la fecha de publicación de una reseña.
 
         Args:
-            container: Elemento BeautifulSoup con la reseña.
+            elemento: Elemento WebElement que contiene la reseña.
 
         Returns:
-            Fecha en formato ISO string o None si no se encuentra.
+            Fecha como string o None si no se encuentra.
         """
-        # Buscar elementos con clase que contenga 'date'
-        fecha_elem = container.find(
-            "span", class_=lambda c: c and "date" in str(c).lower()
-        )
-        if fecha_elem:
-            return fecha_elem.get_text(strip=True)
+        try:
+            # Buscar elementos con clase que contenga 'date'
+            selectores_fecha = [
+                "[class*='date']",
+                "[class*='Date']",
+                "[class*='ratingDate']",
+                "time",
+                "span[class*='teHYY']",
+            ]
 
-        # Buscar en atributo title o datetime
-        elem_time = container.find("time")
-        if elem_time and elem_time.get("datetime"):
-            return elem_time["datetime"]
+            for selector in selectores_fecha:
+                try:
+                    elems = elemento.find_elements(By.CSS_SELECTOR, selector)
+                    for elem in elems:
+                        # Intentar atributo datetime
+                        dt = elem.get_attribute("datetime")
+                        if dt:
+                            return dt
+
+                        # Intentar atributo title
+                        title = elem.get_attribute("title")
+                        if title and re.search(r"\d", title):
+                            return title
+
+                        # Intentar texto del elemento
+                        texto = elem.text.strip()
+                        if texto and re.search(r"\d", texto):
+                            return texto
+                except Exception:
+                    continue
+
+        except Exception as exc:
+            logger.debug(
+                "TripAdvisorScraper: error extrayendo fecha: %s", exc
+            )
 
         return None
 
