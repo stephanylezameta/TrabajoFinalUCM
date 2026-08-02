@@ -915,3 +915,1266 @@ class TerritorialImpactSimulator:
 
 ---
 
+
+
+## Bloque 5 — Integración con LLM
+
+### Descripción
+
+El Bloque 5 transforma el ranking numérico producido por el Motor de Re-ranking en texto personalizado comprensible para el viajero. Su responsabilidad es generar una descripción en lenguaje natural para cada uno de los **top-3 paquetes recomendados**, adaptada al idioma del mercado del usuario (es/de/en) y enriquecida con referencias a sus preferencias y, cuando procede, a los beneficios de sostenibilidad del destino.
+
+El bloque sigue la **DECISIÓN-012**: el modelo principal es GPT-4o-mini (API OpenAI) con fallback automático a plantillas predefinidas cuando la API no responde, devuelve error o se supera el presupuesto configurado.
+
+**Flujo resumido:** para cada uno de los tres paquetes top se realiza una llamada independiente a la API OpenAI (tres llamadas totales por solicitud de recomendación). Si alguna falla, se activa el motor de plantillas para ese paquete concreto sin afectar a los demás.
+
+### Arquitectura del Bloque 5
+
+```mermaid
+graph TD
+    subgraph Inputs
+        R[Ranking top-3\nPaqueteRecomendado x3]
+        P[Perfil_Viajero\npreferencias + idioma]
+    end
+
+    subgraph Bloque5
+        PB[PromptBuilder\nconstruye prompt personalizado]
+        LA[LLMAdapter\nllama a OpenAI GPT-4o-mini]
+        RV[LLMResponseValidator\nverifica coherencia datos]
+        FT[FallbackTemplateEngine\nplantillas predefinidas]
+        TC[TokenCounter\ngestión de costes]
+        LL[UsageLogger\nregistra tokens y coste]
+    end
+
+    subgraph Output
+        D[descripcion_llm: str\npor cada paquete top-3]
+    end
+
+    R & P --> PB
+    PB --> TC
+    TC -->|dentro del límite| LA
+    TC -->|supera límite| FT
+    LA -->|respuesta OK| RV
+    RV -->|válida| D
+    RV -->|inválida / vacía| FT
+    LA -->|error / timeout| FT
+    FT --> D
+    LA --> LL
+    TC --> LL
+```
+
+### Componentes e Interfaces
+
+#### LLMAdapter
+
+Abstracción sobre la API de OpenAI. Permite cambiar de modelo (GPT-4o-mini → otro) mediante configuración sin tocar el resto del código.
+
+```python
+class LLMAdapter:
+    """
+    Abstracción sobre la API de OpenAI.
+    El nombre y versión del modelo se leen de config.yml (RF-8.6).
+    No hay modelo hardcodeado en el código fuente.
+    """
+    model_name: str       # leído de config — ej: "gpt-4o-mini"
+    api_key: str          # leído de variable de entorno OPENAI_API_KEY
+    timeout_seconds: float = 10.0    # timeout por llamada
+    max_tokens_output: int = 300     # límite de tokens en la respuesta
+
+    def generate(self, prompt: str) -> LLMResponse:
+        """
+        Envía el prompt a la API de OpenAI y retorna la respuesta.
+        Lanza LLMTimeoutError si supera timeout_seconds.
+        Lanza LLMRateLimitError si recibe HTTP 429.
+        Lanza LLMUnavailableError para HTTP 5xx o error de red.
+        Lanza LLMEmptyResponseError si la respuesta llega vacía.
+        Tiempo objetivo: < 5s por llamada en condiciones normales (RF-8.4).
+        """
+
+    def is_available(self) -> bool:
+        """Comprueba si la API está accesible (health check ligero)."""
+```
+
+#### PromptBuilder
+
+Construye el prompt personalizado para cada paquete, inyectando campos del perfil del usuario y datos del paquete.
+
+```python
+class PromptBuilder:
+    """
+    Construye el prompt personalizado combinando:
+      - Datos del paquete: nombre, destino, categoría, precio, duración, temporada, TDRS
+      - Datos del perfil: preferencia temática dominante, presupuesto, temporada preferida
+      - Idioma de salida: detectado del campo `mercado` del perfil (es/de/en)
+    """
+
+    def build(self, paquete: PaqueteRecomendado, perfil: PerfilViajeroRequest) -> str:
+        """
+        Retorna el prompt listo para enviar al LLM.
+        Postcondición (RF-8.2): el prompt contiene al menos uno de:
+          - nombre de la preferencia temática dominante del perfil
+          - rango de presupuesto (min-max EUR)
+          - temporada preferida
+        Postcondición (RF-8.3): si paquete.tdrs > 0.6, el prompt incluye
+          instrucción explícita de mencionar sostenibilidad/redistribución.
+        """
+
+    def _preferencia_dominante(self, perfil: PerfilViajeroRequest) -> str:
+        """Retorna la clave de la preferencia con mayor valor en el perfil."""
+
+    def _detectar_idioma(self, perfil: PerfilViajeroRequest) -> str:
+        """Retorna 'es', 'de' o 'en' según el mercado del perfil."""
+```
+
+**Template base del prompt** (texto inyectado en el `user` message de la API):
+
+```
+Eres un asistente especializado en turismo. Escribe una descripción personalizada de 2-3 frases
+en {idioma} para un viajero con las siguientes características:
+- Preferencia principal: {preferencia_dominante}
+- Presupuesto: entre {presupuesto_min}€ y {presupuesto_max}€
+- Duración preferida: {duracion_min}-{duracion_max} días
+- Temporada preferida: {temporada_preferida}
+
+El paquete a describir es:
+- Destino: {destino_nombre} ({pais})
+- Nombre: {nombre_paquete}
+- Categoría: {categoria}
+- Precio: {precio_base_eur}€ ({duracion_dias} días, {temporada})
+- Hotel: {nombre_hotel} ({estrellas_hotel} estrellas)
+{bloque_sostenibilidad}
+
+Escribe SOLO la descripción, sin encabezados ni listas. No inventes datos que no estén en la información proporcionada.
+```
+
+Donde `{bloque_sostenibilidad}` se inyecta únicamente si `paquete.tdrs > 0.6`:
+
+```
+- Este destino tiene un perfil de sostenibilidad destacado (TDRS={tdrs:.2f}).
+  Menciona brevemente el beneficio de redistribución o sostenibilidad en la descripción.
+```
+
+#### FallbackTemplateEngine
+
+Genera texto desde plantillas predefinidas cuando el LLM no está disponible.
+
+```python
+class FallbackTemplateEngine:
+    """
+    Motor de plantillas multilingüe para generación de texto sin LLM.
+    Se activa ante: LLMUnavailableError, LLMTimeoutError, LLMRateLimitError,
+    LLMEmptyResponseError, LLMInvalidResponseError o BudgetExceededError.
+    """
+
+    TEMPLATES: dict[str, str] = {
+        "es": (
+            "{nombre_paquete} en {destino_nombre}: una experiencia de {categoria} "
+            "durante {duracion_dias} días desde {precio_base_eur}€. "
+            "{frase_preferencia} {frase_sostenibilidad}"
+        ),
+        "de": (
+            "{nombre_paquete} in {destino_nombre}: ein {categoria}-Erlebnis "
+            "für {duracion_dias} Tage ab {precio_base_eur}€. "
+            "{frase_preferencia} {frase_sostenibilidad}"
+        ),
+        "en": (
+            "{nombre_paquete} in {destino_nombre}: a {categoria} experience "
+            "for {duracion_dias} days from {precio_base_eur}€. "
+            "{frase_preferencia} {frase_sostenibilidad}"
+        ),
+    }
+
+    def generate(self, paquete: PaqueteRecomendado, perfil: PerfilViajeroRequest) -> str:
+        """
+        Genera descripción desde plantilla.
+        Postcondición: resultado nunca es vacío ni None.
+        Postcondición: resultado contiene destino_nombre y categoria como substrings.
+        """
+        idioma = self._detectar_idioma(perfil)
+        template = self.TEMPLATES.get(idioma, self.TEMPLATES["es"])
+        return template.format(
+            nombre_paquete=paquete.nombre_paquete,
+            destino_nombre=paquete.destino_nombre,
+            categoria=paquete.categoria,
+            duracion_dias=paquete.duracion_dias,
+            precio_base_eur=paquete.precio_base_eur,
+            frase_preferencia=self._frase_preferencia(paquete, perfil, idioma),
+            frase_sostenibilidad=self._frase_sostenibilidad(paquete, idioma),
+        )
+
+    def _frase_preferencia(
+        self, paquete: PaqueteRecomendado, perfil: PerfilViajeroRequest, idioma: str
+    ) -> str:
+        """Frase corta que conecta la preferencia dominante del perfil con el paquete."""
+
+    def _frase_sostenibilidad(self, paquete: PaqueteRecomendado, idioma: str) -> str:
+        """Retorna frase de sostenibilidad si tdrs > 0.6, cadena vacía en caso contrario."""
+```
+
+#### LLMResponseValidator
+
+Valida que la respuesta del LLM es coherente con los datos del paquete (no alucinó precios, nombres de hotel ni destinos incorrectos).
+
+```python
+class LLMResponseValidator:
+    """
+    Verifica que la descripción generada no contenga datos inventados
+    comparándola con los campos del paquete de referencia.
+    """
+
+    def validate(self, response: str, paquete: PaqueteRecomendado) -> ValidationResult:
+        """
+        Comprueba que la respuesta:
+        1. No está vacía (longitud > 10 caracteres).
+        2. No menciona un precio numéricamente diferente al del paquete (±10%).
+        3. No menciona un nombre de hotel diferente al del paquete (si lo menciona).
+        4. No menciona un destino diferente al destino del paquete (si lo menciona).
+        Retorna ValidationResult(is_valid=True/False, reason=str|None).
+        """
+
+    def _extract_prices_from_text(self, text: str) -> list[float]:
+        """Extrae valores numéricos precedidos de símbolos de moneda (€, EUR, £)."""
+
+    def _hotel_mentioned_incorrectly(self, text: str, paquete: PaqueteRecomendado) -> bool:
+        """True si el texto menciona un nombre de hotel que no coincide con el del paquete."""
+```
+
+#### TokenCounter
+
+Estima y controla el consumo de tokens antes de enviar cada petición a OpenAI.
+
+```python
+class TokenCounter:
+    """
+    Estima tokens de un prompt usando tiktoken (misma tokenización que GPT-4o-mini).
+    Controla que el consumo acumulado no supere el límite configurado.
+    """
+    model_name: str = "gpt-4o-mini"
+    max_budget_tokens: int  # límite configurable en config.yml
+    _tokens_consumed: int = 0  # acumulado en la sesión
+
+    def count_tokens(self, text: str) -> int:
+        """
+        Retorna el número de tokens del texto para el modelo configurado.
+        Postcondición: resultado > 0 para cualquier texto no vacío.
+        Usa tiktoken con codificación cl100k_base (GPT-4o-mini).
+        """
+
+    def check_budget(self, prompt: str) -> BudgetCheckResult:
+        """
+        Verifica si enviar este prompt superaría el límite de presupuesto.
+        Retorna BudgetCheckResult(allowed=True/False, tokens_estimated=int, tokens_remaining=int).
+        """
+
+    def register_usage(self, tokens_input: int, tokens_output: int) -> None:
+        """Acumula el uso real reportado por la API de OpenAI tras cada llamada."""
+
+    def estimated_cost_eur(self) -> float:
+        """Coste estimado en EUR basado en precios GPT-4o-mini ($0.15/1M input, $0.60/1M output)."""
+```
+
+#### UsageLogger
+
+Registra cada llamada a la API para monitorización de costes y diagnóstico.
+
+```python
+class UsageLogger:
+    """Registra uso de tokens y costes en log estructurado (JSON por línea)."""
+
+    def log_llm_call(
+        self,
+        id_paquete: str,
+        id_usuario: str,
+        tokens_input: int,
+        tokens_output: int,
+        latency_ms: float,
+        model: str,
+        used_fallback: bool,
+        fallback_reason: Optional[str] = None,
+    ) -> None:
+        """
+        Emite entrada de log con todos los campos.
+        Si used_fallback=True, registra también el motivo del fallback (RF-8.5).
+        """
+```
+
+### Flujo de Datos del Bloque 5
+
+```mermaid
+sequenceDiagram
+    participant B4 as Bloque 4\n(ReRankingEngine)
+    participant PB as PromptBuilder
+    participant TC as TokenCounter
+    participant LA as LLMAdapter
+    participant RV as LLMResponseValidator
+    participant FT as FallbackTemplateEngine
+    participant UL as UsageLogger
+
+    loop Para cada paquete en top-3
+        B4->>PB: build(paquete, perfil)
+        PB-->>TC: prompt (string)
+        TC->>TC: check_budget(prompt)
+
+        alt Presupuesto OK
+            TC-->>LA: prompt
+            LA->>LA: POST /v1/chat/completions (OpenAI)
+            alt Respuesta OK en tiempo
+                LA-->>RV: response_text
+                RV->>RV: validate(response_text, paquete)
+                alt Respuesta válida
+                    RV-->>B4: descripcion_llm = response_text
+                else Respuesta inválida o vacía
+                    RV-->>FT: generate(paquete, perfil)
+                    FT-->>B4: descripcion_llm = plantilla
+                    UL->>UL: log(fallback_reason="invalid_response")
+                end
+            else Timeout / Error HTTP
+                LA-->>FT: generate(paquete, perfil)
+                FT-->>B4: descripcion_llm = plantilla
+                UL->>UL: log(fallback_reason="llm_error")
+            end
+        else Presupuesto agotado
+            TC-->>FT: generate(paquete, perfil)
+            FT-->>B4: descripcion_llm = plantilla
+            UL->>UL: log(fallback_reason="budget_exceeded")
+        end
+
+        LA-->>UL: tokens_input, tokens_output, latency_ms
+        TC->>TC: register_usage(tokens_input, tokens_output)
+    end
+```
+
+### Control de Costes
+
+**Modelo:** GPT-4o-mini — $0,150 / 1M tokens de entrada, $0,600 / 1M tokens de salida.
+
+**Estimación por llamada:**
+- Prompt medio estimado: ~350 tokens de entrada (template + datos del paquete + perfil).
+- Respuesta media: ~150 tokens de salida (2-3 frases).
+- Coste por llamada: (350 × $0,00000015) + (150 × $0,00000060) ≈ **$0,000143** (~€0,00013).
+- Coste por solicitud de recomendación (3 llamadas): ~**$0,000430** (~€0,00040).
+- Con presupuesto total de €100: permite hasta ~**250.000 solicitudes** de recomendación completas.
+
+**Mecanismo de control en el código:**
+
+```yaml
+# config.yml — sección llm
+llm:
+  model_name: "gpt-4o-mini"
+  max_budget_tokens: 5_000_000   # límite de tokens por sesión/día
+  max_tokens_output: 300
+  timeout_seconds: 10.0
+  fallback_on_budget_exceeded: true
+```
+
+El `TokenCounter` estima los tokens antes de cada llamada con `tiktoken` y rechaza la petición si superaría el límite, activando el fallback automáticamente. El `UsageLogger` registra el consumo real reportado por OpenAI en cada respuesta y actualiza el acumulador.
+
+### Política de Fallback
+
+El `FallbackTemplateEngine` se activa en cualquiera de estas condiciones:
+
+| Condición | Excepción | Acción |
+|-----------|-----------|--------|
+| API no responde en `timeout_seconds` | `LLMTimeoutError` | Fallback para ese paquete |
+| HTTP 429 — Rate limit de OpenAI | `LLMRateLimitError` | Fallback inmediato (sin espera) |
+| HTTP 5xx — Error interno de OpenAI | `LLMUnavailableError` | Fallback para ese paquete |
+| Respuesta vacía o `finish_reason != "stop"` | `LLMEmptyResponseError` | Fallback para ese paquete |
+| `LLMResponseValidator` rechaza la respuesta | `LLMInvalidResponseError` | Fallback para ese paquete |
+| `TokenCounter` supera límite de presupuesto | `BudgetExceededError` | Fallback para los paquetes restantes |
+
+**Transparencia ante el usuario:** La `App_Usuario` no diferencia entre texto generado por LLM y texto de plantilla. El campo `descripcion_generada_por` en los metadatos internos sí lo registra (útil para métricas del `Dashboard_TUI`).
+
+**Idempotencia del fallback:** `FallbackTemplateEngine` es una función pura — para los mismos datos de entrada siempre produce la misma salida, garantizando reproducibilidad.
+
+### Gestión de Errores
+
+```python
+# Jerarquía de excepciones del Bloque 5
+class LLMError(Exception): ...
+class LLMTimeoutError(LLMError): ...
+class LLMRateLimitError(LLMError):
+    retry_after_seconds: float  # extraído del header Retry-After de OpenAI
+class LLMUnavailableError(LLMError): ...
+class LLMEmptyResponseError(LLMError): ...
+class LLMInvalidResponseError(LLMError):
+    reason: str
+class BudgetExceededError(LLMError):
+    tokens_consumed: int
+    budget_limit: int
+```
+
+**Gestión de rate limiting (HTTP 429):** OpenAI devuelve el header `Retry-After: N`. El `LLMAdapter` captura este valor y lo expone en `LLMRateLimitError.retry_after_seconds`. Para el contexto del TFM (carga baja), se activa el fallback inmediatamente sin esperar y se registra la indisponibilidad.
+
+**Timeouts:** El timeout de 10s es conservador. En condiciones normales GPT-4o-mini responde en 1-3s para prompts de ~350 tokens. El margen doble absorbe picos puntuales sin bloquear al usuario más allá de los 5s del RF-8.4.
+
+**Reintentos:** El `LLMAdapter` no reintenta automáticamente (para no consumir budget). El reintento ante errores de red transitoria se delega a la `RetryPolicy` del Bloque 3 (máx. 3 intentos, backoff 1s/2s/4s) únicamente si se invoca desde un contexto de reintento explícito.
+
+### Propiedades de Corrección (PBT relevantes del Bloque 5)
+
+*Una propiedad es una característica o comportamiento que debe ser verdadero en todas las ejecuciones válidas del sistema — esencialmente, una declaración formal sobre lo que el sistema debe hacer. Las propiedades sirven como puente entre las especificaciones legibles por personas y las garantías de corrección verificables automáticamente.*
+
+#### Propiedad B5-1: El prompt siempre contiene personalización del perfil
+
+*Para cualquier* `PerfilViajeroRequest` válido y cualquier `PaqueteRecomendado` válido, el prompt generado por `PromptBuilder.build()` debe contener al menos uno de: el nombre de la preferencia temática dominante del perfil, el rango de presupuesto del perfil, o la temporada preferida del perfil.
+
+**Valida: Requisito 8.2**
+
+#### Propiedad B5-2: Prompt incluye mención de sostenibilidad cuando TDRS supera umbral
+
+*Para cualquier* `PaqueteRecomendado` con `tdrs > 0.6` y cualquier `PerfilViajeroRequest` válido, el prompt generado por `PromptBuilder.build()` debe contener una instrucción explícita de mención de sostenibilidad o redistribución.
+
+**Valida: Requisito 8.3**
+
+#### Propiedad B5-3: Fallback nunca produce texto vacío
+
+*Para cualquier* `PerfilViajeroRequest` válido, cualquier `PaqueteRecomendado` válido, y cualquier tipo de error del LLM (timeout, rate limit, error HTTP, respuesta vacía, respuesta inválida), `FallbackTemplateEngine.generate()` debe devolver una cadena de texto con longitud mayor que cero.
+
+**Valida: Requisito 8.5**
+
+#### Propiedad B5-4: Descripción de fallback contiene datos clave del paquete
+
+*Para cualquier* `PaqueteRecomendado` válido y cualquier `PerfilViajeroRequest` válido, la descripción generada por `FallbackTemplateEngine.generate()` debe contener el `destino_nombre` y la `categoria` del paquete como substrings en el texto resultante.
+
+**Valida: Requisito 8.5**
+
+#### Propiedad B5-5: TokenCounter es positivo y monótono
+
+*Para cualquier* texto no vacío `t`, `TokenCounter.count_tokens(t) > 0`. Y para cualquier par de textos donde `t2` es extensión de `t1` (es decir, `t1` es prefijo de `t2`), `TokenCounter.count_tokens(t1) ≤ TokenCounter.count_tokens(t2)` (monotonía débil respecto al tamaño del texto).
+
+**Valida: Control de costes — correctitud del contador de tokens**
+
+#### Propiedad B5-6: Validador detecta precios alucinados
+
+*Para cualquier* `PaqueteRecomendado` y cualquier texto de respuesta LLM que mencione un precio numérico que difiera en más del 10% del `precio_base_eur` del paquete, `LLMResponseValidator.validate()` debe devolver `ValidationResult(is_valid=False)`.
+
+**Valida: Calidad y coherencia de las descripciones generadas por el LLM**
+
+---
+
+
+## Bloque 6 — Productivización (Streamlit)
+
+### Descripción
+
+El Bloque 6 es la capa de presentación del sistema. Implementa dos interfaces web con Streamlit que consumen los endpoints FastAPI del Bloque 3: la `App_Usuario`, orientada al viajero final, y el `Dashboard_TUI`, orientado al analista interno de TUI. Ambas interfaces conviven en una única aplicación Streamlit multi-página organizada bajo el directorio `app/`.
+
+**Decisiones de diseño:**
+- **DECISIÓN-013:** Stack de UI — Streamlit (prototipo TFM). Permite iteración rápida sin necesidad de frontend separado.
+- **DECISIÓN-014:** Comparativa de escenarios en paralelo — la `App_Usuario` muestra los tres rankings (tradicional, moderado, intensivo) en tres columnas side-by-side para facilitar la comparación directa sin recargar el perfil.
+- **DECISIÓN-015:** Comunicación exclusivamente vía API REST — la app no accede directamente a la base de datos; todos los datos provienen de los endpoints FastAPI (`/recomendaciones`, `/oportunidades`, `/metricas`, `/health`).
+
+### Arquitectura del Bloque 6
+
+```mermaid
+graph TD
+    subgraph Streamlit_App
+        NAV[Navegación\nst.sidebar]
+        AU[pages/1_App_Usuario.py]
+        DT[pages/2_Dashboard_TUI.py]
+    end
+
+    subgraph API_Client
+        AC[APIClient\nrequests / httpx]
+    end
+
+    subgraph FastAPI_Backend
+        EP1[POST /recomendaciones]
+        EP2[GET /oportunidades]
+        EP3[GET /metricas]
+        EP4[GET /health]
+    end
+
+    NAV --> AU
+    NAV --> DT
+    AU --> AC
+    DT --> AC
+    AC --> EP1
+    AC --> EP2
+    AC --> EP3
+    AC --> EP4
+```
+
+### Estructura de la Aplicación Streamlit
+
+La aplicación sigue la convención de páginas múltiples de Streamlit (`pages/` directory):
+
+```
+app/
+├── Home.py                    # Página de inicio / landing
+├── pages/
+│   ├── 1_App_Usuario.py       # Interfaz del viajero final (RF-12)
+│   └── 2_Dashboard_TUI.py     # Dashboard analítico interno (RF-13)
+├── components/
+│   ├── perfil_form.py         # Formulario de perfil reutilizable
+│   ├── ranking_card.py        # Tarjeta de paquete recomendado
+│   ├── explicabilidad_panel.py # Panel de factores de explicabilidad
+│   ├── metricas_redistribucion.py # Widgets de métricas Gini/CR5
+│   └── health_status.py       # Indicadores de estado del sistema
+├── api/
+│   └── client.py              # APIClient — wrapper sobre endpoints FastAPI
+└── config.py                  # Configuración de URLs y parámetros
+```
+
+**Navegación:** La barra lateral (`st.sidebar`) muestra el selector de idioma (es/de/en) y el enlace a ambas páginas. El estado del idioma se persiste en `st.session_state["idioma"]`.
+
+
+### Sección App_Usuario (RF-12)
+
+#### Descripción General
+
+Interfaz de recomendación para el viajero. El flujo es: (1) el usuario rellena el formulario de perfil, (2) pulsa "Obtener recomendaciones", (3) la app llama a `POST /recomendaciones` para los tres escenarios, y (4) muestra los resultados en tres columnas paralelas.
+
+#### Formulario de Perfil del Viajero
+
+```python
+def render_perfil_form() -> PerfilViajeroRequest | None:
+    """
+    Renderiza el formulario de captura del Perfil_Viajero.
+    Retorna el perfil validado o None si los sliders no suman 1.0.
+
+    Campos del formulario:
+    - Preferencias temáticas (6 sliders, paso 0.05, rango [0.0, 1.0])
+      Restricción visualizada: indicador de suma actual con color rojo/verde
+    - Presupuesto mínimo y máximo (st.slider rango, EUR, [100, 10000])
+    - Duración mínima y máxima (st.slider rango, días, [1, 30])
+    - Temporada preferida (st.selectbox: Alta / Media / Baja / Indiferente)
+    - Requiere accesibilidad (st.checkbox)
+    - Interés en sostenibilidad (st.slider, [0.0, 1.0], paso 0.1)
+    """
+    with st.form("perfil_viajero"):
+        st.subheader("Mis preferencias de viaje")
+
+        col1, col2 = st.columns(2)
+        with col1:
+            pref_cultura     = st.slider("🏛️ Cultura",      0.0, 1.0, 0.20, step=0.05)
+            pref_gastronomia = st.slider("🍽️ Gastronomía",  0.0, 1.0, 0.15, step=0.05)
+            pref_naturaleza  = st.slider("🌿 Naturaleza",   0.0, 1.0, 0.20, step=0.05)
+        with col2:
+            pref_playa       = st.slider("🏖️ Playa",        0.0, 1.0, 0.20, step=0.05)
+            pref_bienestar   = st.slider("🧘 Bienestar",    0.0, 1.0, 0.10, step=0.05)
+            pref_aventura    = st.slider("🧗 Aventura",     0.0, 1.0, 0.15, step=0.05)
+
+        suma = pref_cultura + pref_gastronomia + pref_naturaleza + pref_playa + pref_bienestar + pref_aventura
+        if abs(suma - 1.0) > 0.01:
+            st.error(f"La suma de preferencias es {suma:.2f}. Debe ser 1.0 (±0.01).")
+
+        presupuesto = st.slider("Presupuesto (EUR)", 100, 10_000, (500, 3_000))
+        duracion    = st.slider("Duración (días)",   1,   30,     (5, 14))
+        temporada   = st.selectbox("Temporada preferida", ["Indiferente", "Alta", "Media", "Baja"])
+        accesibilidad       = st.checkbox("Requiero accesibilidad especial")
+        interes_sostenibilidad = st.slider("Interés en sostenibilidad", 0.0, 1.0, 0.5, step=0.1)
+
+        submitted = st.form_submit_button("🔍 Obtener recomendaciones")
+        if submitted and abs(suma - 1.0) <= 0.01:
+            return PerfilViajeroRequest(
+                pref_cultura=pref_cultura,
+                pref_gastronomia=pref_gastronomia,
+                pref_naturaleza=pref_naturaleza,
+                pref_playa=pref_playa,
+                pref_bienestar=pref_bienestar,
+                pref_aventura=pref_aventura,
+                presupuesto_min_eur=float(presupuesto[0]),
+                presupuesto_max_eur=float(presupuesto[1]),
+                duracion_min_dias=duracion[0],
+                duracion_max_dias=duracion[1],
+                temporada_preferida=None if temporada == "Indiferente" else temporada,
+                requiere_accesibilidad=accesibilidad,
+                interes_sostenibilidad=interes_sostenibilidad,
+            )
+    return None
+```
+
+
+#### Visualización de Resultados — Comparativa de Escenarios en Paralelo
+
+```python
+def render_comparativa_escenarios(
+    resultados: dict[str, list[PaqueteRecomendado]],
+    idioma: str = "es"
+) -> None:
+    """
+    Muestra los tres rankings en columnas side-by-side (RF-12.3).
+    resultados = {
+        "tradicional": [...top 3 PaqueteRecomendado...],
+        "moderado":    [...top 3 PaqueteRecomendado...],
+        "intensivo":   [...top 3 PaqueteRecomendado...],
+    }
+    """
+    ETIQUETAS = {
+        "tradicional": {"es": "🎯 Tradicional",   "de": "🎯 Traditionell",  "en": "🎯 Traditional"},
+        "moderado":    {"es": "⚖️ Moderado",       "de": "⚖️ Moderat",       "en": "⚖️ Moderate"},
+        "intensivo":   {"es": "🌱 Intensivo",      "de": "🌱 Intensiv",      "en": "🌱 Intensive"},
+    }
+
+    col_trad, col_mod, col_int = st.columns(3)
+    for col, escenario in zip([col_trad, col_mod, col_int], ["tradicional", "moderado", "intensivo"]):
+        with col:
+            st.markdown(f"### {ETIQUETAS[escenario][idioma]}")
+            for pos, paquete in enumerate(resultados[escenario][:3], start=1):
+                render_ranking_card(paquete, posicion=pos, idioma=idioma)
+```
+
+#### Tarjeta de Paquete Recomendado
+
+```python
+def render_ranking_card(paquete: PaqueteRecomendado, posicion: int, idioma: str) -> None:
+    """
+    Renderiza la tarjeta de un paquete recomendado con:
+    - Posición, nombre y destino
+    - Precio (EUR), duración (días), categoría
+    - score_final con barra de progreso visual
+    - descripcion_llm (texto generado por LLM o plantilla)
+    - Expander de explicabilidad con indicadores de afinidad, TDRS, saturación
+      y motivo de cambio de posición entre escenarios (RF-12.4)
+    """
+    with st.container(border=True):
+        st.markdown(f"**#{posicion} — {paquete.nombre_paquete}**")
+        st.caption(f"📍 {paquete.destino_nombre} &nbsp;|&nbsp; 💶 {paquete.precio_base_eur:.0f}€ &nbsp;|&nbsp; 🏷️ {paquete.categoria}")
+
+        # Barra de puntuación final
+        st.progress(max(0.0, min(1.0, float(paquete.score_final))),
+                    text=f"Score: {paquete.score_final:.3f}")
+
+        # Descripción en lenguaje natural
+        if paquete.descripcion_llm:
+            st.write(paquete.descripcion_llm)
+
+        # Panel de explicabilidad colapsado
+        with st.expander("🔍 Ver explicabilidad"):
+            render_explicabilidad_panel(paquete.explicacion, idioma=idioma)
+```
+
+#### Panel de Explicabilidad
+
+```python
+def render_explicabilidad_panel(exp: ExplicacionFactores, idioma: str) -> None:
+    """
+    Muestra los indicadores de explicabilidad de un paquete (RF-9, RF-12.4):
+    - Afinidad: barra de progreso [0,1]
+    - TDRS: barra de progreso normalizada [-1,1] → [0,1]
+    - Saturación: barra de progreso [0,1] con color rojo si > 0.7
+    - Motivo de cambio de posición entre escenarios (si existe)
+    """
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        st.metric("Afinidad", f"{exp.afinidad:.3f}")
+        st.progress(exp.afinidad)
+    with col_b:
+        tdrs_norm = (exp.tdrs + 1.0) / 2.0   # normalizar [-1,1] → [0,1]
+        st.metric("TDRS", f"{exp.tdrs:.3f}")
+        st.progress(tdrs_norm)
+    with col_c:
+        color = "🔴" if exp.saturacion > 0.7 else "🟢"
+        st.metric("Saturación", f"{color} {exp.saturacion:.3f}")
+        st.progress(exp.saturacion)
+
+    if exp.motivo_cambio_posicion:
+        st.info(f"↕️ {exp.motivo_cambio_posicion}")
+    if exp.posicion_ranking_tradicional and exp.posicion_ranking_redistributivo:
+        delta = exp.posicion_ranking_tradicional - exp.posicion_ranking_redistributivo
+        if delta != 0:
+            signo = "▲" if delta > 0 else "▼"
+            st.caption(f"Posición en escenario tradicional: #{exp.posicion_ranking_tradicional} {signo} → redistributivo: #{exp.posicion_ranking_redistributivo}")
+```
+
+
+### Sección Dashboard_TUI (RF-13)
+
+#### Descripción General
+
+Panel analítico interno para operadores de TUI. Muestra métricas de redistribución, mapa de calor de saturación, tabla de oportunidades de mercado, diversidad del catálogo y estado del sistema. Los datos se obtienen de los endpoints `/metricas`, `/oportunidades` y `/health`.
+
+#### Métricas de Redistribución (RF-13.3)
+
+```python
+def render_metricas_redistribucion(metricas: MetricasModelo) -> None:
+    """
+    Muestra Gini_Turístico y CR5 para los tres escenarios en formato comparativo.
+    Una reducción del Gini entre escenario tradicional e intensivo indica redistribución efectiva.
+    """
+    st.subheader("📊 Métricas de Redistribución Territorial")
+
+    col1, col2, col3 = st.columns(3)
+    escenarios_data = [
+        ("Tradicional", metricas.gini_tradicional, metricas.cr5_tradicional),
+        ("Moderado",    metricas.gini_moderado,    metricas.cr5_moderado),
+        ("Intensivo",   metricas.gini_intensivo,   metricas.cr5_intensivo),
+    ]
+    for col, (nombre, gini, cr5) in zip([col1, col2, col3], escenarios_data):
+        with col:
+            st.metric(f"Gini — {nombre}", f"{gini:.4f}",
+                      delta=f"{gini - metricas.gini_tradicional:+.4f}" if nombre != "Tradicional" else None,
+                      delta_color="inverse")
+            st.metric(f"CR5 — {nombre}", f"{cr5:.4f}",
+                      delta=f"{cr5 - metricas.cr5_tradicional:+.4f}" if nombre != "Tradicional" else None,
+                      delta_color="inverse")
+
+    # Alerta si redistribución moderada no mejora respecto al tradicional (RF-11.4)
+    if metricas.gini_moderado >= metricas.gini_tradicional:
+        st.warning("⚠️ El escenario moderado no está logrando reducir el Gini respecto al tradicional. Revisar parámetros de redistribución.")
+```
+
+#### Mapa de Calor de Saturación por Destino
+
+```python
+def render_mapa_saturacion(destinos: list[DestinoStats]) -> None:
+    """
+    Visualiza el nivel de saturación de cada destino en un mapa de calor.
+    Usa st.map para posicionamiento geográfico básico (latitud/longitud del destino)
+    y Altair/Plotly para el color por nivel de saturación [0,1].
+    """
+    import pandas as pd
+    import altair as alt
+
+    df = pd.DataFrame([
+        {
+            "destino": d.nombre,
+            "lat": d.latitud,
+            "lon": d.longitud,
+            "saturacion": d.nivel_ocupacion,
+            "zona": d.zona_geografica,
+        }
+        for d in destinos
+    ])
+
+    chart = alt.Chart(df).mark_circle(size=80).encode(
+        longitude="lon:Q",
+        latitude="lat:Q",
+        color=alt.Color(
+            "saturacion:Q",
+            scale=alt.Scale(scheme="redyellowgreen", reverse=True, domain=[0, 1]),
+            legend=alt.Legend(title="Saturación")
+        ),
+        tooltip=["destino:N", "saturacion:Q", "zona:N"],
+        size=alt.Size("saturacion:Q", scale=alt.Scale(range=[50, 300])),
+    ).project("mercator").properties(
+        title="Mapa de saturación de destinos",
+        width=700, height=400
+    )
+    st.altair_chart(chart, use_container_width=True)
+```
+
+#### Tabla de Oportunidades de Mercado (RF-13.4)
+
+```python
+def render_tabla_oportunidades(oportunidades: list[OportunidadMercado]) -> None:
+    """
+    Muestra destinos con indicador_oportunidad > umbral configurado (RF-10.2).
+    Permite filtrar por zona geográfica y temporada (RF-13.4).
+    Incluye columnas: destino, zona, temporada, afinidad_media, nivel_ocupacion,
+    indicador_oportunidad, perfil_usuario_afin.
+    """
+    import pandas as pd
+
+    col_filtro1, col_filtro2 = st.columns(2)
+    with col_filtro1:
+        zona_filtro = st.selectbox("Zona geográfica", ["Todas", "Mediterráneo", "Caribe"])
+    with col_filtro2:
+        temp_filtro = st.selectbox("Temporada", ["Todas", "Alta", "Media", "Baja"])
+
+    df = pd.DataFrame([o.model_dump() for o in oportunidades])
+    if zona_filtro != "Todas":
+        df = df[df["zona_geografica"] == zona_filtro]
+    if temp_filtro != "Todas":
+        df = df[df["temporada"] == temp_filtro]
+
+    df = df.sort_values("indicador_oportunidad", ascending=False)
+    st.dataframe(
+        df[["destino_nombre", "zona_geografica", "temporada",
+            "afinidad_media", "nivel_ocupacion", "indicador_oportunidad",
+            "perfil_usuario_afin"]],
+        use_container_width=True,
+        column_config={
+            "indicador_oportunidad": st.column_config.ProgressColumn(
+                "Oportunidad", min_value=0, max_value=1, format="%.3f"
+            ),
+            "nivel_ocupacion": st.column_config.ProgressColumn(
+                "Ocupación", min_value=0, max_value=1, format="%.2f"
+            ),
+        }
+    )
+```
+
+
+#### Comparativa de Catálogo — Diversidad por Categoría y Región
+
+```python
+def render_diversidad_catalogo(metricas: MetricasModelo) -> None:
+    """
+    Muestra métricas de diversidad del catálogo (RF-13.2):
+    - Intra-list diversity media por escenario
+    - Cobertura del catálogo (% de paquetes recomendados al menos una vez)
+    - Novedad media
+    Incluye gráfico de barras comparativo por categoría y región.
+    """
+    import altair as alt
+    import pandas as pd
+
+    st.subheader("🗂️ Diversidad del Catálogo")
+
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Diversidad intra-lista (moderado)", f"{metricas.intra_list_diversity:.4f}")
+    col2.metric("Cobertura del catálogo", f"{metricas.cobertura_catalogo:.1%}")
+    col3.metric("Novedad media", f"{metricas.novedad_media:.4f}")
+
+    # Distribución de recomendaciones por categoría
+    if metricas.distribucion_categoria:
+        df_cat = pd.DataFrame(
+            list(metricas.distribucion_categoria.items()),
+            columns=["categoria", "porcentaje"]
+        )
+        chart_cat = alt.Chart(df_cat).mark_bar().encode(
+            x=alt.X("porcentaje:Q", title="% Recomendaciones"),
+            y=alt.Y("categoria:N", sort="-x", title="Categoría"),
+            color=alt.Color("porcentaje:Q", scale=alt.Scale(scheme="blues")),
+            tooltip=["categoria:N", alt.Tooltip("porcentaje:Q", format=".1%")]
+        ).properties(title="Distribución por categoría", height=200)
+        st.altair_chart(chart_cat, use_container_width=True)
+```
+
+#### Estado del Sistema — Módulos Activos (RF-NF-4.4)
+
+```python
+def render_health_status(health: HealthStatus) -> None:
+    """
+    Muestra el estado operativo de cada módulo del sistema (RF-NF-4.4).
+    Módulos monitorizados: Scraper, Repositorio, Modelo_Afinidad, LLM_Adapter.
+    Colores: verde (ok), amarillo (degradado), rojo (no disponible).
+    """
+    st.subheader("🟢 Estado del Sistema")
+
+    ICONOS = {"ok": "🟢", "degraded": "🟡", "unavailable": "🔴"}
+    modulos = [
+        ("Scraper",          health.scraper),
+        ("Repositorio",      health.repositorio),
+        ("Modelo_Afinidad",  health.modelo_afinidad),
+        ("LLM_Adapter",      health.llm_adapter),
+    ]
+    cols = st.columns(len(modulos))
+    for col, (nombre, estado) in zip(cols, modulos):
+        icono = ICONOS.get(estado.status, "⚪")
+        col.metric(nombre, f"{icono} {estado.status.upper()}")
+        if estado.latency_ms is not None:
+            col.caption(f"Latencia: {estado.latency_ms:.0f}ms")
+```
+
+#### Exportación CSV (RF-13.6)
+
+```python
+def render_export_button(metricas: MetricasModelo) -> None:
+    """
+    Botón de exportación de todas las métricas en formato CSV (RF-13.6).
+    Un único clic genera y descarga el fichero.
+    """
+    import pandas as pd
+    import io
+
+    def metricas_to_csv(m: MetricasModelo) -> str:
+        rows = {
+            "precision_at_5": m.precision_at_5,
+            "precision_at_10": m.precision_at_10,
+            "recall_at_5": m.recall_at_5,
+            "recall_at_10": m.recall_at_10,
+            "ndcg_at_5": m.ndcg_at_5,
+            "ndcg_at_10": m.ndcg_at_10,
+            "map_at_5": m.map_at_5,
+            "map_at_10": m.map_at_10,
+            "gini_tradicional": m.gini_tradicional,
+            "gini_moderado": m.gini_moderado,
+            "gini_intensivo": m.gini_intensivo,
+            "cr5_tradicional": m.cr5_tradicional,
+            "cr5_moderado": m.cr5_moderado,
+            "cr5_intensivo": m.cr5_intensivo,
+            "intra_list_diversity": m.intra_list_diversity,
+            "cobertura_catalogo": m.cobertura_catalogo,
+            "novedad_media": m.novedad_media,
+        }
+        return pd.DataFrame([rows]).to_csv(index=False)
+
+    csv_data = metricas_to_csv(metricas)
+    st.download_button(
+        label="⬇️ Exportar métricas CSV",
+        data=csv_data,
+        file_name="metricas_tui.csv",
+        mime="text/csv",
+    )
+```
+
+
+### APIClient — Comunicación con el Backend FastAPI
+
+```python
+class APIClient:
+    """
+    Wrapper sobre los endpoints FastAPI del Bloque 3.
+    Gestiona errores de conexión y devuelve objetos Pydantic tipados.
+    Base URL configurable en config.py (variable de entorno API_BASE_URL).
+    """
+    base_url: str  # ej: "http://localhost:8000"
+    timeout: float = 10.0
+
+    def get_recomendaciones(
+        self, perfil: PerfilViajeroRequest, escenario: str = "moderado", top_k: int = 3
+    ) -> list[PaqueteRecomendado]:
+        """
+        POST /recomendaciones
+        Lanza APIConnectionError si el backend no responde (RF-12.6).
+        """
+        response = requests.post(
+            f"{self.base_url}/recomendaciones",
+            json={"perfil": perfil.model_dump(), "escenario": escenario, "top_k": top_k},
+            timeout=self.timeout,
+        )
+        response.raise_for_status()
+        return [PaqueteRecomendado(**p) for p in response.json()]
+
+    def get_recomendaciones_todos_escenarios(
+        self, perfil: PerfilViajeroRequest, top_k: int = 3
+    ) -> dict[str, list[PaqueteRecomendado]]:
+        """
+        Llama a /recomendaciones tres veces (una por escenario) en paralelo.
+        Usa concurrent.futures.ThreadPoolExecutor para mantener latencia < 3s (RF-12.5).
+        """
+        from concurrent.futures import ThreadPoolExecutor
+        escenarios = ["tradicional", "moderado", "intensivo"]
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures = {
+                esc: executor.submit(self.get_recomendaciones, perfil, esc, top_k)
+                for esc in escenarios
+            }
+        return {esc: fut.result() for esc, fut in futures.items()}
+
+    def get_oportunidades(
+        self, zona: str | None = None, temporada: str | None = None, umbral: float = 0.20
+    ) -> list[OportunidadMercado]:
+        """GET /oportunidades"""
+
+    def get_metricas(self) -> MetricasModelo:
+        """GET /metricas"""
+
+    def get_health(self) -> HealthStatus:
+        """GET /health"""
+```
+
+**Manejo de errores de conexión (RF-12.6):**
+
+```python
+def safe_api_call(func, *args, **kwargs):
+    """
+    Envuelve llamadas a la API con manejo de error user-friendly.
+    Si el backend no responde, muestra st.error con mensaje comprensible
+    y registra el fallo en el log de la aplicación.
+    """
+    try:
+        return func(*args, **kwargs)
+    except (requests.ConnectionError, requests.Timeout) as e:
+        st.error("⚠️ No se puede conectar con el servidor de recomendaciones. "
+                 "Por favor, verifica que el backend esté en funcionamiento.")
+        logger.error(f"API connection error: {e}", exc_info=True)
+        return None
+    except requests.HTTPError as e:
+        st.error(f"⚠️ Error del servidor ({e.response.status_code}). "
+                 "Inténtalo de nuevo en unos momentos.")
+        logger.error(f"API HTTP error: {e}", exc_info=True)
+        return None
+```
+
+
+### Gestión de Estado de la Sesión
+
+El estado de la sesión en Streamlit se gestiona mediante `st.session_state`. La siguiente tabla define las claves utilizadas y su ciclo de vida:
+
+| Clave en `st.session_state` | Tipo | Descripción | Inicialización |
+|-----------------------------|------|-------------|----------------|
+| `idioma` | `str` | Idioma seleccionado: `"es"` / `"de"` / `"en"` | `"es"` (sidebar) |
+| `perfil_actual` | `PerfilViajeroRequest \| None` | Perfil del viajero introducido en el formulario | `None` |
+| `resultados_escenarios` | `dict[str, list[PaqueteRecomendado]] \| None` | Resultados de los tres escenarios para el perfil actual | `None` |
+| `paquete_seleccionado` | `PaqueteRecomendado \| None` | Paquete sobre el que el usuario solicitó explicabilidad | `None` |
+| `metricas_cache` | `MetricasModelo \| None` | Métricas cacheadas (se actualizan cada 60s en el Dashboard) | `None` |
+| `oportunidades_cache` | `list[OportunidadMercado] \| None` | Oportunidades cacheadas | `None` |
+| `health_cache` | `HealthStatus \| None` | Estado del sistema cacheado (se actualiza cada 30s) | `None` |
+| `last_fetch_metricas` | `float` | Timestamp de la última actualización de métricas (Unix) | `0.0` |
+
+**Reglas de gestión de estado:**
+- El `perfil_actual` persiste entre cambios de escenario para no obligar al usuario a reintroducir sus datos (RF-12.3).
+- Si `resultados_escenarios` está en sesión y el `perfil_actual` no ha cambiado, la app no vuelve a llamar a la API al cambiar de pestaña.
+- El Dashboard refresca `metricas_cache` cada 60 segundos usando `st.empty()` y un bucle con `time.sleep(60)` en un thread auxiliar, garantizando actualización en < 10s tras cambios en el repositorio (RF-13.5).
+
+```python
+def inicializar_session_state() -> None:
+    """Inicializa todas las claves de session_state con valores por defecto."""
+    defaults = {
+        "idioma": "es",
+        "perfil_actual": None,
+        "resultados_escenarios": None,
+        "paquete_seleccionado": None,
+        "metricas_cache": None,
+        "oportunidades_cache": None,
+        "health_cache": None,
+        "last_fetch_metricas": 0.0,
+    }
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
+```
+
+
+### Flujo de Datos del Bloque 6
+
+```mermaid
+sequenceDiagram
+    participant U as Usuario (navegador)
+    participant ST as Streamlit App
+    participant SS as st.session_state
+    participant AC as APIClient
+    participant FA as FastAPI Backend
+
+    U->>ST: Rellena formulario de perfil y pulsa "Obtener recomendaciones"
+    ST->>SS: Guarda perfil_actual
+    ST->>AC: get_recomendaciones_todos_escenarios(perfil, top_k=3)
+    par Llamada escenario tradicional
+        AC->>FA: POST /recomendaciones {escenario: "tradicional"}
+        FA-->>AC: list[PaqueteRecomendado]
+    and Llamada escenario moderado
+        AC->>FA: POST /recomendaciones {escenario: "moderado"}
+        FA-->>AC: list[PaqueteRecomendado]
+    and Llamada escenario intensivo
+        AC->>FA: POST /recomendaciones {escenario: "intensivo"}
+        FA-->>AC: list[PaqueteRecomendado]
+    end
+    AC-->>SS: Guarda resultados_escenarios
+    ST->>U: Renderiza comparativa 3 columnas con top-3 por escenario
+
+    U->>ST: Hace clic en "Ver explicabilidad" de un paquete
+    ST->>SS: Guarda paquete_seleccionado
+    ST->>U: Renderiza panel de explicabilidad (afinidad, TDRS, saturación, motivo)
+
+    U->>ST: Cambia selector de idioma en sidebar
+    ST->>SS: Actualiza idioma
+    ST->>U: Re-renderiza con etiquetas en nuevo idioma (sin re-llamar a la API)
+
+    Note over ST,FA: Dashboard_TUI (flujo paralelo)
+    U->>ST: Navega a Dashboard_TUI
+    ST->>AC: get_metricas() + get_oportunidades() + get_health()
+    AC->>FA: GET /metricas
+    AC->>FA: GET /oportunidades
+    AC->>FA: GET /health
+    FA-->>AC: MetricasModelo + list[OportunidadMercado] + HealthStatus
+    AC-->>SS: Actualiza caches con timestamp
+    ST->>U: Renderiza métricas, mapa, tabla, estado del sistema
+```
+
+
+### Selector de Idioma
+
+```python
+def render_selector_idioma() -> str:
+    """
+    Muestra el selector de idioma en la barra lateral.
+    Actualiza st.session_state["idioma"] cuando el usuario cambia la selección.
+    Retorna el código de idioma activo: "es", "de" o "en".
+    """
+    opciones = {"🇪🇸 Español": "es", "🇩🇪 Deutsch": "de", "🇬🇧 English": "en"}
+    seleccion = st.sidebar.selectbox(
+        "Idioma / Language / Sprache",
+        list(opciones.keys()),
+        index=list(opciones.values()).index(st.session_state.get("idioma", "es"))
+    )
+    idioma = opciones[seleccion]
+    st.session_state["idioma"] = idioma
+    return idioma
+```
+
+**Alcance del selector de idioma:** Controla el idioma de las etiquetas de la interfaz Streamlit (títulos, botones, mensajes de error). La `descripcion_llm` de cada paquete ya viene en el idioma correcto desde el Bloque 5 (detectado del perfil del usuario), por lo que no se re-solicita al cambiar idioma en la UI.
+
+### Configuración y Despliegue
+
+#### Variables de Entorno
+
+```bash
+# Backend FastAPI
+API_BASE_URL=http://localhost:8000   # URL del backend FastAPI (Bloque 3)
+
+# OpenAI (consumido por el backend, no directamente por Streamlit)
+OPENAI_API_KEY=sk-...               # Clave de API de OpenAI
+
+# Base de datos (consumido por el backend)
+DATABASE_URL=sqlite:///./tui_recsys.db
+
+# Streamlit
+STREAMLIT_SERVER_PORT=8501
+STREAMLIT_SERVER_ADDRESS=0.0.0.0
+```
+
+#### Arranque de la Aplicación
+
+Para ejecutar la aplicación localmente, se deben iniciar dos procesos independientes:
+
+```bash
+# 1. Arrancar el backend FastAPI (Bloque 3)
+uvicorn src.api.main:app --host 0.0.0.0 --port 8000 --reload
+
+# 2. Arrancar la app Streamlit (Bloque 6) — en otro terminal
+streamlit run app/Home.py --server.port 8501
+```
+
+#### Fichero de Configuración de la App
+
+```python
+# app/config.py
+import os
+
+API_BASE_URL: str = os.getenv("API_BASE_URL", "http://localhost:8000")
+API_TIMEOUT: float = float(os.getenv("API_TIMEOUT", "10.0"))
+CACHE_TTL_METRICAS: int = int(os.getenv("CACHE_TTL_METRICAS", "60"))   # segundos
+CACHE_TTL_HEALTH: int   = int(os.getenv("CACHE_TTL_HEALTH", "30"))     # segundos
+DEFAULT_IDIOMA: str = os.getenv("DEFAULT_IDIOMA", "es")
+TOP_K_RECOMENDACIONES: int = int(os.getenv("TOP_K_RECOMENDACIONES", "3"))
+```
+
+#### Dependencias Python del Bloque 6
+
+```
+# requirements-app.txt (añadir a requirements.txt principal)
+streamlit>=1.35.0
+requests>=2.31.0
+httpx>=0.27.0
+altair>=5.3.0
+pandas>=2.2.0
+plotly>=5.22.0
+pydantic>=2.7.0
+```
+
+
+### Propiedades de Corrección (PBT relevantes del Bloque 6)
+
+*Una propiedad es una característica o comportamiento que debe cumplirse en todas las ejecuciones válidas del sistema — esencialmente, una afirmación formal sobre lo que el sistema debe hacer.*
+
+#### B6-1: Suma de preferencias validada antes de llamar a la API
+
+*Para cualquier* conjunto de valores de los 6 sliders de preferencias temáticas cuya suma difiera de 1.0 en más de 0.01, la función `render_perfil_form()` **NO** debe llamar a la API ni retornar un `PerfilViajeroRequest`. Debe mostrar un mensaje de error y retornar `None`.
+
+**Valida: Requisito 6** (formulario de perfil del viajero — validación de entrada)
+
+#### B6-2: Tres escenarios siempre presentes en la comparativa
+
+*Para cualquier* respuesta válida de la API, `render_comparativa_escenarios()` debe renderizar exactamente 3 columnas con las etiquetas `"tradicional"`, `"moderado"` e `"intensivo"`, independientemente del número de paquetes en cada lista.
+
+**Valida: Requisito 6** (comparativa de escenarios de recomendación)
+
+#### B6-3: Fallback de conexión nunca lanza excepción al usuario
+
+*Para cualquier* llamada a `safe_api_call()` que resulte en `ConnectionError`, `Timeout` o `HTTPError`, la función debe mostrar un mensaje de error en la UI y retornar `None`. **NUNCA** debe propagar la excepción hasta Streamlit (lo que causaría una página de error en blanco).
+
+**Valida: Requisito 6** (manejo robusto de errores de comunicación con el backend)
+
+#### B6-4: Session state siempre inicializado
+
+*Para cualquier* flujo de navegación en la app (carga inicial, cambio de página, recarga), todas las claves definidas en `inicializar_session_state()` deben existir en `st.session_state` antes de que cualquier componente intente leerlas.
+
+**Valida: Requisito 6** (estabilidad del estado de sesión entre páginas)
+
+#### B6-5: Perfil persistido entre escenarios
+
+*Para cualquier* usuario que haya obtenido recomendaciones y cambie entre columnas de escenarios, el `perfil_actual` en `st.session_state` debe ser el mismo objeto sin requerir reintroducción de datos.
+
+**Valida: Requisito 6** (persistencia del perfil durante la sesión de uso)
+
+---
+
+## Estructura de Carpetas del Proyecto
+
+```
+tui-recommendation-model/
+├── app/                              # Bloque 6 — Interfaz Streamlit
+│   ├── Home.py
+│   ├── pages/
+│   │   ├── 1_App_Usuario.py
+│   │   └── 2_Dashboard_TUI.py
+│   ├── components/
+│   │   ├── perfil_form.py
+│   │   ├── ranking_card.py
+│   │   ├── explicabilidad_panel.py
+│   │   ├── metricas_redistribucion.py
+│   │   └── health_status.py
+│   ├── api/
+│   │   └── client.py
+│   └── config.py
+├── src/
+│   ├── scraping/                     # Bloque 1 — Scraping y Limpieza
+│   │   ├── __init__.py
+│   │   ├── orchestrator.py           # ScraperOrchestrator
+│   │   ├── tui_spider.py             # TUISpider (ES/DE/UK)
+│   │   ├── reddit_collector.py       # RedditCollector (PRAW)
+│   │   ├── tripadvisor_scraper.py    # TripAdvisorScraper
+│   │   ├── booking_scraper.py        # BookingOccupancyScraper
+│   │   ├── statistics_client.py      # Eurostat / INE / UNWTO
+│   │   └── cleaner.py                # DataCleaner
+│   ├── embeddings/                   # Bloque 2 — Embeddings y NLP
+│   │   ├── __init__.py
+│   │   ├── text_embedder.py          # TextEmbedder (MiniLM / e5-large)
+│   │   ├── review_aggregator.py      # ReviewAggregator
+│   │   ├── semantic_fuser.py         # SemanticFuser
+│   │   └── hybrid_vector_builder.py  # HybridVectorBuilder
+│   ├── data/                         # Bloque 3 — Data Engineering
+│   │   ├── __init__.py
+│   │   ├── models.py                 # Modelos SQLAlchemy (tablas)
+│   │   ├── repository.py             # Repositorio (CRUD)
+│   │   ├── vector_store.py           # Chroma / pgvector wrapper
+│   │   ├── synthetic_users.py        # SyntheticUserGenerator
+│   │   └── retry_policy.py           # RetryPolicy
+│   ├── api/                          # Bloque 3 — FastAPI
+│   │   ├── __init__.py
+│   │   ├── main.py                   # FastAPI app, routers
+│   │   ├── schemas.py                # Modelos Pydantic (request/response)
+│   │   └── dependencies.py           # Inyección de dependencias
+│   ├── recommender/                  # Bloque 4 — Modelo Recomendador
+│   │   ├── __init__.py
+│   │   ├── affinity/
+│   │   │   ├── cosine_model.py       # CosineAffinityModel (baseline)
+│   │   │   └── lightfm_model.py      # LightFMAffinityModel (avanzado)
+│   │   ├── tdrs_calculator.py        # TDRSCalculator
+│   │   ├── reranking_engine.py       # ReRankingEngine (3 escenarios)
+│   │   ├── explainability.py         # ExplainabilityBuilder
+│   │   ├── opportunity_detector.py   # MarketOpportunityDetector
+│   │   └── territorial_simulator.py  # TerritorialImpactSimulator
+│   └── llm/                          # Bloque 5 — Integración LLM
+│       ├── __init__.py
+│       ├── llm_adapter.py            # LLMAdapter (OpenAI GPT-4o-mini)
+│       ├── prompt_builder.py         # PromptBuilder
+│       ├── fallback_templates.py     # FallbackTemplateEngine
+│       ├── response_validator.py     # LLMResponseValidator
+│       ├── token_counter.py          # TokenCounter (tiktoken)
+│       └── usage_logger.py           # UsageLogger
+├── tests/
+│   ├── unit/
+│   │   ├── test_cleaner.py
+│   │   ├── test_embeddings.py
+│   │   ├── test_tdrs.py
+│   │   ├── test_reranking.py
+│   │   ├── test_llm_adapter.py
+│   │   └── test_fallback_templates.py
+│   ├── pbt/                          # Property-Based Tests (Hypothesis)
+│   │   ├── test_pbt_afinidad.py      # PBT-1, PBT-2, PBT-3
+│   │   ├── test_pbt_embeddings.py    # PBT-5
+│   │   ├── test_pbt_llm.py           # B5-1..B5-6
+│   │   ├── test_pbt_ui.py            # B6-1..B6-5
+│   │   └── test_pbt_data.py          # PBT-7
+│   └── integration/
+│       ├── test_api_endpoints.py
+│       └── test_pipeline_e2e.py
+├── scripts/
+│   ├── run_scraping.py               # Ejecutar ciclo de scraping
+│   ├── generate_embeddings.py        # Generar embeddings del catálogo
+│   ├── train_model.py                # Entrenar LightFM / baseline
+│   ├── generate_synthetic_users.py   # Generar 500 usuarios sintéticos
+│   └── run_simulation.py             # Simulación impacto territorial
+├── data/
+│   ├── raw/                          # Datos crudos de scrapers
+│   ├── processed/                    # Datos limpios y normalizados
+│   └── embeddings/                   # Vectores serializados (.npy)
+├── config.yml                        # Configuración central del sistema
+├── .env.example                      # Plantilla de variables de entorno
+├── requirements.txt                  # Dependencias backend
+├── requirements-app.txt              # Dependencias Streamlit
+└── README.md
+```
