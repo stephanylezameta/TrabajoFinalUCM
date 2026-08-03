@@ -1,1 +1,1 @@
-# Módulo de la API FastAPI (Bloque 6)
+"""Módulo API REST (Bloque 3)."""
