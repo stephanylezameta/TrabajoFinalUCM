@@ -162,7 +162,26 @@ def generar_paquetes(n: int = 100) -> list[Paquete]:
     paquetes = []
 
     for i in range(n):
-        destino_nombre, destino_pais, zona = random.choice(DESTINOS)
+        # Distribución desigual: destinos populares aparecen más (simula overtourism real)
+        pesos_destinos = [
+            25,  # Mallorca (dominante)
+            18,  # Tenerife (muy popular)
+            10,  # Ibiza (popular)
+            3,   # Costa del Sol
+            2,   # Lanzarote
+            1,   # Fuerteventura
+            6,   # Creta (popular)
+            2,   # Santorini
+            1,   # Rodas
+            3,   # Antalya
+            1,   # Hurghada
+            18,  # Cancún (dominante)
+            5,   # Riviera Maya
+            4,   # Punta Cana
+            1,   # Cuba
+        ]
+        destino_idx = random.choices(range(len(DESTINOS)), weights=pesos_destinos, k=1)[0]
+        destino_nombre, destino_pais, zona = DESTINOS[destino_idx]
         categoria = random.choice(CATEGORIAS)
         temporada = random.choice(TEMPORADAS)
         mercado = random.choice(MERCADOS)
@@ -518,20 +537,20 @@ def main() -> None:
     parser.add_argument(
         "--paquetes",
         type=int,
-        default=100,
-        help="Número de paquetes a generar (default: 100)",
+        default=10000,
+        help="Número de paquetes a generar (default: 10000)",
     )
     parser.add_argument(
         "--resenas",
         type=int,
-        default=200,
-        help="Número de reseñas a generar (default: 200)",
+        default=3000,
+        help="Número de reseñas a generar (default: 3000)",
     )
     parser.add_argument(
         "--indicadores",
         type=int,
-        default=50,
-        help="Número de indicadores a generar (default: 50)",
+        default=500,
+        help="Número de indicadores a generar (default: 500)",
     )
     args = parser.parse_args()
 

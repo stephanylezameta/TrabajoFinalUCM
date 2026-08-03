@@ -1,0 +1,339 @@
+================================================================================
+  MANUAL DE CONFIGURACION DEL SCRAPING
+  Motor de Recomendacion Turistica TUI
+================================================================================
+
+
+================================================================================
+1. ANTES DE EMPEZAR
+================================================================================
+
+Asegurate de tener:
+
+  - Python 3.11 o superior
+  - Google Chrome instalado (version 120+)
+  - Git instalado
+  - Conexion a internet estable
+  - Al menos 4 GB de RAM (Selenium con Chrome consume bastante)
+
+Sistemas operativos soportados: Windows 10/11, Linux, macOS.
+
+
+================================================================================
+2. CLONAR EL REPOSITORIO
+================================================================================
+
+Valida que tengas el repositorio clonado y en la rama correcta (main o la
+rama de desarrollo que estemos usando)
+
+
+================================================================================
+3. CREAR EL ENTORNO VIRTUAL
+================================================================================
+
+Hay que crear un entorno virtual de Python para no ensuciar la instalacion
+global. Ejecuta desde la carpeta TFM/:
+
+--- Windows (PowerShell) ---
+
+  python -m venv .venv
+  .venv\Scripts\Activate.ps1
+
+  (Si PowerShell no te deja activarlo, ejecuta primero esto:)
+  Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+
+--- Windows (CMD) ---
+
+  python -m venv .venv
+  .venv\Scripts\activate.bat
+
+--- Linux / macOS ---
+
+  python3 -m venv .venv
+  source .venv/bin/activate
+
+Sabras que esta activo cuando veas (.venv) al inicio de la linea de comandos.
+
+
+================================================================================
+4. INSTALAR DEPENDENCIAS
+================================================================================
+
+Con el entorno virtual activo:
+
+  pip install --upgrade pip
+  pip install -r requirements.txt
+
+Esto instala todo lo necesario. Las librerias clave para scraping son:
+
+  - selenium (automatizacion del navegador)
+  - webdriver-manager (descarga automatica de ChromeDriver)
+  - beautifulsoup4, lxml (parsing de HTML)
+  - requests (llamadas HTTP a APIs de estadisticas)
+  - langdetect (deteccion de idioma)
+  - sqlalchemy (base de datos)
+  - python-dotenv (carga del .env)
+  - pandas, numpy (procesamiento de datos)
+
+Si la instalacion completa te da problemas (por torch u otras librerias
+pesadas), puedes crear un requirements-scraping.txt solo con lo minimo:
+
+  selenium==4.21.0
+  webdriver-manager==4.0.1
+  beautifulsoup4==4.12.3
+  lxml==5.2.2
+  requests==2.32.3
+  langdetect==1.0.9
+  sqlalchemy==2.0.30
+  python-dotenv==1.0.1
+  pyyaml==6.0.1
+  loguru==0.7.2
+  pandas==2.2.2
+  numpy==1.26.4
+
+
+================================================================================
+5. INSTALAR GOOGLE CHROME
+================================================================================
+
+El scraping usa Selenium con Chrome en modo headless. Solo necesitas tener
+Chrome instalado; el chromedriver se descarga solo gracias a webdriver-manager.
+
+  - Windows: Bajalo de https://www.google.com/chrome/ e instala normal.
+
+  - Linux (Ubuntu/Debian):
+      wget https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+      sudo dpkg -i google-chrome-stable_current_amd64.deb
+      sudo apt-get install -f
+
+  - macOS:
+      brew install --cask google-chrome
+
+Para verificar que todo esta bien:
+
+  python -c "from selenium import webdriver; d = webdriver.Chrome(); d.quit(); print('OK')"
+
+Si imprime "OK", estas listo.
+
+
+================================================================================
+6. CONFIGURAR VARIABLES DE ENTORNO
+================================================================================
+
+Copia la plantilla del .env:
+
+  Windows:    copy .env.example .env
+  Linux/Mac:  cp .env.example .env
+
+Abre el archivo .env y revisa estos valores:
+
+  # Base de datos (SQLite, funciona sin tocar nada)
+  DATABASE_URL=sqlite:///data/tui_recomendador.db
+
+  # OpenAI (solo si vas a usar la parte de LLM, NO es necesario para scraping)
+  OPENAI_API_KEY=sk-...
+
+  # Nivel de log
+  LOG_LEVEL=INFO
+
+Eso es todo lo que necesitas para el scraping. El resto de variables son
+opcionales o para otros modulos del proyecto.
+
+IMPORTANTE: No subas el .env al repositorio, ya esta en .gitignore.
+
+
+================================================================================
+7. PREPARAR LA BASE DE DATOS
+================================================================================
+
+La base de datos SQLite se crea automaticamente al ejecutar el scraping.
+Solo asegurate de que exista la carpeta data/:
+
+  Windows:    if (!(Test-Path data)) { New-Item -ItemType Directory -Path data }
+  Linux/Mac:  mkdir -p data
+
+Si quieres crear las tablas antes de ejecutar nada:
+
+  python -c "
+  import sys; sys.path.insert(0, '.')
+  from src.data.repository import Repositorio
+  repo = Repositorio('sqlite:///data/tui_recomendador.db')
+  repo.crear_tablas()
+  print('Tablas creadas')
+  "
+
+
+================================================================================
+8. EJECUTAR EL SCRAPING
+================================================================================
+
+Siempre ejecuta desde la carpeta TFM/ (la raiz del proyecto).
+
+--- Modo estandar (todas las fuentes) ---
+
+  python scripts/run_scraping.py
+
+--- Solo algunas fuentes ---
+
+  python scripts/run_scraping.py --sources tripadvisor reddit
+
+--- Destinos especificos ---
+
+  python scripts/run_scraping.py --regiones Mallorca Tenerife Cancun
+
+--- Combinando opciones ---
+
+  python scripts/run_scraping.py --sources tripadvisor --regiones Mallorca Ibiza --log-level DEBUG
+
+--- Scraping masivo con rotacion de destinos ---
+
+  python scripts/run_bulk_scraping.py --objetivo 5000 --rondas 10 --pausa-ronda 30
+
+  Esto rota entre grupos de destinos y fuentes, con deduplicacion automatica.
+  Parametros:
+    --objetivo      Numero de resenas totales a alcanzar (default: 5000)
+    --rondas        Cuantas rondas hacer como maximo (default: 10)
+    --pausa-ronda   Segundos de espera entre rondas (default: 30)
+
+
+--- Fuentes que usa el sistema ---
+
+  tripadvisor   Resenas de destinos (Selenium)
+  reddit        Posts de viajes (Selenium, navega old.reddit.com)
+  booking       Nivel de ocupacion hotelera (Selenium)
+  eurostat      Indicadores de ocupacion (API REST publica)
+  ine           Indicadores de Espana (API REST publica)
+  unwto         Llegadas de turistas (API REST publica)
+
+
+--- Scraping del catalogo TUI ---
+
+  python -c "
+  import sys; sys.path.insert(0, '.')
+  from src.scraping.tui_spider import crear_spider_es
+  with crear_spider_es() as spider:
+      paquetes = spider.extract_packages('mediterraneo')
+      print(f'Paquetes extraidos: {len(paquetes)}')
+  "
+
+  Mercados: crear_spider_es(), crear_spider_de(), crear_spider_uk()
+
+
+================================================================================
+9. FUSIONAR DATOS CON LA BD DEL EQUIPO
+================================================================================
+
+Cada quien scrapea en su propia BD local. Cuando quieras aportar tus datos
+nuevos a la BD centralizada del equipo, usa el script de merge:
+
+  python scripts/merge_databases.py --origen data/mi_bd_local.db --destino data/tui_recomendador.db
+
+El script compara por hash MD5 del texto: si una resena ya existe en la BD
+destino, la salta. Solo inserta las que son nuevas.
+
+Flujo de trabajo del equipo:
+
+  1. Cada miembro scrapea en su maquina (genera su BD local)
+  2. Copia su .db a una carpeta compartida (Drive, USB, red local, etc.)
+  3. Alguien ejecuta el merge contra la BD principal
+  4. Los registros nuevos se suman, los duplicados se ignoran
+
+Ejemplo concreto:
+
+  # Juan scrapeo y te paso su BD por Drive
+  python scripts/merge_databases.py --origen "C:/Users/Steph/Downloads/bd_juan.db" --destino data/tui_recomendador.db
+
+  # Maria tambien aporta la suya
+  python scripts/merge_databases.py --origen "C:/Users/Steph/Downloads/bd_maria.db" --destino data/tui_recomendador.db
+
+El script te muestra cuantos registros nuevos se aportaron y cuantos ya existian.
+
+
+================================================================================
+10. SI ALGO FALLA
+================================================================================
+
+--- "chromedriver executable needs to be in PATH" ---
+
+  Chrome no esta instalado o webdriver-manager no puede descargarlo.
+  -> Verifica que Chrome esta instalado.
+  -> pip install --upgrade webdriver-manager
+
+--- "This version of ChromeDriver only supports Chrome version X" ---
+
+  Version de ChromeDriver desactualizada.
+  -> pip install --upgrade webdriver-manager
+  (Se descarga la version correcta automaticamente)
+
+--- "DevToolsActivePort file doesn't exist" (Linux) ---
+
+  Chrome no puede arrancar en headless.
+  -> Instalar dependencias de sistema:
+     sudo apt-get install -y libnss3 libxss1 libatk-bridge2.0-0 libgtk-3-0
+
+--- "Permission denied" al ejecutar chromedriver (Linux/macOS) ---
+
+  -> chmod +x en el chromedriver descargado
+
+--- Timeout / No salen resultados de TripAdvisor o Reddit ---
+
+  Las webs pueden bloquear por rate limiting o CAPTCHAs.
+  -> Esperar un rato y reintentar.
+  -> Cambiar user-agent en config.yml (seccion scraping.selenium.user_agent)
+  -> Usar VPN si hay bloqueo por IP.
+  -> Reducir destinos por ronda.
+
+--- "ModuleNotFoundError: No module named 'src'" ---
+
+  No estas ejecutando desde la carpeta correcta.
+  -> Asegurate de estar en la carpeta TFM/ al ejecutar los scripts.
+  -> O agrega al PYTHONPATH:
+     Windows:   $env:PYTHONPATH = "ruta\a\TFM"
+     Linux:     export PYTHONPATH=/ruta/a/TFM
+
+--- "no such table: resenas" ---
+
+  La BD no tiene las tablas creadas.
+  -> El orquestador (run_scraping.py) las crea automaticamente.
+  -> Si usas run_bulk_scraping.py, crea las tablas antes (ver seccion 8).
+
+
+================================================================================
+11. ARQUITECTURA RAPIDA
+================================================================================
+
+El flujo es asi:
+
+  run_scraping.py
+      |
+      +-- ScraperOrchestrator.run_cycle()
+              |-- TripAdvisorScraper     -> Resenas
+              |-- RedditCollector         -> Posts/Resenas
+              |-- BookingOccupancyScraper -> Indicadores de ocupacion
+              |-- StatisticsClient       -> Indicadores publicos (Eurostat/INE)
+              +-- DataCleaner -> Repositorio (guarda en SQLite)
+
+Cada fuente se ejecuta de forma independiente: si una falla, las demas siguen.
+
+Reintentos: 3 intentos con backoff de [1, 2, 4] segundos (configurado en config.yml).
+
+Deduplicacion: hash MD5 del texto para no guardar resenas repetidas.
+
+
+================================================================================
+CHECKLIST RAPIDO
+================================================================================
+
+  [ ] Tengo el repo clonado y en la rama correcta
+  [ ] Python 3.11+ instalado
+  [ ] Chrome instalado
+  [ ] Entorno virtual creado y activado
+  [ ] pip install -r requirements.txt sin errores
+  [ ] Archivo .env creado (copiado de .env.example)
+  [ ] Carpeta data/ existe
+  [ ] Selenium funciona: python -c "from selenium import webdriver; ..."
+  [ ] Puedo ejecutar: python scripts/run_scraping.py --sources tripadvisor --regiones Mallorca
+
+Si todo esta marcado, estas listo para scrapear.
+
+================================================================================

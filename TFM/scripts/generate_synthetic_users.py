@@ -21,7 +21,7 @@ def main():
     
     print("Generando usuarios sintéticos...")
     generator = SyntheticUserGenerator(random_seed=42)
-    usuarios = generator.generate_batch(n=500)
+    usuarios = generator.generate_batch(n=1000)
     
     print(f"  -> {len(usuarios)} usuarios generados (coherentes y únicos)")
     

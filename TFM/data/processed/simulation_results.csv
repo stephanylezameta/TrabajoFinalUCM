@@ -1,0 +1,4 @@
+escenario,gini,cr5,num_destinos,total_recomendaciones
+tradicional,0.5922727272727273,0.9032,11,10000
+moderado,0.15566666666666668,0.5,12,10000
+intensivo,0.16325,0.5,12,10000

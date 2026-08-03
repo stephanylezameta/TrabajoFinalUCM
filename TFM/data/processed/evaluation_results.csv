@@ -1,0 +1,4 @@
+escenario,precision_5,precision_10,recall_5,recall_10,ndcg_5,ndcg_10,diversity_destino,diversity_categoria,cobertura,gini,cr5
+tradicional,0.0618,0.0597,0.0037,0.0072,0.2855,0.2930,0.5617,0.4365,0.0053,0.5923,0.9032
+moderado,0.0748,0.0937,0.0040,0.0105,0.2873,0.3078,1.0000,0.4734,0.0027,0.1559,0.5000
+intensivo,0.1136,0.1261,0.0059,0.0160,0.3202,0.3411,1.0000,0.5059,0.0018,0.1631,0.5000
