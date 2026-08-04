@@ -62,6 +62,9 @@ class RedditCollectorArcticShift:
     subreddits_default = [
         "travel", "solotravel", "backpacking", "TravelHacks",
         "vacation", "digitalnomad", "Flights",
+        # Subreddits más específicos de región/destino: suelen tener
+        # menos competencia de búsqueda y más contenido sin explotar.
+        "Spain", "Mexico", "greece", "travelpartners", "shoestring",
     ]
 
     def __init__(
@@ -105,19 +108,7 @@ class RedditCollectorArcticShift:
         before: str | None = None,
         after: str | None = None,
     ) -> list[dict[str, Any]]:
-        """Recolecta posts históricos de Reddit sobre un destino turístico.
-
-        Args:
-            destino: Nombre del destino a buscar (ej. "Mallorca").
-            limite: Número máximo de posts a recolectar en total.
-            before: Fecha límite superior (ISO). Si es None, usa
-                self.fecha_limite (por defecto 2025-01-01, según lo
-                acordado con el equipo).
-            after: Fecha límite inferior (ISO), opcional.
-
-        Returns:
-            Lista de diccionarios compatibles con el modelo Resena.
-        """
+        """Recolecta posts históricos de Reddit sobre un destino turístico."""
         before = before or self.fecha_limite
         resultados: list[dict[str, Any]] = []
         vistos: set[str] = set()
@@ -168,23 +159,106 @@ class RedditCollectorArcticShift:
         )
         return resultados[:limite]
 
-    def _get_con_reintentos(self, params: dict[str, Any]) -> list[dict[str, Any]]:
-        """Hace el request con reintentos y backoff exponencial ante 429/5xx.
+    def collect_comments(
+        self,
+        destino: str,
+        limite: int = 100,
+        before: str | None = None,
+        after: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Recolecta comentarios históricos de Reddit sobre un destino.
 
-        Respeta el header Retry-After si el servidor lo envía. Si tras
-        max_reintentos sigue fallando, propaga la excepción (el llamador
-        la captura y sigue con el siguiente subreddit, sin frenar el ciclo).
+        Los comentarios suelen tener mucho más volumen que los posts (cada
+        post puede tener docenas de comentarios), y a menudo contienen
+        opiniones más directas y específicas sobre el destino que el post
+        original. Usa el endpoint /api/comments/search de Arctic Shift.
         """
+        before = before or self.fecha_limite
+        resultados: list[dict[str, Any]] = []
+        vistos: set[str] = set()
+
+        por_subreddit = max(1, limite // max(1, len(self.subreddits)))
+
+        for subreddit in self.subreddits:
+            if len(resultados) >= limite:
+                break
+
+            params = {
+                "subreddit": subreddit,
+                "body": destino,
+                "limit": min(100, por_subreddit * 2),
+                "before": before,
+                "fields": "id,body,created_utc,score,subreddit,link_id",
+            }
+            if after:
+                params["after"] = after
+
+            try:
+                comentarios = self._get_con_reintentos(
+                    params, endpoint="comments", timeout=35
+                )
+
+                for c in comentarios:
+                    if len(resultados) >= limite:
+                        break
+                    cid = c.get("id")
+                    if not cid or cid in vistos:
+                        continue
+                    vistos.add(cid)
+
+                    resena = self._comentario_a_resena(c, destino, subreddit)
+                    if resena:
+                        resultados.append(resena)
+
+            except requests.RequestException as exc:
+                logger.warning(
+                    "RedditCollectorArcticShift: error (comments) en r/%s "
+                    "para '%s': %s",
+                    subreddit, destino, exc,
+                )
+            finally:
+                time.sleep(self.pausa)
+
+        logger.info(
+            "RedditCollectorArcticShift: %d comentario(s) para '%s'",
+            len(resultados), destino,
+        )
+        return resultados[:limite]
+
+    def collect_all(
+        self,
+        destino: str,
+        limite_posts: int = 50,
+        limite_comentarios: int = 50,
+        before: str | None = None,
+        after: str | None = None,
+    ) -> list[dict[str, Any]]:
+        """Recolecta posts y comentarios combinados para un destino."""
+        posts = self.collect_posts(destino, limite_posts, before, after)
+        comentarios = self.collect_comments(
+            destino, limite_comentarios, before, after
+        )
+        return posts + comentarios
+
+    def _get_con_reintentos(
+        self, params: dict[str, Any], endpoint: str = "posts",
+        timeout: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Hace el request con reintentos y backoff exponencial ante 429/5xx."""
         ultimo_error: requests.RequestException | None = None
 
         for intento in range(self.max_reintentos + 1):
             try:
                 resp = self.session.get(
-                    f"{BASE_URL}/api/posts/search",
+                    f"{BASE_URL}/api/{endpoint}/search",
                     params=params,
-                    timeout=self.timeout,
+                    timeout=timeout or self.timeout,
                 )
-                if resp.status_code == 429 or resp.status_code >= 500:
+                if (
+                    resp.status_code == 429
+                    or resp.status_code == 422
+                    or resp.status_code >= 500
+                ):
                     espera = self._calcular_espera(resp, intento)
                     logger.info(
                         "RedditCollectorArcticShift: %s, reintentando en %.1fs "
@@ -264,6 +338,48 @@ class RedditCollectorArcticShift:
                 "score": post.get("score"),
                 "num_comments": post.get("num_comments"),
                 "fuente_extraccion": "arctic_shift",
+            },
+        }
+
+    def _comentario_a_resena(
+        self, c: dict[str, Any], destino: str, subreddit: str
+    ) -> dict[str, Any] | None:
+        """Convierte un comentario de la API de Arctic Shift a Resena."""
+        body = (c.get("body") or "").strip()
+
+        if not body or body in ("[deleted]", "[removed]") or len(body) < 20:
+            return None
+
+        created_utc = c.get("created_utc")
+        fecha_publicacion = None
+        if created_utc:
+            try:
+                fecha_publicacion = datetime.fromtimestamp(
+                    float(created_utc), tz=timezone.utc
+                ).replace(tzinfo=None)
+            except (ValueError, TypeError):
+                pass
+
+        return {
+            "id_resena": _id_deterministico("reddit_comment", c["id"]),
+            "destino_nombre": destino,
+            "fuente": "reddit",
+            "texto_original": body[:1500],
+            "idioma": self._detectar_idioma(body),
+            "puntuacion": None,
+            "fecha_publicacion": fecha_publicacion,
+            "url_fuente": (
+                f"https://reddit.com/r/{subreddit}/comments/"
+                f"{(c.get('link_id') or '').replace('t3_', '')}/"
+                f"comment/{c['id']}/"
+            ),
+            "fecha_extraccion": datetime.utcnow().isoformat(),
+            "_meta": {
+                "subreddit": subreddit,
+                "reddit_id": c["id"],
+                "score": c.get("score"),
+                "fuente_extraccion": "arctic_shift",
+                "tipo": "comentario",
             },
         }
 

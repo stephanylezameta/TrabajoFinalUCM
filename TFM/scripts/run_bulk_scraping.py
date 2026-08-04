@@ -27,15 +27,52 @@ logger = logging.getLogger(__name__)
 # 5 fuentes disponibles
 FUENTES = ["tripadvisor", "reddit", "reddit_arctic", "google_maps", "youtube"]
 
-# Grupos de destinos (se rotan)
+# ------------------------------------------------------------------------
+# Grupos de destinos (se rotan). Fuentes documentadas para la memoria TFM:
+#
+# CAPA 1 - Catálogo oficial de TUI: nombres extraídos directamente de la
+# navegación "Buscador de destinos" de es.tui.com y de la navegación de
+# tui.co.uk (destinos de resort/isla específicos que TUI vende hoy).
+#
+# CAPA 2 - Granularidad intra-isla: zonas turísticas dentro de los destinos
+# TUI más grandes (Mallorca, Tenerife, Ibiza), para capturar reseñas que
+# mencionan la zona específica en vez de solo la isla. Nombres cruzados
+# entre múltiples fuentes de turismo independientes (consistencia >=3
+# fuentes), no un catálogo único.
+#
+# CAPA 3 (pendiente) - Destinos "oportunidad" desde datos de pernoctación
+# de Eurostat: regiones con alto turismo real que TUI no cubre en su
+# catálogo actual. Se añadirá cuando se valide el pull de Eurostat.
+# ------------------------------------------------------------------------
 DESTINOS_GRUPOS = [
+    # --- Grupo 1: España/Baleares/Canarias - CAPA 1 (catálogo TUI) ---
     ["Mallorca", "Tenerife", "Ibiza", "Costa del Sol", "Lanzarote", "Fuerteventura"],
+    # --- Grupo 2: España/Baleares/Canarias - CAPA 1 ampliado ---
+    ["Menorca", "Gran Canaria", "Benidorm", "Algarve"],
+    # --- Grupo 3: Mediterráneo Este - CAPA 1 (catálogo TUI) ---
     ["Creta", "Santorini", "Rodas", "Antalya", "Hurghada"],
+    # --- Grupo 4: Mediterráneo Este - CAPA 1 ampliado ---
+    ["Chipre", "Zante", "Malta", "Sharm El Sheikh"],
+    # --- Grupo 5: Caribe/América - CAPA 1 (catálogo TUI) ---
     ["Cancun", "Riviera Maya", "Punta Cana", "Cuba", "Jamaica"],
+    # --- Grupo 6: Caribe/América - CAPA 1 ampliado ---
+    ["Aruba", "Costa Rica", "Cabo Verde", "Las Vegas"],
+    # --- Grupo 7: Variantes de búsqueda (mismos destinos, distinta query) ---
     ["Mallorca hotel opiniones", "Tenerife resort review", "Cancun all inclusive experiencia", "Creta vacaciones", "Ibiza playa turismo"],
-    ["Maldivas", "Bali", "Tailandia", "Sicilia", "Sardinia", "Croacia"],
+    # --- Grupo 8: Asia/Índico - CAPA 1 (catálogo TUI) ---
+    ["Maldivas", "Bali", "Tailandia", "Sri Lanka", "Mauricio"],
+    # --- Grupo 9: Mediterráneo Central/Adriático - CAPA 1 ---
+    ["Sicilia", "Sardinia", "Croacia", "Bulgaria", "Turquia"],
+    # --- Grupo 10: Queries en inglés (mismos destinos, otro idioma de búsqueda) ---
     ["Mallorca beach travel", "Tenerife holiday review", "Cancun vacation experience", "Crete tourism opinion", "Punta Cana resort"],
-    ["Barcelona turismo", "Roma vacaciones", "Paris viaje", "Lisboa playa", "Dubrovnik turismo"],
+    # --- Grupo 11: Ciudades (city breaks) ---
+    ["Barcelona turismo", "Roma vacaciones", "Paris viaje", "Lisboa playa", "Dubrovnik turismo", "Dubai turismo"],
+    # --- Grupo 12: Mallorca, granularidad por zona - CAPA 2 ---
+    ["Magaluf", "Alcudia Mallorca", "Playa de Palma", "Santa Ponsa", "Cala Millor"],
+    # --- Grupo 13: Tenerife/Canarias, granularidad por zona - CAPA 2 ---
+    ["Costa Adeje", "Playa de las Americas", "Puerto de la Cruz Tenerife", "Playa del Ingles"],
+    # --- Grupo 14: Ibiza, granularidad por zona - CAPA 2 ---
+    ["San Antonio Ibiza", "Playa d'en Bossa", "Santa Eulalia Ibiza"],
 ]
 
 DATABASE_PATH = "data/tui_recomendador.db"
