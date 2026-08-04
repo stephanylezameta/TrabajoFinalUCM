@@ -1,15 +1,12 @@
 """
-Scraping masivo con rotación de destinos y deduplicación.
+Scraping masivo con rotación de destinos, 5 fuentes y deduplicación.
 
-Estrategia:
-- Rota entre destinos para no hacer muchas peticiones seguidas al mismo
-- Espera entre rondas para evitar rate limiting
-- Verifica si el texto ya existe en la BD antes de guardar
-- Ejecuta múltiples rondas hasta alcanzar el objetivo
+Usa: TripAdvisor, Reddit (Selenium), Reddit Arctic Shift (API), Google Maps, YouTube.
+No elimina datos existentes, solo inserta nuevos (sin duplicados).
 
 Uso:
     cd /d D:\Master\TrabajoFinalUCM\TFM
-    python scripts/run_bulk_scraping.py --objetivo 5000 --rondas 10
+    python scripts/run_bulk_scraping.py --objetivo 5000 --rondas 30 --pausa-ronda 15
 """
 import sys
 import time
@@ -17,6 +14,7 @@ import random
 import hashlib
 import logging
 import sqlite3
+import uuid
 import argparse
 from pathlib import Path
 from datetime import datetime
@@ -26,39 +24,36 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
-# Destinos organizados por grupos (se rota entre grupos para no repetir fuente)
+# 5 fuentes disponibles
+FUENTES = ["tripadvisor", "reddit", "reddit_arctic", "google_maps", "youtube"]
+
+# Grupos de destinos (se rotan)
 DESTINOS_GRUPOS = [
-    # Grupo 1 - España
     ["Mallorca", "Tenerife", "Ibiza", "Costa del Sol", "Lanzarote", "Fuerteventura"],
-    # Grupo 2 - Grecia/Turquía/Egipto
     ["Creta", "Santorini", "Rodas", "Antalya", "Hurghada"],
-    # Grupo 3 - Caribe
     ["Cancun", "Riviera Maya", "Punta Cana", "Cuba", "Jamaica"],
-    # Grupo 4 - Variantes de búsqueda (mismos destinos, diferente query)
-    ["Mallorca hotel", "Tenerife resort", "Cancun all inclusive", "Creta vacaciones", "Ibiza playa"],
-    # Grupo 5 - Destinos adicionales para más variedad
-    ["Maldivas", "Bali", "Tailandia", "Sicilia", "Cerdeña", "Croacia"],
-    # Grupo 6 - Queries en inglés
-    ["Mallorca beach holiday", "Tenerife travel", "Cancun vacation", "Crete tourism", "Punta Cana resort"],
+    ["Mallorca hotel opiniones", "Tenerife resort review", "Cancun all inclusive experiencia", "Creta vacaciones", "Ibiza playa turismo"],
+    ["Maldivas", "Bali", "Tailandia", "Sicilia", "Sardinia", "Croacia"],
+    ["Mallorca beach travel", "Tenerife holiday review", "Cancun vacation experience", "Crete tourism opinion", "Punta Cana resort"],
+    ["Barcelona turismo", "Roma vacaciones", "Paris viaje", "Lisboa playa", "Dubrovnik turismo"],
 ]
 
-DATABASE_URL = "data/tui_recomendador.db"
+DATABASE_PATH = "data/tui_recomendador.db"
 
 
 def get_existing_hashes(db_path: str) -> set:
-    """Carga los hashes de textos ya guardados para evitar duplicados."""
+    """Carga hashes MD5 de textos ya guardados."""
     hashes = set()
     try:
         conn = sqlite3.connect(db_path)
         rows = conn.execute("SELECT texto_original FROM resenas WHERE texto_original IS NOT NULL").fetchall()
         for (texto,) in rows:
             if texto:
-                h = hashlib.md5(texto.strip().lower().encode()).hexdigest()
-                hashes.add(h)
+                hashes.add(hashlib.md5(texto.strip().lower().encode()).hexdigest())
         conn.close()
-        logger.info("Cargados %d hashes de reseñas existentes", len(hashes))
+        logger.info("Cargados %d hashes existentes", len(hashes))
     except Exception as e:
-        logger.warning("No se pudieron cargar hashes existentes: %s", e)
+        logger.warning("Error cargando hashes: %s", e)
     return hashes
 
 
@@ -73,26 +68,17 @@ def get_total_resenas(db_path: str) -> int:
         return 0
 
 
-def texto_es_duplicado(texto: str, hashes_existentes: set) -> bool:
-    """Verifica si un texto ya fue guardado (por hash MD5)."""
-    if not texto or len(texto.strip()) < 20:
-        return True
-    h = hashlib.md5(texto.strip().lower().encode()).hexdigest()
-    return h in hashes_existentes
-
-
-def guardar_resenas(resenas: list, db_path: str, hashes_existentes: set) -> int:
-    """Guarda reseñas nuevas (no duplicadas) en la BD. Retorna cuántas se guardaron."""
-    import uuid
-
+def guardar_resenas(resenas: list, db_path: str, hashes: set) -> int:
+    """Guarda reseñas no duplicadas. Retorna cuantas se guardaron."""
     nuevas = []
     for r in resenas:
         texto = r.get("texto_original", "")
-        if texto_es_duplicado(texto, hashes_existentes):
+        if not texto or len(texto.strip()) < 20:
             continue
-        # Marcar como vista
         h = hashlib.md5(texto.strip().lower().encode()).hexdigest()
-        hashes_existentes.add(h)
+        if h in hashes:
+            continue
+        hashes.add(h)
         nuevas.append(r)
 
     if not nuevas:
@@ -102,150 +88,181 @@ def guardar_resenas(resenas: list, db_path: str, hashes_existentes: set) -> int:
     for r in nuevas:
         try:
             conn.execute(
-                """INSERT INTO resenas (id_resena, destino_nombre, fuente, texto_original, 
+                """INSERT INTO resenas (id_resena, destino_nombre, fuente, texto_original,
                    idioma, puntuacion, fecha_publicacion, url_fuente, fecha_extraccion)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    str(uuid.uuid4()),
+                    r.get("id_resena", str(uuid.uuid4())),
                     r.get("destino_nombre", ""),
                     r.get("fuente", ""),
                     r.get("texto_original", ""),
                     r.get("idioma", "unknown"),
                     r.get("puntuacion"),
-                    r.get("fecha_publicacion"),
+                    str(r.get("fecha_publicacion")) if r.get("fecha_publicacion") else None,
                     r.get("url_fuente", ""),
                     r.get("fecha_extraccion", datetime.utcnow().isoformat()),
                 )
             )
-        except Exception as e:
-            logger.debug("Error insertando reseña: %s", e)
+        except Exception:
+            pass
     conn.commit()
     conn.close()
     return len(nuevas)
 
 
-def ejecutar_ronda(grupo_destinos: list, fuente: str, hashes: set) -> int:
-    """Ejecuta scraping de un grupo de destinos con una fuente. Retorna reseñas nuevas."""
-    total_nuevas = 0
+def ejecutar_scraper(fuente: str, destino: str, hashes: set) -> int:
+    """Ejecuta un scraper para un destino. Retorna reseñas nuevas guardadas."""
+    try:
+        resenas = []
 
-    if fuente == "tripadvisor":
-        from src.scraping.tripadvisor_scraper import TripAdvisorScraper
-        scraper = TripAdvisorScraper(timeout=15)
-        for destino in grupo_destinos:
-            try:
-                resenas = scraper.extraer_resenas(destino, limite=30)
-                guardadas = guardar_resenas(resenas, DATABASE_URL, hashes)
-                total_nuevas += guardadas
-                logger.info("  [TA] %s: %d extraídas, %d nuevas guardadas", destino, len(resenas), guardadas)
-                time.sleep(random.uniform(2, 5))  # Pausa entre destinos
-            except Exception as e:
-                logger.warning("  [TA] Error en %s: %s", destino, e)
+        if fuente == "tripadvisor":
+            from src.scraping.tripadvisor_scraper import TripAdvisorScraper
+            resenas = TripAdvisorScraper(timeout=15).extraer_resenas(destino, limite=40)
 
-    elif fuente == "reddit":
-        from src.scraping.reddit_collector import RedditCollector
-        collector = RedditCollector(timeout=15)
-        for destino in grupo_destinos:
-            try:
-                posts = collector.collect_posts(destino, limite=30)
-                guardadas = guardar_resenas(posts, DATABASE_URL, hashes)
-                total_nuevas += guardadas
-                logger.info("  [RD] %s: %d extraídos, %d nuevos guardados", destino, len(posts), guardadas)
-                time.sleep(random.uniform(2, 5))
-            except Exception as e:
-                logger.warning("  [RD] Error en %s: %s", destino, e)
+        elif fuente == "reddit":
+            from src.scraping.reddit_collector import RedditCollector
+            resenas = RedditCollector(timeout=15).collect_posts(destino, limite=40)
 
-    elif fuente == "reddit_arctic":
-        from src.scraping.reddit_collector_arctic_shift import RedditCollectorArcticShift
-        collector = RedditCollectorArcticShift(pausa_entre_requests=2.0)
-        for destino in grupo_destinos:
-            try:
-                posts = collector.collect_posts(destino, limite=30)
-                guardadas = guardar_resenas(posts, DATABASE_URL, hashes)
-                total_nuevas += guardadas
-                logger.info("  [RA] %s: %d extraídos, %d nuevos guardados", destino, len(posts), guardadas)
-                time.sleep(random.uniform(3, 7))
-            except Exception as e:
-                logger.warning("  [RA] Error en %s: %s", destino, e)
+        elif fuente == "reddit_arctic":
+            from src.scraping.reddit_collector_arctic_shift import RedditCollectorArcticShift
+            collector = RedditCollectorArcticShift(timeout=20, pausa_entre_requests=2.0)
+            resenas = collector.collect_posts(destino, limite=100)
 
-    return total_nuevas
+        elif fuente == "google_maps":
+            from src.scraping.google_maps_scraper import GoogleMapsScraper
+            resenas = GoogleMapsScraper(timeout=15).extraer_resenas(destino, limite=40)
+
+        elif fuente == "youtube":
+            from src.scraping.youtube_scraper import YouTubeScraper
+            resenas = YouTubeScraper(timeout=15).extraer_comentarios(destino, limite=40)
+
+        guardadas = guardar_resenas(resenas, DATABASE_PATH, hashes)
+        return guardadas
+
+    except Exception as e:
+        logger.warning("  Error [%s] %s: %s", fuente, destino, e)
+        return 0
+
+
+def deduplicar_bd_final(db_path: str) -> int:
+    """Deduplicacion final: elimina solo registros duplicados (conserva el mas reciente)."""
+    conn = sqlite3.connect(db_path)
+    rows = conn.execute("""
+        SELECT id_resena, texto_original FROM resenas
+        WHERE texto_original IS NOT NULL
+        ORDER BY fecha_extraccion DESC
+    """).fetchall()
+
+    hashes_vistos = set()
+    ids_a_eliminar = []
+
+    for id_resena, texto in rows:
+        if not texto:
+            continue
+        h = hashlib.md5(texto.strip().lower().encode()).hexdigest()
+        if h in hashes_vistos:
+            ids_a_eliminar.append(id_resena)
+        else:
+            hashes_vistos.add(h)
+
+    if ids_a_eliminar:
+        for i in range(0, len(ids_a_eliminar), 500):
+            batch = ids_a_eliminar[i:i+500]
+            placeholders = ",".join("?" * len(batch))
+            conn.execute(f"DELETE FROM resenas WHERE id_resena IN ({placeholders})", batch)
+        conn.commit()
+
+    conn.close()
+    return len(ids_a_eliminar)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Scraping masivo con rotación de destinos")
-    parser.add_argument("--objetivo", type=int, default=5000, help="Número objetivo de reseñas totales")
-    parser.add_argument("--rondas", type=int, default=10, help="Número máximo de rondas")
-    parser.add_argument("--pausa-ronda", type=int, default=30, help="Segundos de pausa entre rondas")
-    parser.add_argument(
-        "--fuentes", nargs="+", default=["reddit_arctic"],
-        choices=["tripadvisor", "reddit", "reddit_arctic"],
-        help="Fuentes a rotar durante el scraping masivo",
-    )
+    parser = argparse.ArgumentParser(description="Scraping masivo con 5 fuentes y deduplicacion")
+    parser.add_argument("--objetivo", type=int, default=5000, help="Numero objetivo de reseñas totales")
+    parser.add_argument("--rondas", type=int, default=30, help="Numero maximo de rondas")
+    parser.add_argument("--pausa-ronda", type=int, default=15, help="Segundos de pausa entre rondas")
     args = parser.parse_args()
 
     print(f"\n{'='*60}")
-    print(f"  SCRAPING MASIVO CON ROTACIÓN")
+    print(f"  SCRAPING MASIVO — 5 FUENTES")
     print(f"{'='*60}")
     print(f"  Objetivo: {args.objetivo} reseñas totales")
-    print(f"  Rondas máximas: {args.rondas}")
+    print(f"  Rondas maximas: {args.rondas}")
     print(f"  Pausa entre rondas: {args.pausa_ronda}s")
+    print(f"  Fuentes: {', '.join(FUENTES)}")
     print(f"{'='*60}\n")
 
-    # Cargar hashes existentes
-    hashes = get_existing_hashes(DATABASE_URL)
-    total_actual = get_total_resenas(DATABASE_URL)
-    print(f"Reseñas actuales en BD: {total_actual}")
-
-    if total_actual >= args.objetivo:
-        print(f"Ya se alcanzó el objetivo ({total_actual} >= {args.objetivo}). Nada que hacer.")
-        return
-
-    total_nuevas_global = 0
-    fuentes = args.fuentes
+    # Estado
+    hashes = get_existing_hashes(DATABASE_PATH)
+    total_inicio = get_total_resenas(DATABASE_PATH)
+    ejecutados = set()  # (fuente, destino) ya procesados
+    total_nuevas = 0
     start_time = time.time()
 
+    print(f"Reseñas al inicio: {total_inicio}")
+
+    if total_inicio >= args.objetivo:
+        print(f"Ya se alcanzo el objetivo ({total_inicio} >= {args.objetivo}).")
+        return
+
     for ronda in range(1, args.rondas + 1):
-        total_actual = get_total_resenas(DATABASE_URL)
+        total_actual = get_total_resenas(DATABASE_PATH)
         if total_actual >= args.objetivo:
             print(f"\n✅ Objetivo alcanzado: {total_actual} reseñas")
             break
 
-        # Seleccionar grupo de destinos (rotar)
+        # Rotar grupo y fuente
         grupo_idx = (ronda - 1) % len(DESTINOS_GRUPOS)
-        grupo = DESTINOS_GRUPOS[grupo_idx]
-        random.shuffle(grupo)  # Aleatorizar orden dentro del grupo
+        fuente_idx = (ronda - 1) % len(FUENTES)
+        grupo = list(DESTINOS_GRUPOS[grupo_idx])
+        fuente = FUENTES[fuente_idx]
+        random.shuffle(grupo)
 
-        # Alternar fuente
-        fuente = fuentes[(ronda - 1) % len(fuentes)]
+        print(f"\n--- Ronda {ronda}/{args.rondas} | {fuente.upper()} | {grupo[:3]}... ---")
 
-        print(f"\n--- Ronda {ronda}/{args.rondas} | Fuente: {fuente} | Grupo: {grupo[:3]}... ---")
+        nuevas_ronda = 0
+        for destino in grupo:
+            # No repetir fuente+destino
+            clave = (fuente, destino.lower())
+            if clave in ejecutados:
+                continue
+            ejecutados.add(clave)
 
-        try:
-            nuevas = ejecutar_ronda(grupo, fuente, hashes)
-        except Exception as e:
-            logger.error("Ronda %d falló por completo: %s. Continuando con la siguiente.", ronda, e)
-            nuevas = 0
+            guardadas = ejecutar_scraper(fuente, destino, hashes)
+            nuevas_ronda += guardadas
+            total_nuevas += guardadas
 
-        total_nuevas_global += nuevas
-        total_actual = get_total_resenas(DATABASE_URL)
+            if guardadas > 0:
+                logger.info("  [%s] %s: +%d nuevas", fuente[:2].upper(), destino, guardadas)
 
-        print(f"  Nuevas esta ronda: {nuevas} | Total en BD: {total_actual} | Objetivo: {args.objetivo}")
+            time.sleep(random.uniform(2, 4))
 
+        total_actual = get_total_resenas(DATABASE_PATH)
+        print(f"  Ronda {ronda}: +{nuevas_ronda} | Total: {total_actual} | Objetivo: {args.objetivo}")
+
+        # Pausa entre rondas
         if ronda < args.rondas and total_actual < args.objetivo:
-            pausa = args.pausa_ronda + random.randint(0, 10)
-            print(f"  Esperando {pausa}s antes de siguiente ronda...")
-            time.sleep(pausa)
+            time.sleep(args.pausa_ronda + random.randint(0, 5))
 
+    # Deduplicacion final (solo elimina duplicados, no datos originales)
+    print(f"\n--- Deduplicacion final ---")
+    eliminados = deduplicar_bd_final(DATABASE_PATH)
+    print(f"  Duplicados eliminados: {eliminados}")
+
+    total_final = get_total_resenas(DATABASE_PATH)
     elapsed = time.time() - start_time
-    total_final = get_total_resenas(DATABASE_URL)
 
     print(f"\n{'='*60}")
     print(f"  RESUMEN SCRAPING MASIVO")
     print(f"{'='*60}")
-    print(f"  Reseñas nuevas: {total_nuevas_global}")
-    print(f"  Total en BD: {total_final}")
-    print(f"  Duplicados omitidos: verificación por hash MD5")
+    print(f"  Reseñas al inicio: {total_inicio}")
+    print(f"  Reseñas nuevas: {total_nuevas}")
+    print(f"  Duplicados eliminados: {eliminados}")
+    print(f"  Total final en BD: {total_final}")
+    print(f"  Combinaciones ejecutadas: {len(ejecutados)}")
+    print(f"  Rondas completadas: {ronda}")
     print(f"  Tiempo total: {elapsed/60:.1f} minutos")
-    print(f"  Objetivo {'ALCANZADO ✅' if total_final >= args.objetivo else 'NO alcanzado ⚠️'}")
+    print(f"  Objetivo {'ALCANZADO' if total_final >= args.objetivo else 'NO alcanzado'}")
     print(f"{'='*60}\n")
 
 
