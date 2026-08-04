@@ -45,34 +45,38 @@ FUENTES = ["tripadvisor", "reddit", "reddit_arctic", "google_maps", "youtube"]
 # catálogo actual. Se añadirá cuando se valide el pull de Eurostat.
 # ------------------------------------------------------------------------
 DESTINOS_GRUPOS = [
-    # --- Grupo 1: España/Baleares/Canarias - CAPA 1 (catálogo TUI) ---
-    ["Mallorca", "Tenerife", "Ibiza", "Costa del Sol", "Lanzarote", "Fuerteventura"],
-    # --- Grupo 2: España/Baleares/Canarias - CAPA 1 ampliado ---
-    ["Menorca", "Gran Canaria", "Benidorm", "Algarve"],
-    # --- Grupo 3: Mediterráneo Este - CAPA 1 (catálogo TUI) ---
-    ["Creta", "Santorini", "Rodas", "Antalya", "Hurghada"],
-    # --- Grupo 4: Mediterráneo Este - CAPA 1 ampliado ---
-    ["Chipre", "Zante", "Malta", "Sharm El Sheikh"],
-    # --- Grupo 5: Caribe/América - CAPA 1 (catálogo TUI) ---
-    ["Cancun", "Riviera Maya", "Punta Cana", "Cuba", "Jamaica"],
-    # --- Grupo 6: Caribe/América - CAPA 1 ampliado ---
-    ["Aruba", "Costa Rica", "Cabo Verde", "Las Vegas"],
-    # --- Grupo 7: Variantes de búsqueda (mismos destinos, distinta query) ---
-    ["Mallorca hotel opiniones", "Tenerife resort review", "Cancun all inclusive experiencia", "Creta vacaciones", "Ibiza playa turismo"],
-    # --- Grupo 8: Asia/Índico - CAPA 1 (catálogo TUI) ---
-    ["Maldivas", "Bali", "Tailandia", "Sri Lanka", "Mauricio"],
-    # --- Grupo 9: Mediterráneo Central/Adriático - CAPA 1 ---
-    ["Sicilia", "Sardinia", "Croacia", "Bulgaria", "Turquia"],
-    # --- Grupo 10: Queries en inglés (mismos destinos, otro idioma de búsqueda) ---
-    ["Mallorca beach travel", "Tenerife holiday review", "Cancun vacation experience", "Crete tourism opinion", "Punta Cana resort"],
-    # --- Grupo 11: Ciudades (city breaks) ---
-    ["Barcelona turismo", "Roma vacaciones", "Paris viaje", "Lisboa playa", "Dubrovnik turismo", "Dubai turismo"],
-    # --- Grupo 12: Mallorca, granularidad por zona - CAPA 2 ---
+    # Orden: primero lo NUEVO/nunca-scrapeado (mejor rendimiento las
+    # primeras horas), al final lo ya muy explotado en corridas previas
+    # (Mallorca/Tenerife/Ibiza core, y variantes de query repetidas).
+
+    # --- Grupo 12: Mallorca, granularidad por zona - CAPA 2 (nuevo) ---
     ["Magaluf", "Alcudia Mallorca", "Playa de Palma", "Santa Ponsa", "Cala Millor"],
-    # --- Grupo 13: Tenerife/Canarias, granularidad por zona - CAPA 2 ---
+    # --- Grupo 13: Tenerife/Canarias, granularidad por zona - CAPA 2 (nuevo) ---
     ["Costa Adeje", "Playa de las Americas", "Puerto de la Cruz Tenerife", "Playa del Ingles"],
-    # --- Grupo 14: Ibiza, granularidad por zona - CAPA 2 ---
+    # --- Grupo 14: Ibiza, granularidad por zona - CAPA 2 (nuevo) ---
     ["San Antonio Ibiza", "Playa d'en Bossa", "Santa Eulalia Ibiza"],
+    # --- Grupo 2: España/Baleares/Canarias - CAPA 1 ampliado (nuevo) ---
+    ["Menorca", "Gran Canaria", "Benidorm", "Algarve"],
+    # --- Grupo 4: Mediterráneo Este - CAPA 1 ampliado (nuevo) ---
+    ["Chipre", "Zante", "Malta", "Sharm El Sheikh"],
+    # --- Grupo 6: Caribe/América - CAPA 1 ampliado (nuevo) ---
+    ["Aruba", "Costa Rica", "Cabo Verde", "Las Vegas"],
+    # --- Grupo 8: Asia/Índico - CAPA 1 (nuevo, sin explotar) ---
+    ["Maldivas", "Bali", "Tailandia", "Sri Lanka", "Mauricio"],
+    # --- Grupo 9: Mediterráneo Central/Adriático - CAPA 1 (nuevo) ---
+    ["Sicilia", "Sardinia", "Croacia", "Bulgaria", "Turquia"],
+    # --- Grupo 11: Ciudades (city breaks) - parcialmente nuevo ---
+    ["Barcelona turismo", "Roma vacaciones", "Paris viaje", "Lisboa playa", "Dubrovnik turismo", "Dubai turismo"],
+    # --- Grupo 3: Mediterráneo Este - CAPA 1 (ya explotado ayer) ---
+    ["Creta", "Santorini", "Rodas", "Antalya", "Hurghada"],
+    # --- Grupo 5: Caribe/América - CAPA 1 (ya explotado ayer) ---
+    ["Cancun", "Riviera Maya", "Punta Cana", "Cuba", "Jamaica"],
+    # --- Grupo 1: España/Baleares/Canarias - CAPA 1 (muy explotado ayer) ---
+    ["Mallorca", "Tenerife", "Ibiza", "Costa del Sol", "Lanzarote", "Fuerteventura"],
+    # --- Grupo 7: Variantes de búsqueda (muy explotado ayer) ---
+    ["Mallorca hotel opiniones", "Tenerife resort review", "Cancun all inclusive experiencia", "Creta vacaciones", "Ibiza playa turismo"],
+    # --- Grupo 10: Queries en inglés (muy explotado ayer) ---
+    ["Mallorca beach travel", "Tenerife holiday review", "Cancun vacation experience", "Crete tourism opinion", "Punta Cana resort"],
 ]
 
 DATABASE_PATH = "data/tui_recomendador.db"
