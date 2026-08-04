@@ -154,6 +154,19 @@ def ejecutar_ronda(grupo_destinos: list, fuente: str, hashes: set) -> int:
             except Exception as e:
                 logger.warning("  [RD] Error en %s: %s", destino, e)
 
+    elif fuente == "reddit_arctic":
+        from src.scraping.reddit_collector_arctic_shift import RedditCollectorArcticShift
+        collector = RedditCollectorArcticShift(pausa_entre_requests=2.0)
+        for destino in grupo_destinos:
+            try:
+                posts = collector.collect_posts(destino, limite=30)
+                guardadas = guardar_resenas(posts, DATABASE_URL, hashes)
+                total_nuevas += guardadas
+                logger.info("  [RA] %s: %d extraídos, %d nuevos guardados", destino, len(posts), guardadas)
+                time.sleep(random.uniform(3, 7))
+            except Exception as e:
+                logger.warning("  [RA] Error en %s: %s", destino, e)
+
     return total_nuevas
 
 
@@ -162,6 +175,11 @@ def main():
     parser.add_argument("--objetivo", type=int, default=5000, help="Número objetivo de reseñas totales")
     parser.add_argument("--rondas", type=int, default=10, help="Número máximo de rondas")
     parser.add_argument("--pausa-ronda", type=int, default=30, help="Segundos de pausa entre rondas")
+    parser.add_argument(
+        "--fuentes", nargs="+", default=["reddit_arctic"],
+        choices=["tripadvisor", "reddit", "reddit_arctic"],
+        help="Fuentes a rotar durante el scraping masivo",
+    )
     args = parser.parse_args()
 
     print(f"\n{'='*60}")
@@ -182,7 +200,7 @@ def main():
         return
 
     total_nuevas_global = 0
-    fuentes = ["tripadvisor", "reddit"]
+    fuentes = args.fuentes
     start_time = time.time()
 
     for ronda in range(1, args.rondas + 1):
@@ -201,7 +219,12 @@ def main():
 
         print(f"\n--- Ronda {ronda}/{args.rondas} | Fuente: {fuente} | Grupo: {grupo[:3]}... ---")
 
-        nuevas = ejecutar_ronda(grupo, fuente, hashes)
+        try:
+            nuevas = ejecutar_ronda(grupo, fuente, hashes)
+        except Exception as e:
+            logger.error("Ronda %d falló por completo: %s. Continuando con la siguiente.", ronda, e)
+            nuevas = 0
+
         total_nuevas_global += nuevas
         total_actual = get_total_resenas(DATABASE_URL)
 

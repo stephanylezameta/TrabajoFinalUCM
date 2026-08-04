@@ -74,7 +74,7 @@ Ejemplos:
         "--sources",
         nargs="+",
         default=None,
-        choices=["tripadvisor", "reddit", "booking", "eurostat", "ine", "unwto"],
+        choices=["tripadvisor", "reddit", "reddit_arctic", "booking", "eurostat", "ine", "unwto"],
         help=(
             "Fuentes a ejecutar. Si no se especifica, se ejecutan todas. "
             "Opciones: tripadvisor, reddit, booking, eurostat, ine, unwto"

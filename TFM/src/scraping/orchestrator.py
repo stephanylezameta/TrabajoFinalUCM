@@ -58,6 +58,7 @@ class ExtractionReport:
 FUENTES_DISPONIBLES: list[str] = [
     "tripadvisor",
     "reddit",
+    "reddit_arctic",
     "booking",
     "eurostat",
     "ine",
@@ -159,6 +160,8 @@ class ScraperOrchestrator:
                     self._ejecutar_tripadvisor(destinos, report)
                 elif fuente == "reddit":
                     self._ejecutar_reddit(destinos, report)
+                elif fuente == "reddit_arctic":
+                    self._ejecutar_reddit_arctic(destinos, report)
                 elif fuente == "booking":
                     self._ejecutar_booking(destinos, report)
                 elif fuente in ("eurostat", "ine", "unwto"):
@@ -241,6 +244,21 @@ class ScraperOrchestrator:
             if posts:
                 self._persistir_resenas(posts, report)
 
+    def _ejecutar_reddit_arctic(
+        self, destinos: list[str], report: ExtractionReport
+    ) -> None:
+        """Ejecuta el recolector de Reddit basado en Arctic Shift."""
+        from src.scraping.reddit_collector_arctic_shift import (
+            RedditCollectorArcticShift,
+        )
+
+        collector = RedditCollectorArcticShift()
+
+        for destino in destinos:
+            posts = collector.collect_posts(destino, limite=100)
+            if posts:
+                self._persistir_resenas(posts, report)
+
     def _ejecutar_booking(
         self, destinos: list[str], report: ExtractionReport
     ) -> None:
@@ -292,7 +310,7 @@ class ScraperOrchestrator:
 
         for resena_dict in resenas_raw:
             try:
-                resena = Resena(
+                kwargs = dict(
                     destino_nombre=resena_dict.get("destino_nombre", ""),
                     fuente=resena_dict.get("fuente", ""),
                     texto_original=resena_dict.get("texto_original"),
@@ -304,6 +322,10 @@ class ScraperOrchestrator:
                     url_fuente=resena_dict.get("url_fuente"),
                     fecha_extraccion=datetime.utcnow(),
                 )
+                if resena_dict.get("id_resena"):
+                    kwargs["id_resena"] = resena_dict["id_resena"]
+
+                resena = Resena(**kwargs)
                 self.repositorio.upsert_resena(resena)
                 report.total_resenas += 1
 
