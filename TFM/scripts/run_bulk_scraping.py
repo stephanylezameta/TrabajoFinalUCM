@@ -19,13 +19,18 @@ import argparse
 from pathlib import Path
 from datetime import datetime
 
+try:
+    from destinos_capa3a import DESTINOS_CAPA3A
+except ImportError:
+    DESTINOS_CAPA3A = []
+
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 # 5 fuentes disponibles
-FUENTES = ["tripadvisor", "reddit", "reddit_arctic", "google_maps", "youtube"]
+FUENTES = ["tripadvisor", "reddit", "reddit_arctic", "youtube"]  # google_maps pausado: revisar timeout/consentimiento cookies con Steph
 
 # ------------------------------------------------------------------------
 # Grupos de destinos (se rotan). Fuentes documentadas para la memoria TFM:
@@ -141,6 +146,14 @@ DESTINOS_GRUPOS = [
     ["Mallorca Urlaub Erfahrung", "Teneriffa Hotel Bewertung", "Kreta Familienurlaub",
      "Antalya All Inclusive", "Hurghada Reise Tipps", "Fuerteventura Strand"],
 ]
+
+# --- CAPA 3a - Se agregan TODAS las regiones NUTS2 de Eurostat
+# (tour_occ_nin2), sin filtro adicional: el dataset ya mide actividad
+# turística real, incluye tanto destinos saturados como no saturados,
+# necesarios ambos para que el modelo aprenda a calcular correctamente
+# las métricas de redistribución (Gini/CR5). Generado por
+# scripts/generar_destinos_eurostat.py -- ver scripts/destinos_capa3a.py
+DESTINOS_GRUPOS = DESTINOS_GRUPOS + DESTINOS_CAPA3A
 
 DATABASE_PATH = "data/tui_recomendador.db"
 
