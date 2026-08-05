@@ -36,47 +36,110 @@ FUENTES = ["tripadvisor", "reddit", "reddit_arctic", "google_maps", "youtube"]
 #
 # CAPA 2 - Granularidad intra-isla: zonas turísticas dentro de los destinos
 # TUI más grandes (Mallorca, Tenerife, Ibiza), para capturar reseñas que
-# mencionan la zona específica en vez de solo la isla. Nombres cruzados
-# entre múltiples fuentes de turismo independientes (consistencia >=3
-# fuentes), no un catálogo único.
+# mencionan la zona específica en vez de solo la isla.
 #
-# CAPA 3 (pendiente) - Destinos "oportunidad" desde datos de pernoctación
-# de Eurostat: regiones con alto turismo real que TUI no cubre en su
-# catálogo actual. Se añadirá cuando se valide el pull de Eurostat.
+# CAPA 3 - Destinos "oportunidad"/regiones de Eurostat + países no-europeos
+# del catálogo TUI (ver Capa 3a/3c más abajo en este archivo).
+#
+# Grupos de Steph (marcados STEPH) fusionados desde master: emergentes,
+# temáticas, marcas TUI y variantes multilingüe.
 # ------------------------------------------------------------------------
 DESTINOS_GRUPOS = [
-    # Orden: primero lo NUEVO/nunca-scrapeado (mejor rendimiento las
-    # primeras horas), al final lo ya muy explotado en corridas previas
-    # (Mallorca/Tenerife/Ibiza core, y variantes de query repetidas).
+    # Orden: primero lo NUEVO/nunca-scrapeado, al final lo ya explotado.
 
-    # --- Grupo 12: Mallorca, granularidad por zona - CAPA 2 (nuevo) ---
+    # --- Grupo 12: Mallorca, granularidad por zona - CAPA 2 ---
     ["Magaluf", "Alcudia Mallorca", "Playa de Palma", "Santa Ponsa", "Cala Millor"],
-    # --- Grupo 13: Tenerife/Canarias, granularidad por zona - CAPA 2 (nuevo) ---
+    # --- Grupo 13: Tenerife/Canarias, granularidad por zona - CAPA 2 ---
     ["Costa Adeje", "Playa de las Americas", "Puerto de la Cruz Tenerife", "Playa del Ingles"],
-    # --- Grupo 14: Ibiza, granularidad por zona - CAPA 2 (nuevo) ---
+    # --- Grupo 14: Ibiza, granularidad por zona - CAPA 2 ---
     ["San Antonio Ibiza", "Playa d'en Bossa", "Santa Eulalia Ibiza"],
-    # --- Grupo 2: España/Baleares/Canarias - CAPA 1 ampliado (nuevo) ---
+    # --- Grupo 2: España/Baleares/Canarias - CAPA 1 ampliado ---
     ["Menorca", "Gran Canaria", "Benidorm", "Algarve"],
-    # --- Grupo 4: Mediterráneo Este - CAPA 1 ampliado (nuevo) ---
+    # --- Grupo 4: Mediterráneo Este - CAPA 1 ampliado ---
     ["Chipre", "Zante", "Malta", "Sharm El Sheikh"],
-    # --- Grupo 6: Caribe/América - CAPA 1 ampliado (nuevo) ---
+    # --- Grupo 6: Caribe/América - CAPA 1 ampliado ---
     ["Aruba", "Costa Rica", "Cabo Verde", "Las Vegas"],
-    # --- Grupo 8: Asia/Índico - CAPA 1 (nuevo, sin explotar) ---
+    # --- Grupo 8: Asia/Índico - CAPA 1 ---
     ["Maldivas", "Bali", "Tailandia", "Sri Lanka", "Mauricio"],
-    # --- Grupo 9: Mediterráneo Central/Adriático - CAPA 1 (nuevo) ---
+    # --- Grupo 9: Mediterráneo Central/Adriático - CAPA 1 ---
     ["Sicilia", "Sardinia", "Croacia", "Bulgaria", "Turquia"],
-    # --- Grupo 11: Ciudades (city breaks) - parcialmente nuevo ---
+    # --- Grupo 11: Ciudades (city breaks) ---
     ["Barcelona turismo", "Roma vacaciones", "Paris viaje", "Lisboa playa", "Dubrovnik turismo", "Dubai turismo"],
-    # --- Grupo 3: Mediterráneo Este - CAPA 1 (ya explotado ayer) ---
+    # --- Grupo 3: Mediterráneo Este - CAPA 1 (ya explotado) ---
     ["Creta", "Santorini", "Rodas", "Antalya", "Hurghada"],
-    # --- Grupo 5: Caribe/América - CAPA 1 (ya explotado ayer) ---
+    # --- Grupo 5: Caribe/América - CAPA 1 (ya explotado) ---
     ["Cancun", "Riviera Maya", "Punta Cana", "Cuba", "Jamaica"],
-    # --- Grupo 1: España/Baleares/Canarias - CAPA 1 (muy explotado ayer) ---
+    # --- Grupo 1: España/Baleares/Canarias - CAPA 1 (muy explotado) ---
     ["Mallorca", "Tenerife", "Ibiza", "Costa del Sol", "Lanzarote", "Fuerteventura"],
-    # --- Grupo 7: Variantes de búsqueda (muy explotado ayer) ---
+    # --- Grupo 7: Variantes de búsqueda (muy explotado) ---
     ["Mallorca hotel opiniones", "Tenerife resort review", "Cancun all inclusive experiencia", "Creta vacaciones", "Ibiza playa turismo"],
-    # --- Grupo 10: Queries en inglés (muy explotado ayer) ---
+    # --- Grupo 10: Queries en inglés (muy explotado) ---
     ["Mallorca beach travel", "Tenerife holiday review", "Cancun vacation experience", "Crete tourism opinion", "Punta Cana resort"],
+
+    # ============ GRUPOS DE STEPH (fusionados desde master) ============
+    # --- STEPH Grupo 1 - Emergentes Mediterráneo ---
+    ["Georgia Batumi", "Eslovenia Portoroz", "Croacia islas", "Grecia Lefkada", "Grecia Thassos", "Italia Tropea"],
+    # --- STEPH Grupo 2 - Asia ---
+    ["Tailandia Phuket", "Tailandia Koh Samui", "Bali", "Vietnam Da Nang", "Sri Lanka", "Maldivas"],
+    # --- STEPH Grupo 3 - Océano Índico ---
+    ["Mauricio", "Seychelles", "Reunión", "Zanzíbar", "Maldivas atolón"],
+    # --- STEPH Grupo 4 - Caribe ampliado ---
+    ["Antigua", "Santa Lucía", "Granada Caribe", "Dominica", "Bonaire", "Turks and Caicos"],
+    # --- STEPH Grupo 5 - Naturaleza ---
+    ["Islandia", "Noruega fiordos", "Azores senderismo", "Madeira trekking", "Canarias volcanes", "Escocia Highlands"],
+    # --- STEPH Grupo 6 - Oriente Medio ---
+    ["Dubái", "Abu Dhabi", "Omán Muscat", "Omán Salalah", "Jordania Mar Muerto", "Jordania Aqaba"],
+    # --- STEPH Grupo 7 - México y Centroamérica ---
+    ["Playa del Carmen", "Tulum", "Los Cabos", "Puerto Vallarta", "Costa Rica", "Panamá"],
+    # --- STEPH Grupo 8 - Cabo Verde ---
+    ["Cabo Verde Sal", "Cabo Verde Boa Vista", "Cabo Verde Santiago", "Cabo Verde Santo Antão"],
+    # --- STEPH Grupo 9 - Marruecos ---
+    ["Marrakech", "Agadir", "Essaouira", "Fez", "Tánger"],
+    # --- STEPH Grupo 10 - Italia ampliada ---
+    ["Sicilia", "Cerdeña", "Calabria", "Puglia", "Costa Amalfitana", "Toscana", "Cinque Terre", "Lago de Garda"],
+    # --- STEPH Grupo 11 - Croacia y Adriático ---
+    ["Dubrovnik", "Split", "Istria", "Hvar", "Montenegro Budva", "Albania Saranda", "Albania Ksamil"],
+    # --- STEPH Grupo 12 - Turquía ampliada ---
+    ["Antalya", "Bodrum", "Dalaman", "Fethiye", "Cesme", "Kusadasi", "Marmaris", "Alanya"],
+    # --- STEPH Grupo 13 - Egipto ampliado ---
+    ["Hurghada", "Sharm el Sheikh", "Marsa Alam", "El Gouna", "Luxor"],
+    # --- STEPH Grupo 14 - Grecia continental ---
+    ["Atenas", "Salónica", "Pelión", "Halkidiki", "Peloponeso"],
+    # --- STEPH Grupo 15 - Europa otros ---
+    ["Malta", "Chipre", "Chipre Norte", "Eslovenia costa", "Bulgaria Sunny Beach"],
+    # --- STEPH Grupo 16 - Portugal atlántico ---
+    ["Algarve", "Madeira", "Azores", "Lisboa costa", "Porto"],
+    # --- STEPH Grupo 17 - Temporadas y ofertas ---
+    ["vacaciones verano 2025 oferta", "viaje invierno sol barato", "Semana Santa playa",
+     "Navidad Caribe", "puente mayo destino", "última hora vacaciones playa"],
+    # --- STEPH Grupo 18 - Comparativas ---
+    ["Mallorca vs Creta", "Cancún vs Punta Cana", "Tenerife vs Gran Canaria",
+     "Antalya vs Hurghada", "Maldivas vs Mauricio", "Costa del Sol vs Algarve", "Bali vs Tailandia"],
+    # --- STEPH Grupo 19 - Temáticas ---
+    ["vacaciones playa familia Europa", "mejor destino luna de miel", "todo incluido barato",
+     "mejor isla griega parejas", "destino sostenible Europa", "viaje aventura seguro"],
+    # --- STEPH Grupo 20 - Marcas TUI ---
+    ["TUI Blue Mallorca", "TUI Magic Life Bodrum", "TUI Sensatori Tenerife",
+     "Robinson Club Fuerteventura", "RIU Cancún", "Iberostar Creta", "Barceló Bávaro"],
+    # --- STEPH Grupo 21 - Baleares ---
+    ["Mallorca", "Ibiza", "Menorca", "Formentera"],
+    # --- STEPH Grupo 22 - Canarias ---
+    ["Tenerife", "Gran Canaria", "Lanzarote", "Fuerteventura", "La Palma", "La Gomera"],
+    # --- STEPH Grupo 23 - Costas España ---
+    ["Costa del Sol", "Costa Brava", "Costa Blanca", "Costa Dorada", "Almería", "Cádiz", "Huelva"],
+    # --- STEPH Grupo 24 - Grecia islas ---
+    ["Creta", "Santorini", "Rodas", "Kos", "Corfu", "Zante", "Mykonos", "Kefalonia", "Skiathos", "Paros", "Naxos"],
+    # --- STEPH Grupo 25 - Caribe clásico ---
+    ["Cancún", "Riviera Maya", "Punta Cana", "Cuba Varadero", "Jamaica Montego Bay", "Aruba", "Curaçao", "Barbados"],
+    # --- STEPH Grupo 26 - Opiniones español ---
+    ["Mallorca vacaciones opiniones", "Tenerife hotel todo incluido", "Cancún experiencia viaje",
+     "Creta playa familiar", "Punta Cana resort opiniones", "Antalya all inclusive"],
+    # --- STEPH Grupo 27 - Reviews inglés ---
+    ["Mallorca holiday review", "Tenerife all inclusive", "Cancun resort review",
+     "Crete family holiday", "Rhodes travel tips", "Maldives overwater villa review"],
+    # --- STEPH Grupo 28 - Bewertungen alemán ---
+    ["Mallorca Urlaub Erfahrung", "Teneriffa Hotel Bewertung", "Kreta Familienurlaub",
+     "Antalya All Inclusive", "Hurghada Reise Tipps", "Fuerteventura Strand"],
 ]
 
 DATABASE_PATH = "data/tui_recomendador.db"
