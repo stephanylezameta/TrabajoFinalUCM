@@ -27,15 +27,74 @@ logger = logging.getLogger(__name__)
 # 5 fuentes disponibles
 FUENTES = ["tripadvisor", "reddit", "reddit_arctic", "google_maps", "youtube"]
 
-# Grupos de destinos (se rotan)
+# Destinos reales TUI + destinos seguros potenciales — NUEVOS PRIMERO
 DESTINOS_GRUPOS = [
-    ["Mallorca", "Tenerife", "Ibiza", "Costa del Sol", "Lanzarote", "Fuerteventura"],
-    ["Creta", "Santorini", "Rodas", "Antalya", "Hurghada"],
-    ["Cancun", "Riviera Maya", "Punta Cana", "Cuba", "Jamaica"],
-    ["Mallorca hotel opiniones", "Tenerife resort review", "Cancun all inclusive experiencia", "Creta vacaciones", "Ibiza playa turismo"],
-    ["Maldivas", "Bali", "Tailandia", "Sicilia", "Sardinia", "Croacia"],
-    ["Mallorca beach travel", "Tenerife holiday review", "Cancun vacation experience", "Crete tourism opinion", "Punta Cana resort"],
-    ["Barcelona turismo", "Roma vacaciones", "Paris viaje", "Lisboa playa", "Dubrovnik turismo"],
+    # --- NUEVOS PRIMERO (nunca buscados) ---
+    # Grupo 1 - Emergentes Mediterráneo seguro
+    ["Georgia Batumi", "Eslovenia Portoroz", "Croacia islas", "Grecia Lefkada", "Grecia Thassos", "Italia Tropea"],
+    # Grupo 2 - Asia segura
+    ["Tailandia Phuket", "Tailandia Koh Samui", "Bali", "Vietnam Da Nang", "Sri Lanka", "Maldivas"],
+    # Grupo 3 - Océano Índico
+    ["Mauricio", "Seychelles", "Reunión", "Zanzíbar", "Maldivas atolón"],
+    # Grupo 4 - Caribe ampliado seguro
+    ["Antigua", "Santa Lucía", "Granada Caribe", "Dominica", "Bonaire", "Turks and Caicos"],
+    # Grupo 5 - Naturaleza seguros
+    ["Islandia", "Noruega fiordos", "Azores senderismo", "Madeira trekking", "Canarias volcanes", "Escocia Highlands"],
+    # Grupo 6 - Oriente Medio seguro
+    ["Dubái", "Abu Dhabi", "Omán Muscat", "Omán Salalah", "Jordania Mar Muerto", "Jordania Aqaba"],
+    # Grupo 7 - México y Centroamérica
+    ["Playa del Carmen", "Tulum", "Los Cabos", "Puerto Vallarta", "Costa Rica", "Panamá"],
+    # Grupo 8 - Cabo Verde
+    ["Cabo Verde Sal", "Cabo Verde Boa Vista", "Cabo Verde Santiago", "Cabo Verde Santo Antão"],
+    # Grupo 9 - Marruecos
+    ["Marrakech", "Agadir", "Essaouira", "Fez", "Tánger"],
+    # Grupo 10 - Italia ampliada
+    ["Sicilia", "Cerdeña", "Calabria", "Puglia", "Costa Amalfitana", "Toscana", "Cinque Terre", "Lago de Garda"],
+    # Grupo 11 - Croacia y Adriático
+    ["Dubrovnik", "Split", "Istria", "Hvar", "Montenegro Budva", "Albania Saranda", "Albania Ksamil"],
+    # Grupo 12 - Turquía ampliada
+    ["Antalya", "Bodrum", "Dalaman", "Fethiye", "Cesme", "Kusadasi", "Marmaris", "Alanya"],
+    # Grupo 13 - Egipto ampliado
+    ["Hurghada", "Sharm el Sheikh", "Marsa Alam", "El Gouna", "Luxor"],
+    # Grupo 14 - Grecia continental
+    ["Atenas", "Salónica", "Pelión", "Halkidiki", "Peloponeso"],
+    # Grupo 15 - Europa otros seguros
+    ["Malta", "Chipre", "Chipre Norte", "Eslovenia costa", "Bulgaria Sunny Beach"],
+    # Grupo 16 - Portugal atlántico
+    ["Algarve", "Madeira", "Azores", "Lisboa costa", "Porto"],
+    # Grupo 17 - Temporadas y ofertas (nuevo)
+    ["vacaciones verano 2025 oferta", "viaje invierno sol barato", "Semana Santa playa",
+     "Navidad Caribe", "puente mayo destino", "última hora vacaciones playa"],
+    # Grupo 18 - Comparativas (nuevo)
+    ["Mallorca vs Creta", "Cancún vs Punta Cana", "Tenerife vs Gran Canaria",
+     "Antalya vs Hurghada", "Maldivas vs Mauricio", "Costa del Sol vs Algarve", "Bali vs Tailandia"],
+    # Grupo 19 - Temáticas (nuevo)
+    ["vacaciones playa familia Europa", "mejor destino luna de miel", "todo incluido barato",
+     "mejor isla griega parejas", "destino sostenible Europa", "viaje aventura seguro"],
+    # Grupo 20 - Marcas TUI
+    ["TUI Blue Mallorca", "TUI Magic Life Bodrum", "TUI Sensatori Tenerife",
+     "Robinson Club Fuerteventura", "RIU Cancún", "Iberostar Creta", "Barceló Bávaro"],
+
+    # --- YA BUSCADOS (irán después si quedan rondas) ---
+    # Grupo 21 - Baleares
+    ["Mallorca", "Ibiza", "Menorca", "Formentera"],
+    # Grupo 22 - Canarias
+    ["Tenerife", "Gran Canaria", "Lanzarote", "Fuerteventura", "La Palma", "La Gomera"],
+    # Grupo 23 - Costas España
+    ["Costa del Sol", "Costa Brava", "Costa Blanca", "Costa Dorada", "Almería", "Cádiz", "Huelva"],
+    # Grupo 24 - Grecia islas
+    ["Creta", "Santorini", "Rodas", "Kos", "Corfu", "Zante", "Mykonos", "Kefalonia", "Skiathos", "Paros", "Naxos"],
+    # Grupo 25 - Caribe clásico
+    ["Cancún", "Riviera Maya", "Punta Cana", "Cuba Varadero", "Jamaica Montego Bay", "Aruba", "Curaçao", "Barbados"],
+    # Grupo 26 - Opiniones español
+    ["Mallorca vacaciones opiniones", "Tenerife hotel todo incluido", "Cancún experiencia viaje",
+     "Creta playa familiar", "Punta Cana resort opiniones", "Antalya all inclusive"],
+    # Grupo 27 - Reviews inglés
+    ["Mallorca holiday review", "Tenerife all inclusive", "Cancun resort review",
+     "Crete family holiday", "Rhodes travel tips", "Maldives overwater villa review"],
+    # Grupo 28 - Bewertungen alemán
+    ["Mallorca Urlaub Erfahrung", "Teneriffa Hotel Bewertung", "Kreta Familienurlaub",
+     "Antalya All Inclusive", "Hurghada Reise Tipps", "Fuerteventura Strand"],
 ]
 
 DATABASE_PATH = "data/tui_recomendador.db"
