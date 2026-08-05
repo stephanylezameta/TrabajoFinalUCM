@@ -75,7 +75,7 @@ DESTINOS_GRUPOS = [
     ["TUI Blue Mallorca", "TUI Magic Life Bodrum", "TUI Sensatori Tenerife",
      "Robinson Club Fuerteventura", "RIU Cancún", "Iberostar Creta", "Barceló Bávaro"],
 
-    # --- YA BUSCADOS (irán después si quedan rondas) ---
+
     # Grupo 21 - Baleares
     ["Mallorca", "Ibiza", "Menorca", "Formentera"],
     # Grupo 22 - Canarias
