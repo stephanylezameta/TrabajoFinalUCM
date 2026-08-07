@@ -1,0 +1,184 @@
+KEYWORDS_POR_DESTINO = {
+    # ------------------------------------------------------------------
+    # BALEARES (Hubs masificados vs. Alternativas)
+    # ------------------------------------------------------------------
+    "Mallorca": {
+        "GB": "Majorca holidays",
+        "DE": "Mallorca Urlaub",
+        "ES": "vacaciones Mallorca",
+    },
+    "Ibiza": {
+        "GB": "Ibiza holidays",
+        "DE": "Ibiza Urlaub",
+        "ES": "vacaciones Ibiza",
+    },
+    "Menorca": {
+        "GB": "Menorca holidays",
+        "DE": "Menorca Urlaub",
+        "ES": "vacaciones Menorca",
+    },
+    "Formentera": {
+        "GB": "Formentera holidays",
+        "DE": "Formentera Urlaub",
+        "ES": "vacaciones Formentera",
+    },
+
+    # ------------------------------------------------------------------
+    # COSTA DEL SOL (Desglose por municipios / zonas clave)
+    # ------------------------------------------------------------------
+    "Marbella": {
+        "GB": "Marbella holidays",
+        "DE": "Marbella Urlaub",
+        "ES": "vacaciones Marbella",
+    },
+    "Torremolinos": {
+        "GB": "Torremolinos holidays",
+        "DE": "Torremolinos Urlaub",
+        "ES": "vacaciones Torremolinos",
+    },
+    "Benalmádena": {
+        "GB": "Benalmadena holidays",
+        "DE": "Benalmadena Urlaub",
+        "ES": "vacaciones Benalmadena",
+    },
+    "Fuengirola": {
+        "GB": "Fuengirola holidays",
+        "DE": "Fuengirola Urlaub",
+        "ES": "vacaciones Fuengirola",
+    },
+    "Nerja": {  # Alternativa menos masificada en la zona este
+        "GB": "Nerja holidays",
+        "DE": "Nerja Urlaub",
+        "ES": "vacaciones Nerja",
+    },
+    "Estepona": {
+        "GB": "Estepona holidays",
+        "DE": "Estepona Urlaub",
+        "ES": "vacaciones Estepona",
+    },
+
+    # ------------------------------------------------------------------
+    # ISLAS CANARIAS (Desglose por islas clave)
+    # ------------------------------------------------------------------
+    "Tenerife": {
+        "GB": "Tenerife holidays",
+        "DE": "Teneriffa Urlaub",
+        "ES": "vacaciones Tenerife",
+    },
+    "Gran Canaria": {
+        "GB": "Gran Canaria holidays",
+        "DE": "Gran Canaria Urlaub",
+        "ES": "vacaciones Gran Canaria",
+    },
+    "Lanzarote": {
+        "GB": "Lanzarote holidays",
+        "DE": "Lanzarote Urlaub",
+        "ES": "vacaciones Lanzarote",
+    },
+    "Fuerteventura": {
+        "GB": "Fuerteventura holidays",
+        "DE": "Fuerteventura Urlaub",
+        "ES": "vacaciones Fuerteventura",
+    },
+    "La Palma": {  # Alternativa de bajo volumen / naturaleza
+        "GB": "La Palma holidays",
+        "DE": "La Palma Urlaub",
+        "ES": "vacaciones La Palma",
+    },
+
+    # ------------------------------------------------------------------
+    # GRECIA (Hubs hiper-saturados vs. Alternativas Cícladas / Jónicas)
+    # ------------------------------------------------------------------
+    "Santorini": {  # Hub saturado
+        "GB": "Santorini holidays",
+        "DE": "Santorin Urlaub",
+        "ES": "vacaciones Santorini",
+    },
+    "Mykonos": {  # Hub saturado
+        "GB": "Mykonos holidays",
+        "DE": "Mykonos Urlaub",
+        "ES": "vacaciones Mykonos",
+    },
+    "Creta": {
+        "GB": "Crete holidays",
+        "DE": "Kreta Urlaub",
+        "ES": "vacaciones Creta",
+    },
+    "Rodas": {
+        "GB": "Rhodes holidays",
+        "DE": "Rhodos Urlaub",
+        "ES": "vacaciones Rodas",
+    },
+    "Corfú": {
+        "GB": "Corfu holidays",
+        "DE": "Korfu Urlaub",
+        "ES": "vacaciones Corfu",
+    },
+    "Naxos": {  # Alternativa menos masificada a Santorini/Mykonos
+        "GB": "Naxos holidays",
+        "DE": "Naxos Urlaub",
+        "ES": "vacaciones Naxos",
+    },
+    "Paros": {  # Alternativa intermedia
+        "GB": "Paros holidays",
+        "DE": "Paros Urlaub",
+        "ES": "vacaciones Paros",
+    },
+    "Kos": {
+        "GB": "Kos holidays",
+        "DE": "Kos Urlaub",
+        "ES": "vacaciones Kos",
+    },
+}
+
+from trendspy import Trends
+import time
+import random
+import pandas as pd
+
+def consulta_con_reintentos(tr, keyword, timeframe, geo, max_intentos=3):
+    for intento in range(1, max_intentos + 1):
+        try:
+            return tr.interest_over_time(keywords=keyword, timeframe=timeframe, geo=geo)
+        except Exception as e:
+            if "429" in str(e):
+                espera = random.uniform(20, 40) * intento
+                print(f"Intento {intento}: rate limit (429). Esperando {espera:.0f}s...")
+                time.sleep(espera)
+            else:
+                raise
+    raise Exception(f"No se pudo completar tras {max_intentos} intentos: {keyword}/{geo}")
+
+
+def descargar_trends_destinos(keywords_por_destino, timeframe="today 3-m"):
+    """
+    Recorre cada destino x mercado emisor y arma un DataFrame único
+    con la estructura: date, origin_market, destination, search_volume_index
+    """
+    tr = Trends()
+    filas = []
+
+    for destino, keywords_idioma in keywords_por_destino.items():
+        for mercado, keyword in keywords_idioma.items():
+            print(f"Descargando: {destino} / {mercado} ({keyword})")
+            df = consulta_con_reintentos(tr, keyword, timeframe, mercado)
+
+            for fecha, row in df.iterrows():
+                filas.append({
+                    "date": fecha.strftime("%Y-%m-%d"),
+                    "origin_market": mercado,
+                    "destination": destino,
+                    "search_volume_index": row[keyword],
+                })
+
+            # Pausa aleatoria entre peticiones, como pedía el spec
+            time.sleep(random.uniform(5, 10))
+
+    return pd.DataFrame(filas)
+
+
+if __name__ == "__main__":
+    df_resultado = descargar_trends_destinos(KEYWORDS_POR_DESTINO)
+    print(df_resultado.shape)
+    print(df_resultado.head(20))
+
