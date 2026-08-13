@@ -2,11 +2,15 @@
 
 ## Visión General del Sistema
 
-El sistema se articula en **seis bloques de pipeline** que transforman datos crudos de la web de TUI y fuentes públicas en recomendaciones personalizadas explicadas en lenguaje natural. La arquitectura sigue un flujo secuencial con dependencias explícitas entre bloques, aunque los bloques 1-3 pueden ejecutarse en paralelo durante el refresco periódico de datos.
+El sistema se articula en **siete bloques de pipeline** que transforman datos crudos de la web de TUI, fuentes públicas y datasets académicos reales en recomendaciones personalizadas explicadas en lenguaje natural. La arquitectura sigue un flujo secuencial con dependencias explícitas entre bloques, aunque los bloques 1-3 pueden ejecutarse en paralelo durante el refresco periódico de datos.
+
+El **Bloque 7 es transversal de ingesta**: no es una etapa más del flujo secuencial, sino una fuente de datos adicional que alimenta la limpieza del Bloque 1 y la persistencia del Bloque 3. Al sustituir el catálogo, las reseñas y las interacciones sintéticas por observaciones reales, fuerza la regeneración de los embeddings del Bloque 2 y el reentrenamiento del modelo del Bloque 4.
 
 ```mermaid
 graph TD
-    B1[Bloque 1\nScraping y Limpieza] --> B3[Bloque 3\nData Engineering]
+    B7[Bloque 7\nDatos Reales Externos] --> B1[Bloque 1\nScraping y Limpieza]
+    B7 --> B3[Bloque 3\nData Engineering]
+    B1 --> B3
     B2[Bloque 2\nEmbeddings y NLP] --> B3
     B3 --> B4[Bloque 4\nModelo Recomendador]
     B4 --> B5[Bloque 5\nIntegración LLM]
@@ -2081,6 +2085,342 @@ pydantic>=2.7.0
 
 ---
 
+
+## Bloque 7 — Integración de Datos Reales Externos
+
+### Descripción
+
+El Bloque 7 sustituye la dependencia de datos sintéticos por datasets académicos reales procedentes del repositorio NTIC UCM 2025. **No reemplaza a los Bloques 1-6**: se conecta como una fuente de ingesta adicional al Bloque 1 (reutilizando el contrato de limpieza del `DataCleaner`) y al Bloque 3 (persistencia en el Repositorio), y fuerza la regeneración del Bloque 2 (embeddings con corpus ampliado y vector D+9) y del Bloque 4 (reentrenamiento de LightFM, TDRS con indicadores reales y validación externa).
+
+El scraping web se mantiene como fuente complementaria, pero se considera **saturado en 18.502 reseñas**: en la última ronda de 60 minutos, de 804 reseñas extraídas 789 resultaron duplicados. El crecimiento del corpus proviene por tanto de los datasets externos y no de más rondas de scraping.
+
+**Estado de partida y objetivo del bloque:**
+
+| Dimensión | Antes del Bloque 7 | Después del Bloque 7 |
+|-----------|-------------------|---------------------|
+| Reseñas | 18.502 reales (scraping) | ≥ 60.000 reales consolidadas (~75.000 con solapamientos descartados) |
+| Catálogo | 10.000 paquetes sintéticos | ≥ 5.000 paquetes reales + sintéticos como relleno |
+| Usuarios / interacciones | 1.000 usuarios sintéticos | Perfiles derivados de ~150.000 reservas reales |
+| Vector híbrido | D + 7 (391 dim con MiniLM) | D + 9 (400 dim con MiniLM) |
+| Ocupación, estacionalidad, accesibilidad | Estimadas / simuladas | Reales (Meta Data-for-Good, series mensuales, Google Places) |
+| Validación del TDRS | Reducción del Gini (interna) | Ground truth externo `Exc_turismo` (AUC-ROC ≥ 0,70) |
+
+### Arquitectura del Bloque 7
+
+```mermaid
+graph TD
+    subgraph Datasets_Externos
+        D1[Destinia\nexperiences_catalog_v1.csv]
+        D2[Destinia\nCustomer Bookings 15 CSV]
+        D3[Destinia\nReview Dataset 4 CSV]
+        D4[Smart Touring\nMovement Distribution 33 CSV]
+        D5[Smart Touring\ninteres_turistico_mensual]
+        D6[REDESCUBRIENDO ESPAÑA\nCiudades_Nivel_Turismo.csv]
+        D7[REDESCUBRIENDO ESPAÑA\nReviews_Data_Final.csv]
+        D8[SmartCity Tour\nData.csv Google Places]
+    end
+
+    subgraph Bloque7
+        EL[ExternalDatasetLoader\ncarga CSV + LoadReport]
+        RP[RealProfileBuilder\nperfiles desde reservas]
+        TI[TerritorialIndicatorBuilder\nocupación / estacionalidad /\ndiversificación / accesibilidad]
+        GV[GroundTruthValidator\nvalidación externa TDRS]
+    end
+
+    subgraph Reutilizado_Bloque1
+        DC[DataCleaner\ndedup + minmax + esquema]
+    end
+
+    subgraph Persistencia_Bloque3
+        R1[(paquetes)]
+        R2[(resenas)]
+        R3[(usuarios)]
+        R4[(interacciones)]
+        R5[(indicadores_destino)]
+        RE[(reportes\nload + validacion)]
+    end
+
+    D1 & D3 & D7 --> EL
+    D2 --> EL
+    D2 --> RP
+    D4 & D5 & D8 --> TI
+    D6 & D7 --> GV
+    EL --> DC
+    DC --> R1
+    DC --> R2
+    RP --> R3
+    RP --> R4
+    TI --> R5
+    EL --> RE
+    GV --> RE
+```
+
+### Componentes e Interfaces
+
+#### ExternalDatasetLoader
+
+Carga ficheros CSV locales aplicando el mismo contrato de limpieza y validación que el Scraper del Bloque 1 (RF-15.1). Nunca borra registros preexistentes: la política de colisión es conservar el registro existente y contabilizar el duplicado (RF-15.5).
+
+```python
+class ExternalDatasetLoader:
+    """Carga ficheros CSV locales aplicando el mismo contrato del DataCleaner."""
+    base_path: Path   # raíz del repositorio académico: "Datos NTIC UCM 2025"
+
+    def load_catalog(self, csv_path: Path) -> LoadReport:
+        """
+        Mapea experiences_catalog_v1.csv a la tabla `paquetes`.
+        Marca es_sintetico = False y registra origen_dato / url_origen / fecha_extraccion
+        con el nombre exacto del fichero y el dataset académico de procedencia (RF-15.2, RF-15.3).
+        """
+
+    def load_reviews(self, csv_path: Path) -> LoadReport:
+        """
+        Mapea Review Dataset/ y Reviews_Data_Final.csv a la tabla `resenas`,
+        conservando `Sentiment Score` y `Molestia` como campos nuevos (RF-15.4).
+        """
+
+    def load_bookings(self, csv_dir: Path) -> LoadReport:
+        """
+        Recorre los 15 CSV de Customer Bookings y deriva interacciones de tipo 'reserva'
+        con id_usuario, id_paquete y timestamp_interaccion reales (RF-16.1).
+        """
+
+    def load_territorial_indicators(self, csv_dir: Path) -> LoadReport:
+        """
+        Carga los CSV territoriales (movilidad, estacionalidad, accesibilidad)
+        en la tabla `indicadores_destino` (RF-17.1, RF-17.2, RF-17.4).
+        """
+
+    def _upsert_sin_borrar(self, records: list, clave_unicidad: tuple) -> LoadReport:
+        """
+        Inserta solo los registros cuya clave de unicidad no existe ya en el Repositorio.
+        Postcondición (RF-15.5, PBT-8): el número de registros preexistentes nunca decrece
+        y una segunda ejecución sobre el mismo fichero no inserta nada nuevo.
+        """
+```
+
+#### RealProfileBuilder
+
+Deriva perfiles de viajero desde el historial real de reservas, sustituyendo al `SyntheticUserGenerator` como fuente primaria de usuarios.
+
+```python
+class RealProfileBuilder:
+    """Deriva Perfil_Viajero desde el historial real de reservas."""
+    min_reservas_confianza: int = 2   # RF-16.3
+
+    def build_from_bookings(self, bookings: pd.DataFrame) -> list[UsuarioPerfil]:
+        """
+        Un perfil por cliente real, con es_sintetico = False (RF-16.4).
+        Clientes con menos de min_reservas_confianza reservas se marcan como
+        baja confianza y se excluyen del entrenamiento, quedando disponibles
+        para la evaluación de cold-start (RF-16.3).
+        """
+
+    def _preferencias_desde_categorias(self, categorias: list[str]) -> dict[str, float]:
+        """
+        Frecuencia relativa de las categorías reservadas, mapeada a las seis
+        preferencias temáticas y normalizada.
+        Postcondición (RF-16.2, PBT-9): suma de preferencias ∈ [0.99, 1.01]
+        y cada preferencia ∈ [0, 1].
+        """
+```
+
+#### TerritorialIndicatorBuilder
+
+Calcula los componentes territoriales del TDRS a partir de datos reales, sustituyendo los valores estimados.
+
+```python
+class TerritorialIndicatorBuilder:
+    """Calcula ocupación, estacionalidad, diversificación y accesibilidad reales."""
+
+    def ocupacion_desde_movilidad(self, movement_df: pd.DataFrame) -> dict[str, float]:
+        """
+        Normaliza el volumen de movilidad observada de Meta Data-for-Good al rango [0,1]
+        por zona GADM y mes (RF-17.1). Se conserva la regla RF-6.4 sobre el valor real:
+        ocupación > 0.85 se fuerza a 1.0 en el cálculo del TDRS.
+        """
+
+    def estacionalidad_mensual(self, interes_df: pd.DataFrame) -> dict[tuple[str, int], float]:
+        """
+        Índice de estacionalidad por (destino, mes) desde la serie 2021-2025.
+        Sustituye la regla fija de temporada basada en el mes de salida como
+        origen del componente Temporada_Baja del TDRS (RF-17.2).
+        """
+
+    def diversificacion_desde_reservas(self, bookings_df: pd.DataFrame) -> dict[str, float]:
+        """
+        Diversificación = 1 − (reservas del destino / total de reservas del dataset).
+        Reemplaza la popularidad simulada por cuota de demanda real (RF-17.3).
+        """
+
+    def accesibilidad_desde_poi(self, places_df: pd.DataFrame) -> dict[str, float]:
+        """
+        Proporción de puntos de interés con ACCESIBILIDAD_SILLA_RUEDAS = True
+        agregada por destino y normalizada a [0,1] (RF-17.4).
+        """
+```
+
+**Trazabilidad de la cobertura (RF-17.5):** cuando un destino no tiene dato territorial real, se conserva el valor estimado previo y se marca `origen_datos_ocupacion = "estimado"`, de modo que el reporte distingue destinos medidos de destinos estimados.
+
+#### GroundTruthValidator
+
+Valida el `nivel_saturacion` calculado por el sistema contra una etiqueta externa e independiente de exceso de turismo.
+
+```python
+class GroundTruthValidator:
+    """Valida el nivel_saturacion calculado contra Exc_turismo (RF-18)."""
+
+    def validate_overtourism(
+        self, saturacion: dict[str, float], ground_truth: pd.DataFrame
+    ) -> ValidationReport:
+        """
+        Etiqueta de referencia: campo Exc_turismo de Ciudades_Nivel_Turismo.csv (RF-18.1).
+        Reporta AUC-ROC, precisión, exhaustividad y matriz de confusión (RF-18.2).
+        Umbral objetivo: AUC-ROC ≥ 0.70; si no se alcanza, se registra el valor obtenido
+        y las hipótesis de desviación sin ocultar la métrica (RF-18.3).
+        """
+
+    def correlacion_molestia(
+        self, saturacion: dict[str, float], reviews_df: pd.DataFrame
+    ) -> float:
+        """
+        Correlación de Spearman entre el nivel_saturacion calculado y la etiqueta
+        Molestia agregada por destino de Reviews_Data_Final.csv (RF-18.4).
+        """
+```
+
+#### LoadReport
+
+Estructura de salida común a todas las operaciones de carga (RF-15.6).
+
+```python
+@dataclass
+class LoadReport:
+    dataset: str                      # nombre del dataset académico de procedencia
+    fichero: str                      # nombre exacto del fichero o directorio de origen
+    leidos: int                       # registros leídos del CSV
+    insertados: int                   # registros nuevos persistidos
+    duplicados: int                   # colisiones descartadas por clave de unicidad
+    excluidos: int                    # registros descartados por validación
+    motivos_exclusion: dict[str, int] # motivo -> nº de registros excluidos
+```
+
+### Mapeo Dataset → Tabla Destino
+
+| Dataset | Fichero / Directorio | Tabla destino | Campos clave | Volumen estimado |
+|---------|---------------------|---------------|--------------|-----------------|
+| Destinia | `Destinia/Customer Bookings/` (15 CSV) | `interacciones`, `usuarios` | `id_usuario`, `id_paquete`, `timestamp_interaccion`, categoría de la reserva | ~150.000 reservas |
+| Destinia | `Destinia/experiences_catalog_v1.csv` | `paquetes` | `destino_nombre`, `categoria`, `precio_base_eur`, `duracion_dias`, `es_sintetico = FALSE` | ~6.000 experiencias |
+| Destinia | `Destinia/Review Dataset/` (4 CSV) | `resenas` | `texto_original`, `puntuacion`, `Sentiment Score`, `id_destino_referencia` | ~50.000 reseñas |
+| Smart Touring | `Smart Touring/Movement Distribution Data/` (33 CSV, GADM, España 2023-2025) | `indicadores_destino` | zona GADM, `mes_referencia`, `nivel_ocupacion` | 33 ficheros mensuales |
+| Smart Touring | `Smart Touring/interes_turistico_mensual_por_ciudad.csv` | `indicadores_destino` | `destino_nombre`, `mes_referencia`, índice de estacionalidad | 8 ciudades × serie 2021-2025 |
+| REDESCUBRIENDO ESPAÑA | `REDESCUBRIENDO ESPAÑA/Ciudades_Nivel_Turismo.csv` | `indicadores_destino` (+ reporte de validación) | `destino_nombre`, `Exc_turismo` (ground truth) | Ciudades españolas etiquetadas |
+| REDESCUBRIENDO ESPAÑA | `REDESCUBRIENDO ESPAÑA/Reviews_Data_Final.csv` | `resenas` | `texto_original`, `Molestia`, `id_destino_referencia` | Reseñas con molestia percibida |
+| SmartCity Tour | `SmartCity Tour/Data.csv` (Google Places) | `paquetes` / `indicadores_destino` | `CATEGORIA_TUI`, `ACCESIBILIDAD_SILLA_RUEDAS`, destino | Puntos de interés por ciudad |
+
+### Impacto en el Bloque 2 — Embeddings (vector D+9)
+
+El corpus de reseñas pasa de 18.502 a ~75.000 documentos, lo que modifica el embedding de reputación de destino (`ReviewAggregator`) para prácticamente todos los destinos. Además, el vector híbrido se amplía de **D+7 a D+9** (391 → 400 dimensiones con MiniLM) añadiendo dos atributos numéricos nuevos:
+
+| Atributo nuevo | Origen | Peso |
+|----------------|--------|------|
+| `sentiment_score_medio_destino` | campo `Sentiment Score` de `Destinia/Review Dataset/`, promediado por destino y normalizado a [0,1] | `w8 = 0.9` |
+| `ratio_molestia_destino` | etiqueta `Molestia` de `Reviews_Data_Final.csv`, proporción de reseñas con molestia percibida por destino | `w9 = 1.2` |
+
+```python
+# Ampliación de HybridVectorBuilder — DECISIÓN-018
+# w8 = 0.9  sentiment_score_medio_destino
+# w9 = 1.2  ratio_molestia_destino  (peso alto: señal directa de saturación percibida)
+numeric_part = np.array([
+    ...,  # w1..w7 sin cambios (DECISIÓN-008)
+    self.weights['w8'] * structured_attrs['sentiment_score_medio_destino_norm'],
+    self.weights['w9'] * structured_attrs['ratio_molestia_destino'],
+])
+# Dimensión resultante: D + 9  (400 con MiniLM-384)
+```
+
+`ratio_molestia_destino` recibe el peso más alto después de `nivel_ocupacion` (w3 = 1.5) porque es una medida de impacto social directo sobre la población residente, señal que ningún atributo previo del vector capturaba.
+
+**Consecuencia operativa:** la ampliación obliga a **regenerar todos los embeddings del catálogo** y a versionar `embeddings_meta` con la nueva dimensión (`embedding_dim = 400`). Los vectores D+7 y D+9 no son comparables: la colección Chroma debe recrearse por completo, sin mezclar vectores de ambas versiones.
+
+### Impacto en el Bloque 1 — Scraping
+
+- `BookingOccupancyScraper` migra de Selenium a **Playwright**, siguiendo el patrón de `scraper_booking_final.py` del repositorio académico (mayor resistencia a bloqueos y a la detección anti-bot).
+- Se mantienen sin cambios los scrapers de **TripAdvisor**, **Google Maps** y **YouTube** (Selenium), porque ya funcionan de forma estable.
+- Se mantiene **Arctic Shift** como vía de acceso a Reddit.
+- El scraping deja de ser la vía de crecimiento del corpus: se considera saturado en 18.502 reseñas y se conserva como fuente complementaria de refresco.
+
+### Impacto en el Bloque 4 — Modelo
+
+- **Modelo_Afinidad:** LightFM (pérdida WARP) se reentrena sobre la matriz de interacciones reales, con partición train/test estratificada por usuario y ≥ 20% en test (RF-16.5).
+- **TDRS:** `Ocupación`, `Temporada_Baja`, `Diversificación` y `Accesibilidad` pasan a calcularse con datos reales (RF-17); se recalcula el TDRS de todos los paquetes afectados.
+- **Gini_Turístico:** se reporta sobre demanda real de reservas junto al valor calculado sobre demanda simulada (RF-18.6). Esto corrige dos problemas conocidos del estado actual: el Gini tradicional inflado artificialmente por los pesos desiguales de destinos en `generate_sample_data.py` (0,5923) y el Gini moderado poco realista (0,1559).
+- **Validación externa:** el `nivel_saturacion` se contrasta contra `Exc_turismo` con objetivo AUC-ROC ≥ 0,70 y correlación de Spearman frente a `Molestia` (RF-18).
+- **Métricas de referencia:** el reporte compara Precision@10 y NDCG@10 reales frente a los valores sintéticos actuales (Precision@10 = 0,0937; NDCG@10 = 0,3078) y registra explícitamente si se alcanza el umbral RF-5.4.
+
+### Flujo de Datos del Bloque 7
+
+```mermaid
+sequenceDiagram
+    participant S as scripts/load_external_datasets.py
+    participant EL as ExternalDatasetLoader
+    participant DC as DataCleaner (Bloque 1)
+    participant R as Repositorio (Bloque 3)
+    participant RP as RealProfileBuilder
+    participant TI as TerritorialIndicatorBuilder
+    participant TD as TDRSCalculator (Bloque 4)
+    participant GV as GroundTruthValidator
+
+    S->>EL: load_catalog(experiences_catalog_v1.csv)
+    EL->>DC: deduplicate + normalize_minmax + validate_schema
+    DC-->>EL: (registros válidos, exclusion_logs)
+    EL->>R: _upsert_sin_borrar(paquetes, clave_unicidad)
+    R-->>EL: insertados / duplicados
+    EL-->>S: LoadReport(catalogo)
+
+    S->>EL: load_reviews(Review Dataset/ + Reviews_Data_Final.csv)
+    Note over EL,R: Los 18.502 registros ya scrapeados se conservan
+    EL->>R: _upsert_sin_borrar(resenas)
+    EL-->>S: LoadReport(resenas)
+
+    S->>EL: load_bookings(Customer Bookings/)
+    EL->>R: upsert interacciones tipo 'reserva'
+    EL-->>S: LoadReport(bookings)
+
+    S->>RP: build_from_bookings(bookings)
+    RP->>RP: _preferencias_desde_categorias (suma = 1.0 ± 0.01)
+    RP->>R: upsert usuarios (es_sintetico = False)
+    RP-->>S: perfiles reales + perfiles de baja confianza (cold-start)
+
+    S->>TI: ocupacion / estacionalidad / diversificacion / accesibilidad
+    TI->>R: upsert indicadores_destino (origen real o "estimado")
+    R->>TD: recalculate_for_destination(destino_id)
+    TD-->>R: TDRS actualizado de los paquetes afectados
+
+    S->>GV: validate_overtourism(saturacion, Ciudades_Nivel_Turismo.csv)
+    GV->>GV: AUC-ROC, precisión, exhaustividad, matriz de confusión
+    S->>GV: correlacion_molestia(saturacion, Reviews_Data_Final.csv)
+    GV-->>R: ValidationReport (JSON/CSV con fecha y dataset de referencia)
+```
+
+### Propiedades de Corrección (PBT relevantes del Bloque 7)
+
+*Una propiedad es una característica o comportamiento que debe cumplirse en todas las ejecuciones válidas del sistema — esencialmente, una afirmación formal sobre lo que el sistema debe hacer.*
+
+#### PBT-8: Idempotencia de la carga de datasets externos
+
+*Para cualquier* fichero CSV externo válido `f`, ejecutar la carga dos veces consecutivas debe producir el mismo número de registros en el Repositorio que ejecutarla una sola vez: `count(load(f)) == count(load(f); load(f))`. Ninguna recarga debe duplicar registros ni eliminar registros preexistentes.
+
+**Valida: Requisito 15.5**
+
+#### PBT-9: Conservación de la suma de preferencias en perfiles derivados de datos reales
+
+*Para cualquier* historial no vacío de reservas de un cliente, el perfil derivado por `RealProfileBuilder` debe cumplir que la suma de sus seis preferencias temáticas ∈ [0.99, 1.01] y que todas las preferencias individuales ∈ [0, 1], independientemente del número de reservas y del reparto de categorías entre ellas.
+
+**Valida: Requisito 16.2**
+
+---
+
 ## Estructura de Carpetas del Proyecto
 
 ```
@@ -2121,7 +2461,10 @@ tui-recommendation-model/
 │   │   ├── repository.py             # Repositorio (CRUD)
 │   │   ├── vector_store.py           # Chroma / pgvector wrapper
 │   │   ├── synthetic_users.py        # SyntheticUserGenerator
-│   │   └── retry_policy.py           # RetryPolicy
+│   │   ├── retry_policy.py           # RetryPolicy
+│   │   ├── external_loader.py        # Bloque 7 — ExternalDatasetLoader
+│   │   ├── real_profile_builder.py   # Bloque 7 — RealProfileBuilder
+│   │   └── territorial_indicators.py # Bloque 7 — TerritorialIndicatorBuilder
 │   ├── api/                          # Bloque 3 — FastAPI
 │   │   ├── __init__.py
 │   │   ├── main.py                   # FastAPI app, routers
@@ -2136,7 +2479,8 @@ tui-recommendation-model/
 │   │   ├── reranking_engine.py       # ReRankingEngine (3 escenarios)
 │   │   ├── explainability.py         # ExplainabilityBuilder
 │   │   ├── opportunity_detector.py   # MarketOpportunityDetector
-│   │   └── territorial_simulator.py  # TerritorialImpactSimulator
+│   │   ├── territorial_simulator.py  # TerritorialImpactSimulator
+│   │   └── ground_truth_validator.py # Bloque 7 — GroundTruthValidator
 │   └── llm/                          # Bloque 5 — Integración LLM
 │       ├── __init__.py
 │       ├── llm_adapter.py            # LLMAdapter (OpenAI GPT-4o-mini)
@@ -2158,7 +2502,8 @@ tui-recommendation-model/
 │   │   ├── test_pbt_embeddings.py    # PBT-5
 │   │   ├── test_pbt_llm.py           # B5-1..B5-6
 │   │   ├── test_pbt_ui.py            # B6-1..B6-5
-│   │   └── test_pbt_data.py          # PBT-7
+│   │   ├── test_pbt_data.py          # PBT-7
+│   │   └── test_pbt_external.py      # PBT-8, PBT-9 (Bloque 7)
 │   └── integration/
 │       ├── test_api_endpoints.py
 │       └── test_pipeline_e2e.py
@@ -2167,7 +2512,11 @@ tui-recommendation-model/
 │   ├── generate_embeddings.py        # Generar embeddings del catálogo
 │   ├── train_model.py                # Entrenar LightFM / baseline
 │   ├── generate_synthetic_users.py   # Generar 500 usuarios sintéticos
-│   └── run_simulation.py             # Simulación impacto territorial
+│   ├── run_simulation.py             # Simulación impacto territorial
+│   ├── load_external_datasets.py     # Bloque 7 — Cargar catálogo/reseñas/reservas reales
+│   ├── build_real_profiles.py        # Bloque 7 — Derivar perfiles reales de reservas
+│   ├── load_territorial_indicators.py # Bloque 7 — Cargar indicadores territoriales reales
+│   └── validate_ground_truth.py      # Bloque 7 — Validación externa del TDRS
 ├── data/
 │   ├── raw/                          # Datos crudos de scrapers
 │   ├── processed/                    # Datos limpios y normalizados
