@@ -29,6 +29,12 @@ FUENTES = ["tripadvisor", "reddit", "reddit_arctic", "google_maps", "youtube"]
 
 # Destinos reales TUI + destinos seguros potenciales — NUEVOS PRIMERO
 DESTINOS_GRUPOS = [
+    # --- DESTINOS SIN COBERTURA (prioridad máxima) ---
+    ["Bilbao turismo", "San Sebastián turismo", "Córdoba turismo", "Cádiz turismo", "Alicante turismo", "Valencia turismo"],
+    ["Split Croatia tourism", "Cerdeña Sardinia tourism", "Costa Amalfitana tourism", "Algarve Portugal tourism", "Túnez Tunisia tourism", "Cabo Verde tourism"],
+    ["Dubái Dubai tourism", "Marrakech tourism", "Maldivas Maldives tourism", "Phuket Thailand tourism", "Bali Indonesia tourism", "Creta Crete tourism"],
+    ["Sicilia Sicily tourism", "Menorca turismo", "Fuerteventura turismo", "Lanzarote turismo", "Gran Canaria turismo", "Granada turismo"],
+
     # --- NUEVOS PRIMERO (nunca buscados) ---
     # Grupo 1 - Emergentes Mediterráneo seguro
     ["Georgia Batumi", "Eslovenia Portoroz", "Croacia islas", "Grecia Lefkada", "Grecia Thassos", "Italia Tropea"],
