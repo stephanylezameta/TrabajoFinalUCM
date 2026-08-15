@@ -2,7 +2,7 @@
 Script para generar embeddings del catálogo completo.
 
 Uso:
-    cd /d D:\Master\TrabajoFinalUCM\TFM
+    cd /d D:/Master/TrabajoFinalUCM/TFM
     python scripts/generate_embeddings.py
 """
 import sys
@@ -31,9 +31,18 @@ def main():
     output_dir.mkdir(parents=True, exist_ok=True)
     
     # Cargar datos
-    logger.info("Cargando paquetes de data/sample_tui.db...")
-    repo_paquetes = Repositorio("sqlite:///data/sample_tui.db")
+
+    db_path = Path("C:/Users/mtkyg/Downloads/tui_recomendador.db")
+    db_url = f"sqlite:///{db_path.as_posix()}"
+
+    logger.info("Cargando paquetes de %s...", db_path)
+    repo_paquetes = Repositorio(db_url)
     paquetes = repo_paquetes.list_paquetes(page_size=500)
+
+    # 🛡️ AQUÍ AGREGAS LA PRIMERA PROTECCIÓN:
+    if not paquetes:
+        logger.error("⚠️ La tabla 'paquetes' está vacía. No se pueden generar embeddings.")
+        return  # Sale sin romper todo de golpe
     logger.info("  -> %d paquetes cargados", len(paquetes))
     
     # Cargar reseñas de ambas BDs
@@ -43,8 +52,11 @@ def main():
     resenas_por_destino = defaultdict(list)
     
     # Reseñas reales
+    resenas_por_destino = defaultdict(list)
+    db_path_str = "C:/Users/mtkyg/Downloads/tui_recomendador.db"
+
     try:
-        conn = sqlite3.connect("data/tui_recomendador.db")
+        conn = sqlite3.connect(db_path_str)
         rows = conn.execute("SELECT destino_nombre, texto_original FROM resenas WHERE texto_original IS NOT NULL").fetchall()
         for destino, texto in rows:
             if texto and len(texto.strip()) > 20:
@@ -93,8 +105,11 @@ def main():
         textos_paquetes.append(texto)
     
     package_embeddings = embedder.embed_batch(textos_paquetes)
-    logger.info("  -> %d embeddings de paquetes generados (dim=%d)", len(package_embeddings), package_embeddings.shape[1])
-    
+    if len(package_embeddings) > 0:
+        logger.info("  -> %d embeddings de paquetes generados (dim=%d)", len(package_embeddings), package_embeddings.shape[1])
+    else:
+        logger.warning("⚠️ No hay embeddings de paquetes disponibles para medir su dimensión.")
+        return
     # Fusionar y construir vectores híbridos
     logger.info("Fusionando embeddings y construyendo vectores híbridos...")
     
