@@ -33,21 +33,48 @@ random.seed(42)
 
 DESTINOS = [
     # (nombre, país, zona_geográfica)
+    # --- España peninsular e islas ---
     ("Mallorca", "España", "Mediterráneo"),
-    ("Tenerife", "España", "Mediterráneo"),
+    ("Tenerife", "España", "Atlántico"),
     ("Ibiza", "España", "Mediterráneo"),
     ("Costa del Sol", "España", "Mediterráneo"),
-    ("Lanzarote", "España", "Mediterráneo"),
-    ("Fuerteventura", "España", "Mediterráneo"),
-    ("Creta", "Grecia", "Mediterráneo"),
-    ("Santorini", "Grecia", "Mediterráneo"),
-    ("Rodas", "Grecia", "Mediterráneo"),
+    ("Barcelona", "España", "Mediterráneo"),
+    ("Madrid", "España", "Interior"),
+    ("Málaga", "España", "Mediterráneo"),
+    ("Sevilla", "España", "Interior"),
+    ("Valencia", "España", "Mediterráneo"),
+    ("Gran Canaria", "España", "Atlántico"),
+    ("Alicante", "España", "Mediterráneo"),
+    ("Bilbao", "España", "Atlántico"),
+    ("San Sebastián", "España", "Atlántico"),
+    ("Córdoba", "España", "Interior"),
+    ("Granada", "España", "Interior"),
+    ("Cádiz", "España", "Atlántico"),
+    ("Fuerteventura", "España", "Atlántico"),
+    ("Lanzarote", "España", "Atlántico"),
+    ("Menorca", "España", "Mediterráneo"),
+    # --- Internacional Mediterráneo ---
     ("Antalya", "Turquía", "Mediterráneo"),
-    ("Hurghada", "Egipto", "Mediterráneo"),
+    ("Rodas", "Grecia", "Mediterráneo"),
+    ("Santorini", "Grecia", "Mediterráneo"),
+    ("Hurghada", "Egipto", "Mar Rojo"),
+    ("Split", "Croacia", "Mediterráneo"),
+    ("Creta", "Grecia", "Mediterráneo"),
+    ("Sicilia", "Italia", "Mediterráneo"),
+    ("Cerdeña", "Italia", "Mediterráneo"),
+    ("Costa Amalfitana", "Italia", "Mediterráneo"),
+    ("Algarve", "Portugal", "Atlántico"),
+    ("Túnez", "Túnez", "Mediterráneo"),
+    # --- Caribe y largo radio ---
+    ("Punta Cana", "República Dominicana", "Caribe"),
     ("Cancún", "México", "Caribe"),
     ("Riviera Maya", "México", "Caribe"),
-    ("Punta Cana", "República Dominicana", "Caribe"),
-    ("Cuba", "Cuba", "Caribe"),
+    ("Dubái", "Emiratos Árabes Unidos", "Golfo Pérsico"),
+    ("Maldivas", "Maldivas", "Océano Índico"),
+    ("Bali", "Indonesia", "Sudeste Asiático"),
+    ("Phuket", "Tailandia", "Sudeste Asiático"),
+    ("Marrakech", "Marruecos", "Norte de África"),
+    ("Cabo Verde", "Cabo Verde", "Atlántico"),
 ]
 
 CATEGORIAS = ["playa", "cultura", "aventura", "bienestar", "gastronomia", "naturaleza"]
@@ -72,6 +99,21 @@ HOTELES_CARIBE = [
     "Tropical Paradise Club", "Hotel Arena Blanca", "Coral Bay Suites",
     "Palm Beach Grand Resort", "Hotel Sol Caribeño", "Diamante Beach Resort",
     "Mayan Riviera Club", "Hotel Flamingo Caribe", "Ocean Breeze Resort",
+]
+
+HOTELES_LUJO_ASIA = [
+    "The Palm Grand Resort", "Marina Bay Suites", "Jumeirah Beach Palace",
+    "Atlantis Premium Resort", "Desert Oasis Hotel", "Golden Sands Resort",
+    "Overwater Villa Paradise", "Bali Infinity Resort", "Andaman Breeze Hotel",
+    "Azure Lagoon Villas", "Sunset Pearl Resort", "Coral Reef Club",
+    "Lotus Garden Spa Resort", "Emerald Bay Hotel", "Tropical Zen Resort",
+]
+
+HOTELES_NORTE_AFRICA = [
+    "Riad Palais Medina", "Atlas Mountains Lodge", "Sahara Oasis Resort",
+    "Kasbah Royal Hotel", "Marrakech Gardens Riad", "Le Grand Hammam Hotel",
+    "Palmeraie Club Resort", "Dar El Fenn Suites", "Medina Heritage Hotel",
+    "Oasis Palm Resort", "Dunes & Beach Club", "Le Jardin Secret Hotel",
 ]
 
 # Plantillas de descripciones por categoría (español)
@@ -162,23 +204,47 @@ def generar_paquetes(n: int = 100) -> list[Paquete]:
     paquetes = []
 
     for i in range(n):
-        # Distribución desigual: destinos populares aparecen más (simula overtourism real)
+        # Distribución desigual: destinos populares concentran demanda (simula overtourism)
         pesos_destinos = [
-            25,  # Mallorca (dominante)
-            18,  # Tenerife (muy popular)
-            10,  # Ibiza (popular)
-            3,   # Costa del Sol
-            2,   # Lanzarote
-            1,   # Fuerteventura
-            6,   # Creta (popular)
-            2,   # Santorini
-            1,   # Rodas
-            3,   # Antalya
-            1,   # Hurghada
-            18,  # Cancún (dominante)
-            5,   # Riviera Maya
-            4,   # Punta Cana
-            1,   # Cuba
+            20,  # Mallorca
+            15,  # Tenerife
+            10,  # Ibiza
+            8,   # Costa del Sol
+            18,  # Barcelona
+            12,  # Madrid
+            7,   # Málaga
+            6,   # Sevilla
+            6,   # Valencia
+            8,   # Gran Canaria
+            4,   # Alicante
+            3,   # Bilbao
+            3,   # San Sebastián
+            2,   # Córdoba
+            4,   # Granada
+            3,   # Cádiz
+            4,   # Fuerteventura
+            4,   # Lanzarote
+            3,   # Menorca
+            7,   # Antalya
+            4,   # Rodas
+            5,   # Santorini
+            3,   # Hurghada
+            3,   # Split
+            5,   # Creta
+            4,   # Sicilia
+            3,   # Cerdeña
+            3,   # Costa Amalfitana
+            4,   # Algarve
+            2,   # Túnez
+            12,  # Punta Cana
+            15,  # Cancún
+            8,   # Riviera Maya
+            10,  # Dubái
+            6,   # Maldivas
+            5,   # Bali
+            4,   # Phuket
+            3,   # Marrakech
+            2,   # Cabo Verde
         ]
         destino_idx = random.choices(range(len(DESTINOS)), weights=pesos_destinos, k=1)[0]
         destino_nombre, destino_pais, zona = DESTINOS[destino_idx]
@@ -191,13 +257,25 @@ def generar_paquetes(n: int = 100) -> list[Paquete]:
         # Seleccionar hotel según zona
         if zona == "Caribe":
             hotel = random.choice(HOTELES_CARIBE)
+        elif zona in ("Golfo Pérsico", "Océano Índico", "Sudeste Asiático"):
+            hotel = random.choice(HOTELES_LUJO_ASIA)
+        elif zona == "Norte de África":
+            hotel = random.choice(HOTELES_NORTE_AFRICA)
         else:
             hotel = random.choice(HOTELES_MEDITERRANEO)
 
         # Precio correlacionado con duración y zona
         precio_base = random.randint(400, 3000)
         if zona == "Caribe":
-            precio_base = max(800, precio_base)  # Caribe más caro
+            precio_base = max(800, precio_base)
+        elif zona in ("Golfo Pérsico", "Océano Índico"):
+            precio_base = max(1200, int(precio_base * 1.5))
+        elif zona == "Sudeste Asiático":
+            precio_base = int(precio_base * 0.8)
+        elif zona == "Norte de África":
+            precio_base = int(precio_base * 0.6)
+        elif zona == "Interior":
+            precio_base = int(precio_base * 0.85)
         if temporada == "Alta":
             precio_base = int(precio_base * random.uniform(1.1, 1.4))
         elif temporada == "Baja":
@@ -221,7 +299,18 @@ def generar_paquetes(n: int = 100) -> list[Paquete]:
         estrellas = random.choice([3.0, 3.5, 4.0, 4.5, 5.0])
 
         # Generar descripción
-        zona_adj = "mediterráneo" if zona == "Mediterráneo" else "caribeño"
+        zona_adj_map = {
+            "Mediterráneo": "mediterráneo",
+            "Caribe": "caribeño",
+            "Atlántico": "atlántico",
+            "Golfo Pérsico": "del Golfo",
+            "Océano Índico": "tropical",
+            "Sudeste Asiático": "tropical",
+            "Norte de África": "norteafricano",
+            "Mar Rojo": "del Mar Rojo",
+            "Interior": "interior",
+        }
+        zona_adj = zona_adj_map.get(zona, "internacional")
         plantillas = DESCRIPCIONES_PLANTILLAS[categoria]
         plantilla = random.choice(plantillas)
         descripcion = plantilla.format(

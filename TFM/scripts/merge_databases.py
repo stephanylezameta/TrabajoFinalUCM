@@ -1,234 +1,176 @@
 """
-Fusiona una base de datos local de scraping con la BD principal del equipo.
-
-Cada miembro del equipo scrapea en su propia BD local. Luego usa este script
-para aportar sus registros nuevos a la BD centralizada, sin duplicados.
-
-La deduplicacion se hace por hash MD5 del texto (resenas) y por clave
-compuesta (indicadores).
+Analiza y unifica las bases de datos tui_recomendador.db y tui_recomendador-javier.db.
 
 Uso:
-    cd TFM
-    python scripts/merge_databases.py --origen data/mi_bd_local.db --destino data/tui_recomendador.db
-    python scripts/merge_databases.py --origen "C:/Users/Juan/bd_juan.db" --destino data/tui_recomendador.db
+    cd /d D:\Master\TrabajoFinalUCM\TFM
+    python scripts/merge_databases.py
 """
-
-import argparse
-import hashlib
-import logging
-import sqlite3
 import sys
+import sqlite3
+import hashlib
+import uuid
 from pathlib import Path
+from datetime import datetime
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-logger = logging.getLogger(__name__)
+DB1_PATH = "data/tui_recomendador.db"
+DB2_PATH = "data/tui_recomendador-javier.db"
 
 
-def calcular_hash_texto(texto: str) -> str:
-    """Hash MD5 del texto normalizado para comparar duplicados."""
-    return hashlib.md5(texto.strip().lower().encode()).hexdigest()
-
-
-def obtener_hashes_existentes(conn: sqlite3.Connection, tabla: str, columna_texto: str) -> set:
-    """Carga los hashes de textos ya existentes en la BD destino."""
+def analizar_db(path: str) -> dict:
+    """Analiza una BD y retorna estadísticas."""
+    conn = sqlite3.connect(path)
+    
+    total = conn.execute("SELECT COUNT(*) FROM resenas").fetchone()[0]
+    fuentes = conn.execute("SELECT fuente, COUNT(*) FROM resenas GROUP BY fuente ORDER BY COUNT(*) DESC").fetchall()
+    destinos = conn.execute("SELECT destino_nombre, COUNT(*) FROM resenas GROUP BY destino_nombre ORDER BY COUNT(*) DESC LIMIT 15").fetchall()
+    idiomas = conn.execute("SELECT idioma, COUNT(*) FROM resenas GROUP BY idioma ORDER BY COUNT(*) DESC LIMIT 10").fetchall()
+    
+    textos = conn.execute("SELECT texto_original FROM resenas WHERE texto_original IS NOT NULL").fetchall()
     hashes = set()
-    try:
-        rows = conn.execute(
-            f"SELECT {columna_texto} FROM {tabla} WHERE {columna_texto} IS NOT NULL"
-        ).fetchall()
-        for (texto,) in rows:
-            if texto and len(texto.strip()) > 10:
-                hashes.add(calcular_hash_texto(texto))
-    except Exception as e:
-        logger.warning("No se pudieron cargar hashes de %s: %s", tabla, e)
-    return hashes
+    for (t,) in textos:
+        if t and len(t.strip()) > 10:
+            hashes.add(hashlib.md5(t.strip().lower().encode()).hexdigest())
+    
+    conn.close()
+    return {
+        "total": total,
+        "fuentes": fuentes,
+        "destinos": destinos,
+        "idiomas": idiomas,
+        "hashes": hashes,
+        "textos_unicos": len(hashes),
+    }
 
 
-def obtener_claves_indicadores(conn: sqlite3.Connection) -> set:
-    """Carga claves unicas de indicadores existentes (destino+fuente+tipo+anio+mes)."""
-    claves = set()
-    try:
-        rows = conn.execute(
-            "SELECT destino_nombre, fuente, tipo_indicador, anio, mes FROM indicadores_destino"
-        ).fetchall()
-        for row in rows:
-            clave = (row[0], row[1], row[2], row[3], row[4])
-            claves.add(clave)
-    except Exception:
-        pass
-    return claves
-
-
-def merge_resenas(conn_origen: sqlite3.Connection, conn_destino: sqlite3.Connection) -> int:
-    """Fusiona resenas de origen a destino, saltando duplicados por hash de texto."""
-    hashes_destino = obtener_hashes_existentes(conn_destino, "resenas", "texto_original")
-    logger.info("Resenas ya existentes en destino: %d", len(hashes_destino))
-
-    try:
-        resenas_origen = conn_origen.execute(
-            "SELECT id_resena, id_paquete, destino_nombre, fuente, texto_original, "
-            "idioma, puntuacion, fecha_publicacion, url_fuente, fecha_extraccion "
-            "FROM resenas WHERE texto_original IS NOT NULL"
-        ).fetchall()
-    except Exception as e:
-        logger.warning("No se pudo leer tabla resenas del origen: %s", e)
-        return 0
-
-    nuevas = 0
-    duplicadas = 0
-
-    for row in resenas_origen:
-        texto = row[4]
-        if not texto or len(texto.strip()) < 10:
+def unificar_databases(db1_path: str, db2_path: str):
+    """Copia reseñas únicas de db2 a db1 (sin duplicados)."""
+    conn1 = sqlite3.connect(db1_path)
+    conn2 = sqlite3.connect(db2_path)
+    
+    # Cargar hashes de DB1
+    textos1 = conn1.execute("SELECT texto_original FROM resenas WHERE texto_original IS NOT NULL").fetchall()
+    hashes1 = set()
+    for (t,) in textos1:
+        if t and len(t.strip()) > 10:
+            hashes1.add(hashlib.md5(t.strip().lower().encode()).hexdigest())
+    
+    # Leer todas las reseñas de DB2
+    resenas2 = conn2.execute("""
+        SELECT destino_nombre, fuente, texto_original, idioma, puntuacion, 
+               fecha_publicacion, url_fuente, fecha_extraccion 
+        FROM resenas WHERE texto_original IS NOT NULL
+    """).fetchall()
+    
+    # Insertar solo las que no existen en DB1
+    insertadas = 0
+    for row in resenas2:
+        destino, fuente, texto, idioma, puntuacion, fecha_pub, url, fecha_ext = row
+        if not texto or len(texto.strip()) <= 10:
             continue
-
-        h = calcular_hash_texto(texto)
-        if h in hashes_destino:
-            duplicadas += 1
+        h = hashlib.md5(texto.strip().lower().encode()).hexdigest()
+        if h in hashes1:
             continue
-
-        # Insertar en destino
+        hashes1.add(h)
+        
         try:
-            conn_destino.execute(
-                """INSERT OR IGNORE INTO resenas 
-                   (id_resena, id_paquete, destino_nombre, fuente, texto_original,
-                    idioma, puntuacion, fecha_publicacion, url_fuente, fecha_extraccion)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                row
+            conn1.execute(
+                """INSERT INTO resenas (id_resena, destino_nombre, fuente, texto_original,
+                   idioma, puntuacion, fecha_publicacion, url_fuente, fecha_extraccion)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (str(uuid.uuid4()), destino, fuente, texto, idioma, puntuacion, fecha_pub, url, fecha_ext)
             )
-            hashes_destino.add(h)
-            nuevas += 1
-        except Exception as e:
-            logger.debug("Error insertando resena: %s", e)
-
-    conn_destino.commit()
-    logger.info("Resenas: %d nuevas insertadas, %d duplicadas omitidas", nuevas, duplicadas)
-    return nuevas
-
-
-def merge_indicadores(conn_origen: sqlite3.Connection, conn_destino: sqlite3.Connection) -> int:
-    """Fusiona indicadores de destino, saltando los que ya existen por clave compuesta."""
-    claves_destino = obtener_claves_indicadores(conn_destino)
-    logger.info("Indicadores ya existentes en destino: %d", len(claves_destino))
-
-    try:
-        indicadores_origen = conn_origen.execute(
-            "SELECT id_indicador, destino_nombre, fuente, tipo_indicador, "
-            "valor, anio, mes, fecha_extraccion "
-            "FROM indicadores_destino"
-        ).fetchall()
-    except Exception as e:
-        logger.warning("No se pudo leer tabla indicadores_destino del origen: %s", e)
-        return 0
-
-    nuevos = 0
-    duplicados = 0
-
-    for row in indicadores_origen:
-        clave = (row[1], row[2], row[3], row[5], row[6])  # destino, fuente, tipo, anio, mes
-        if clave in claves_destino:
-            duplicados += 1
-            continue
-
-        try:
-            conn_destino.execute(
-                """INSERT OR IGNORE INTO indicadores_destino
-                   (id_indicador, destino_nombre, fuente, tipo_indicador,
-                    valor, anio, mes, fecha_extraccion)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-                row
-            )
-            claves_destino.add(clave)
-            nuevos += 1
-        except Exception as e:
-            logger.debug("Error insertando indicador: %s", e)
-
-    conn_destino.commit()
-    logger.info("Indicadores: %d nuevos insertados, %d duplicados omitidos", nuevos, duplicados)
-    return nuevos
-
-
-def contar_registros(conn: sqlite3.Connection) -> dict:
-    """Cuenta registros en las tablas principales."""
-    conteos = {}
-    for tabla in ["resenas", "indicadores_destino", "paquetes"]:
-        try:
-            count = conn.execute(f"SELECT COUNT(*) FROM {tabla}").fetchone()[0]
-            conteos[tabla] = count
+            insertadas += 1
         except Exception:
-            conteos[tabla] = 0
-    return conteos
+            pass
+    
+    conn1.commit()
+    conn1.close()
+    conn2.close()
+    return insertadas
 
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Fusiona una BD local de scraping con la BD principal del equipo."
-    )
-    parser.add_argument(
-        "--origen",
-        required=True,
-        help="Ruta a la BD local del compañero (ej: data/bd_juan.db)"
-    )
-    parser.add_argument(
-        "--destino",
-        default="data/tui_recomendador.db",
-        help="Ruta a la BD principal/centralizada (default: data/tui_recomendador.db)"
-    )
-    args = parser.parse_args()
-
-    # Validar que los archivos existen
-    if not Path(args.origen).exists():
-        logger.error("La BD de origen no existe: %s", args.origen)
-        sys.exit(1)
-
-    if not Path(args.destino).exists():
-        logger.error("La BD de destino no existe: %s", args.destino)
-        logger.info("Crea primero las tablas con: python -c \"import sys; sys.path.insert(0,'.'); "
-                    "from src.data.repository import Repositorio; "
-                    "Repositorio('sqlite:///data/tui_recomendador.db').crear_tablas()\"")
-        sys.exit(1)
-
-    print(f"\n{'='*60}")
-    print(f"  MERGE DE BASES DE DATOS")
-    print(f"{'='*60}")
-    print(f"  Origen:  {args.origen}")
-    print(f"  Destino: {args.destino}")
-    print(f"{'='*60}\n")
-
-    conn_origen = sqlite3.connect(args.origen)
-    conn_destino = sqlite3.connect(args.destino)
-
-    # Mostrar estado antes del merge
-    conteos_origen = contar_registros(conn_origen)
-    conteos_destino_antes = contar_registros(conn_destino)
-
-    print(f"  Estado ANTES del merge:")
-    print(f"    Origen  -> resenas: {conteos_origen['resenas']}, "
-          f"indicadores: {conteos_origen['indicadores_destino']}")
-    print(f"    Destino -> resenas: {conteos_destino_antes['resenas']}, "
-          f"indicadores: {conteos_destino_antes['indicadores_destino']}")
-    print()
-
-    # Ejecutar merge
-    nuevas_resenas = merge_resenas(conn_origen, conn_destino)
-    nuevos_indicadores = merge_indicadores(conn_origen, conn_destino)
-
-    # Mostrar estado despues
-    conteos_destino_despues = contar_registros(conn_destino)
-
-    print(f"\n{'='*60}")
-    print(f"  RESULTADO")
-    print(f"{'='*60}")
-    print(f"  Resenas nuevas aportadas:     {nuevas_resenas}")
-    print(f"  Indicadores nuevos aportados: {nuevos_indicadores}")
-    print(f"  Total resenas en destino:     {conteos_destino_despues['resenas']}")
-    print(f"  Total indicadores en destino: {conteos_destino_despues['indicadores_destino']}")
-    print(f"{'='*60}\n")
-
-    conn_origen.close()
-    conn_destino.close()
+    print(f"\n{'='*70}")
+    print(f"  ANÁLISIS Y COMPARACIÓN DE BASES DE DATOS")
+    print(f"{'='*70}")
+    
+    # Analizar DB1
+    print(f"\n{'─'*70}")
+    print(f"  tui_recomendador.db")
+    print(f"{'─'*70}")
+    stats1 = analizar_db(DB1_PATH)
+    print(f"  Total registros: {stats1['total']}")
+    print(f"  Textos únicos: {stats1['textos_unicos']}")
+    print(f"\n  Por fuente:")
+    for f, n in stats1['fuentes']:
+        print(f"    {f}: {n}")
+    print(f"\n  Top 10 destinos:")
+    for d, n in stats1['destinos'][:10]:
+        print(f"    {d}: {n}")
+    print(f"\n  Por idioma:")
+    for i, n in stats1['idiomas']:
+        print(f"    {i}: {n}")
+    
+    # Analizar DB2
+    print(f"\n{'─'*70}")
+    print(f"  tui_recomendador-javier.db")
+    print(f"{'─'*70}")
+    stats2 = analizar_db(DB2_PATH)
+    print(f"  Total registros: {stats2['total']}")
+    print(f"  Textos únicos: {stats2['textos_unicos']}")
+    print(f"\n  Por fuente:")
+    for f, n in stats2['fuentes']:
+        print(f"    {f}: {n}")
+    print(f"\n  Top 10 destinos:")
+    for d, n in stats2['destinos'][:10]:
+        print(f"    {d}: {n}")
+    print(f"\n  Por idioma:")
+    for i, n in stats2['idiomas']:
+        print(f"    {i}: {n}")
+    
+    # Comparación
+    print(f"\n{'─'*70}")
+    print(f"  COMPARACIÓN Y CRUCE")
+    print(f"{'─'*70}")
+    
+    hashes1 = stats1['hashes']
+    hashes2 = stats2['hashes']
+    comunes = hashes1 & hashes2
+    solo_db1 = hashes1 - hashes2
+    solo_db2 = hashes2 - hashes1
+    union = hashes1 | hashes2
+    
+    print(f"  Únicos en tui_recomendador.db:        {len(hashes1)}")
+    print(f"  Únicos en tui_recomendador-javier.db: {len(hashes2)}")
+    print(f"  En COMÚN (duplicados):                {len(comunes)}")
+    print(f"  Solo en tui_recomendador.db:          {len(solo_db1)}")
+    print(f"  Solo en javier.db:                    {len(solo_db2)}")
+    print(f"  UNIÓN (total sin duplicados):         {len(union)}")
+    
+    if min(len(hashes1), len(hashes2)) > 0:
+        print(f"  % de cruce:                           {len(comunes)/min(len(hashes1),len(hashes2))*100:.1f}%")
+    
+    # Preguntar si unificar
+    print(f"\n{'─'*70}")
+    print(f"  RESUMEN")
+    print(f"{'─'*70}")
+    print(f"  Si unificamos → {len(union)} reseñas únicas")
+    print(f"  Se ganarían {len(solo_db2)} reseñas nuevas de javier.db")
+    print(f"  Se eliminarían {len(comunes)} duplicados")
+    
+    respuesta = input(f"\n  ¿Unificar javier.db → tui_recomendador.db? (s/n): ").strip().lower()
+    if respuesta == "s":
+        insertadas = unificar_databases(DB1_PATH, DB2_PATH)
+        total_final = sqlite3.connect(DB1_PATH).execute("SELECT COUNT(*) FROM resenas").fetchone()[0]
+        print(f"\n  ✅ Unificación completada:")
+        print(f"     Reseñas nuevas insertadas: {insertadas}")
+        print(f"     Total final en tui_recomendador.db: {total_final}")
+    else:
+        print(f"\n  Cancelado. No se modificó ninguna BD.")
+    
+    print(f"{'='*70}\n")
 
 
 if __name__ == "__main__":

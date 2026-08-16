@@ -431,6 +431,96 @@ Donde `w₁...w₇` son pesos configurables que escalan cada atributo antes de c
 
 ---
 
+## BLOQUE 7 — Datos Reales Externos
+
+### DECISIÓN-016 | 2026-08-02 | Estado: Tomada, pendiente de autorización académica
+
+**Área:** Fuentes de datos — sustitución de datos sintéticos por datasets académicos reales
+
+**Decisión:** Incorporar los datasets del repositorio NTIC UCM 2025 como **fuente primaria** de catálogo, reseñas e interacciones. Los datos sintéticos (`data/sample_tui.db`: 10.000 paquetes, 1.000 usuarios) quedan relegados a relleno para escenarios de cold-start, identificados con `es_sintetico = TRUE`.
+
+**Datasets incorporados:**
+
+| Dataset | Aportación | Volumen |
+|---------|-----------|---------|
+| `Destinia/Customer Bookings/` | Interacciones y perfiles reales | ~150.000 reservas |
+| `Destinia/experiences_catalog_v1.csv` | Catálogo real de experiencias | ~6.000 experiencias |
+| `Destinia/Review Dataset/` | Reseñas con `Sentiment Score` | ~50.000 reseñas |
+| `Smart Touring/Movement Distribution Data/` | Movilidad real (Meta Data-for-Good, GADM, España 2023-2025) | 33 CSV |
+| `Smart Touring/interes_turistico_mensual_por_ciudad.csv` | Estacionalidad real | 8 ciudades, 2021-2025 |
+| `REDESCUBRIENDO ESPAÑA/Ciudades_Nivel_Turismo.csv` | Ground truth `Exc_turismo` | Ciudades etiquetadas |
+| `REDESCUBRIENDO ESPAÑA/Reviews_Data_Final.csv` | Etiqueta `Molestia` | Reseñas con molestia percibida |
+| `SmartCity Tour/Data.csv` | `CATEGORIA_TUI`, `ACCESIBILIDAD_SILLA_RUEDAS` (Google Places) | Puntos de interés |
+
+**Justificación:** 150.000 reservas reales y ~50.000 reseñas con sentimiento aportan una validez que el generador sintético no puede replicar. Los perfiles sintéticos generados con Dirichlet producen preferencias uniformes que no reflejan el comportamiento real de reserva, y la demanda simulada distorsiona las métricas de redistribución. El usuario ha manifestado explícitamente que no quiere usar datos sintéticos.
+
+**Alternativa descartada:** Continuar con el generador sintético calibrando sus distribuciones a partir de las reseñas scrapeadas. Descartada porque mantiene la circularidad (el sistema se evalúa contra datos que él mismo genera) y no resuelve la ausencia de interacciones reales.
+
+**Riesgo abierto:** Requiere confirmación del tutor sobre la autorización de uso y la forma de citación de datasets procedentes de otros TFM del repositorio académico. Ningún dataset externo se incluye en la memoria del TFM antes de esa confirmación.
+
+---
+
+### DECISIÓN-017 | 2026-08-02 | Estado: Tomada
+
+**Área:** Fuente de la ocupación real — Meta Movement Distribution (Data-for-Good) frente a INE/Eurostat
+
+**Decisión:** Calcular `nivel_ocupacion` a partir de `Smart Touring/Movement Distribution Data/` (Meta Data-for-Good), normalizando el volumen de movilidad observada al rango [0, 1] por zona GADM y mes. INE y Eurostat se conservan como fuente de **contraste de validación**, no como fuente primaria.
+
+**Justificación:** Meta Data-for-Good ofrece granularidad por zona GADM y por mes con cobertura 2023-2025, mientras que INE y Eurostat agregan por provincia y publican con retardo. Para un índice como el TDRS, que penaliza la saturación a nivel de destino, la resolución territorial y temporal es determinante.
+
+**Alternativa descartada:** INE/Eurostat como fuente primaria — agregación provincial demasiado gruesa y retardo de publicación incompatible con el ciclo de refresco del sistema.
+
+**Limitación documentada:** La cobertura de Meta Data-for-Good en este dataset es **solo España**. Los destinos de Caribe y de Mediterráneo no español mantienen ocupación estimada y se marcan con `origen_datos_ocupacion = "estimado"` (RF-17.5), quedando diferenciados en el reporte.
+
+---
+
+### DECISIÓN-018 | 2026-08-02 | Estado: Tomada
+
+**Área:** Embeddings — ampliación del vector híbrido de D+7 a D+9
+
+**Decisión:** Ampliar el vector híbrido definido en DECISIÓN-008 con dos atributos numéricos nuevos:
+
+| Atributo nuevo | Origen | Peso |
+|----------------|--------|------|
+| `sentiment_score_medio_destino` | `Sentiment Score` de `Destinia/Review Dataset/`, promediado por destino | `w8 = 0.9` |
+| `ratio_molestia_destino` | etiqueta `Molestia` de `Reviews_Data_Final.csv`, proporción por destino | `w9 = 1.2` |
+
+Dimensión resultante: **D + 9** — 400 dimensiones con MiniLM-384 (antes 391).
+
+**Justificación:** El sentimiento agregado y la molestia percibida por los residentes son señales directas de saturación que ningún atributo actual del vector captura. `ratio_molestia_destino` recibe el peso más alto después de `nivel_ocupacion` (w3 = 1.5) porque mide impacto social directo sobre la población local, que es precisamente el fenómeno que el TDRS pretende mitigar.
+
+**Alternativa descartada:** Introducir ambas señales únicamente como filtros post-ranking. Descartada porque perdería su contribución en el espacio de similitud: dos paquetes idénticos en el resto de atributos pero con molestia percibida muy distinta seguirían siendo vecinos en el espacio vectorial.
+
+**Consecuencia operativa:** Obliga a regenerar todos los embeddings del catálogo y a versionar `embeddings_meta` con `embedding_dim = 400`. Los vectores D+7 y D+9 no son comparables, por lo que el almacén vectorial se recrea completo.
+
+---
+
+### DECISIÓN-019 | 2026-08-02 | Estado: Tomada
+
+**Área:** Evaluación — validación externa del TDRS contra `Exc_turismo`
+
+**Decisión:** Validar el `nivel_saturacion` calculado por el sistema contra el campo `Exc_turismo` de `REDESCUBRIENDO ESPAÑA/Ciudades_Nivel_Turismo.csv` como etiqueta de referencia independiente, reportando AUC-ROC, precisión, exhaustividad y matriz de confusión. **Umbral objetivo: AUC-ROC ≥ 0,70.** Se añade la correlación de Spearman frente a la etiqueta `Molestia` como validación complementaria.
+
+**Justificación:** El TDRS es una construcción propia de este TFM. Sin validación contra una etiqueta externa e independiente no es defendible en la memoria: solo se podría afirmar que el sistema hace lo que se le ha programado hacer. Contrastarlo con una clasificación de exceso de turismo elaborada por terceros convierte el TDRS en un indicador validado empíricamente.
+
+**Alternativa descartada:** Validar únicamente con la reducción del Gini entre escenarios. Descartada por circular: mide el propio mecanismo de redistribución del sistema, no su correspondencia con la saturación real del territorio.
+
+**Transparencia:** Si el AUC-ROC no alcanza 0,70, el resultado se registra tal cual y se documentan las hipótesis de desviación (cobertura territorial parcial, desalineación entre destinos TUI y ciudades españolas etiquetadas). No se oculta ni se recalibra la métrica para superar el umbral.
+
+---
+
+### DECISIÓN-020 | 2026-08-02 | Estado: Tomada
+
+**Área:** Scraping — migración del scraper de ocupación a Playwright
+
+**Decisión:** Migrar `BookingOccupancyScraper` de Selenium a **Playwright**, siguiendo el patrón de `scraper_booking_final.py` del repositorio académico. El resto de scrapers (TripAdvisor, Google Maps, YouTube con Selenium; Reddit vía Arctic Shift) se mantienen sin cambios.
+
+**Justificación:** El patrón de `scraper_booking_final.py` resiste mejor la detección anti-bot de Booking.com que el Selenium actual (gestión de contexto de navegador, interceptación de red, esperas basadas en eventos en lugar de esperas fijas). El resto de scrapers ya funciona de forma estable, por lo que migrarlos añadiría riesgo sin beneficio.
+
+**Saturación del scraping documentada:** El corpus de scraping está saturado en **18.502 reseñas**. En la última ronda de 60 minutos, de 804 reseñas extraídas 789 fueron duplicados (98,1%). El crecimiento del corpus proviene por tanto de los datasets externos del Bloque 7, no de más rondas de scraping. El scraping se conserva como fuente complementaria de refresco de precios y ocupación.
+
+---
+
 ## Historial de Conversaciones
 
 Esta sección referencia los temas discutidos en cada sesión de trabajo para trazabilidad del TFM.
@@ -446,3 +536,13 @@ Esta sección referencia los temas discutidos en cada sesión de trabajo para tr
 - Campo `origen_dato` / `origen_datos_*` añadido a las tres entidades para trazabilidad completa de procedencia
 - Bloque 2 NLP/Embeddings: modelo a comparar (MiniLM vs e5-large), texto a embeddir (paquete + reseñas), fusión ponderada con pesos configurables (DECISIONES-006, 007, 008)
 - Bloque 3 Data Engineering: SQLite→PostgreSQL, Chroma→pgvector, FastAPI REST (DECISIONES-009, 010, 011)
+
+### Sesión 2026-08-02
+- Lectura y exploración del repositorio académico `Datos NTIC UCM 2025`: Destinia (reservas, catálogo de experiencias, reseñas con `Sentiment Score`), Smart Touring (movilidad Meta Data-for-Good, estacionalidad mensual por ciudad, Google Places), REDESCUBRIENDO ESPAÑA (`Exc_turismo`, `Molestia`), Discoverxo y el resto de proyectos
+- Diagnóstico del estado actual: scraping saturado en 18.502 reseñas (789 duplicados de 804 extracciones en la última ronda de 60 min); catálogo y usuarios sintéticos; Gini tradicional inflado por los pesos desiguales de destinos de `generate_sample_data.py` (0,5923) y Gini moderado poco realista (0,1559); RF-5.4 no alcanzado (Precision@10 = 0,0937; NDCG@10 = 0,3078)
+- Identificación de mejoras aplicables al proyecto en cuatro frentes: scraping (Playwright), datos (sustitución de sintéticos por reales), embeddings (sentimiento y molestia percibida) y modelo (interacciones reales, indicadores territoriales reales, validación externa)
+- Definición del **Bloque 7 — Integración de Datos Reales Externos** como bloque transversal de ingesta conectado al Bloque 1 (limpieza) y al Bloque 3 (persistencia), con regeneración forzada de los Bloques 2 y 4
+- Nuevos requisitos 15 a 18: ingesta de datasets externos reales, interacciones reales y reducción de la dependencia de usuarios sintéticos, indicadores territoriales reales de saturación y estacionalidad, y validación externa del TDRS contra ground truth de overtourism
+- Nuevas propiedades PBT-8 (idempotencia de la carga externa) y PBT-9 (suma de preferencias en perfiles derivados de reservas reales)
+- Decisiones: sustitución de datos sintéticos por datasets académicos reales (016), Meta Data-for-Good como fuente de ocupación real (017), ampliación del vector híbrido de D+7 a D+9 (018), validación externa del TDRS contra `Exc_turismo` (019), migración del scraper de ocupación a Playwright (020)
+- Riesgo abierto registrado: la incorporación de los datasets externos queda pendiente de confirmación del tutor sobre autorización de uso y forma de citación

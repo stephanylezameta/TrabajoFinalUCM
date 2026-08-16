@@ -234,6 +234,66 @@ El alcance del prototipo abarca: recolección de datos mediante scraping, proces
 5. THE Sistema SHALL garantizar que el conjunto de test no contiene usuarios ni interacciones presentes en el conjunto de entrenamiento (ausencia de data leakage).
 
 
+### Requirement 15: Ingesta de datasets externos reales
+
+**User Story:** Como ingeniero de datos, quiero incorporar los datasets reales del repositorio académico NTIC UCM 2025 al Repositorio del sistema, para sustituir los datos sintéticos por observaciones reales y aumentar la validez del modelo.
+
+#### Criterios de Aceptación
+
+1. THE Sistema SHALL disponer de un componente `ExternalDatasetLoader` capaz de cargar ficheros CSV locales como fuente de ingesta, aplicando el mismo contrato de limpieza y validación que el Scraper: deduplicación por clave de unicidad, normalización min-max de campos numéricos, validación de esquema y exclusión de registros con más del 30% de atributos obligatorios vacíos.
+2. WHEN se carga un registro externo, THE Sistema SHALL registrar en los campos de trazabilidad (`origen_dato`, `url_origen`, `fecha_extraccion`) el nombre exacto del fichero de origen y el dataset académico del que proviene.
+3. THE Sistema SHALL mapear `Destinia/experiences_catalog_v1.csv` a la tabla `paquetes` conservando la clave de unicidad ya definida en el Requisito 1.6, y SHALL marcar cada paquete cargado con `es_sintetico = FALSE`.
+4. THE Sistema SHALL mapear `Destinia/Review Dataset/` y `REDESCUBRIENDO ESPAÑA/Reviews_Data_Final.csv` a la tabla `resenas`, conservando `Sentiment Score` y `Molestia` como campos nuevos de la entidad RESEÑA.
+5. IF un registro externo colisiona con un registro ya existente en el Repositorio según la clave de unicidad, THEN THE Sistema SHALL conservar el registro existente y SHALL contabilizar el duplicado descartado, sin borrar datos previos (los 18.502 registros ya scrapeados NO se eliminan en ningún caso).
+6. THE Sistema SHALL producir un informe de carga por dataset con: registros leídos, registros insertados, duplicados descartados y registros excluidos por validación, con el motivo de exclusión desglosado.
+7. THE Sistema SHALL alcanzar un corpus consolidado de al menos 60.000 reseñas y 5.000 paquetes reales tras la ingesta de los datasets externos.
+8. THE Sistema SHALL documentar la procedencia académica y la cita de cada dataset externo en el registro de decisiones, y SHALL requerir confirmación explícita de autorización de uso antes de incluirlo en la memoria del TFM.
+
+
+### Requirement 16: Interacciones reales y reducción de la dependencia de usuarios sintéticos
+
+**User Story:** Como científico de datos, quiero derivar perfiles de viajero e interacciones a partir de las reservas reales de Destinia, para entrenar el Modelo_Afinidad con señal real en lugar de señal sintética.
+
+#### Criterios de Aceptación
+
+1. THE Sistema SHALL derivar de `Destinia/Customer Bookings/` registros en la tabla `interacciones` de tipo `reserva`, con `id_usuario`, `id_paquete` y `timestamp_interaccion` procedentes del dato real.
+2. THE Sistema SHALL derivar un Perfil_Viajero por cliente real, calculando las preferencias temáticas como frecuencia relativa de las categorías de sus reservas, normalizada de modo que la suma de las seis preferencias sea igual a 1,0 con una tolerancia de ±0,01.
+3. WHEN un cliente real tiene menos de 2 reservas, THE Sistema SHALL marcar su perfil como de baja confianza y SHALL excluirlo del conjunto de entrenamiento, manteniéndolo disponible para la evaluación de cold-start.
+4. THE Sistema SHALL marcar los perfiles derivados de datos reales con `es_sintetico = FALSE`, y SHALL conservar los perfiles sintéticos únicamente como relleno para escenarios de cold-start, identificados con `es_sintetico = TRUE`.
+5. THE Sistema SHALL entrenar el Modelo_Afinidad avanzado (LightFM, pérdida WARP) sobre la matriz de interacciones reales, con partición train/test estratificada por usuario y al menos el 20% de las interacciones en test.
+6. WHEN el Modelo_Afinidad se evalúa sobre interacciones reales, THE Sistema SHALL reportar Precision@10 y NDCG@10 y SHALL registrar explícitamente si se alcanza el umbral del Requisito 5.4 (Precision@10 ≥ 0,30 y NDCG@10 ≥ 0,35), documentando la desviación en caso contrario.
+7. THE Sistema SHALL comparar en el reporte de evaluación las métricas obtenidas con interacciones reales frente a las obtenidas con interacciones sintéticas, indicando ambos conjuntos de valores.
+
+
+### Requirement 17: Indicadores territoriales reales de saturación y estacionalidad
+
+**User Story:** Como investigador de sostenibilidad turística, quiero que los componentes de Ocupación, Diversificación y Accesibilidad del TDRS se calculen a partir de datos territoriales reales, para que el índice deje de depender de valores simulados.
+
+#### Criterios de Aceptación
+
+1. THE Sistema SHALL calcular `nivel_ocupacion` por destino y mes a partir de `Smart Touring/Movement Distribution Data/` (Meta Data-for-Good), normalizando el volumen de movilidad observada al rango [0, 1] por zona GADM.
+2. THE Sistema SHALL calcular un índice de estacionalidad mensual por destino a partir de `Smart Touring/interes_turistico_mensual_por_ciudad.csv`, y SHALL derivar de él el componente `Temporada_Baja` del TDRS en lugar de la regla fija basada en el mes de salida.
+3. THE Sistema SHALL calcular el componente `Diversificación` del TDRS como el inverso de la cuota de reservas reales del destino sobre el total de reservas del dataset Destinia.
+4. THE Sistema SHALL poblar `accesibilidad_destino` a partir del campo `ACCESIBILIDAD_SILLA_RUEDAS` de `SmartCity Tour/Data.csv`, agregando por destino la proporción de puntos de interés accesibles y normalizando el resultado a [0, 1].
+5. WHEN no existe dato territorial real para un destino, THE Sistema SHALL mantener el valor estimado previo y SHALL marcar el campo con `origen_datos_ocupacion = "estimado"` para diferenciarlo en el reporte.
+6. THE Sistema SHALL recalcular el TDRS de todos los Paquetes afectados tras la carga de los indicadores territoriales reales.
+7. THE Sistema SHALL conservar la regla del Requisito 6.4 (ocupación superior a 0,85 se fuerza a 1,0) aplicándola sobre los valores reales de ocupación.
+
+
+### Requirement 18: Validación externa del TDRS contra ground truth de overtourism
+
+**User Story:** Como investigador, quiero validar que el nivel de saturación que calcula el sistema coincide con una clasificación externa e independiente de exceso de turismo, para poder defender la validez del TDRS en la memoria del TFM.
+
+#### Criterios de Aceptación
+
+1. THE Sistema SHALL utilizar el campo `Exc_turismo` de `REDESCUBRIENDO ESPAÑA/Ciudades_Nivel_Turismo.csv` como etiqueta de referencia (ground truth) de exceso de turismo por ciudad.
+2. THE Sistema SHALL evaluar la capacidad del `nivel_saturacion` calculado para discriminar las ciudades etiquetadas como exceso de turismo, reportando AUC-ROC, precisión, exhaustividad y matriz de confusión.
+3. THE Sistema SHALL alcanzar un AUC-ROC igual o superior a 0,70 en esta validación externa; IF no se alcanza el umbral, THEN THE Sistema SHALL registrar el resultado obtenido y SHALL documentar las hipótesis de desviación sin ocultar la métrica.
+4. THE Sistema SHALL calcular la correlación de Spearman entre el `nivel_saturacion` calculado y la etiqueta `Molestia` agregada por destino de `REDESCUBRIENDO ESPAÑA/Reviews_Data_Final.csv`.
+5. THE Sistema SHALL almacenar el reporte de validación externa en un fichero estructurado (JSON o CSV) con fecha de ejecución, dataset de referencia utilizado y todas las métricas calculadas.
+6. THE Sistema SHALL reportar el Gini_Turístico calculado sobre demanda real de reservas junto al Gini calculado sobre demanda simulada, indicando ambos valores en el reporte de evaluación.
+
+
 ---
 
 ## Requisitos No Funcionales
@@ -339,4 +399,19 @@ Para cualquier par de Paquetes e₁, e₂ en el ranking final, si e₁ aparece a
 **Módulos:** Limpiador, Modelo_Afinidad
 
 Para cualquier entrada con atributos fuera de rango (e.g., Ocupación > 1, presupuesto negativo), el módulo correspondiente SHALL lanzar una excepción tipada y documentada, sin producir resultados silenciosos ni corruptos.
+
+### PBT-8: Idempotencia de la carga de datasets externos
+
+**Módulo:** ExternalDatasetLoader
+
+Para cualquier fichero CSV externo válido `f`, ejecutar la carga dos veces consecutivas SHALL producir el mismo número de registros en el Repositorio que ejecutarla una sola vez:
+`count(load(f)) == count(load(f); load(f))`
+
+Ninguna recarga debe duplicar registros ni eliminar registros preexistentes en el Repositorio.
+
+### PBT-9: Conservación de la suma de preferencias en perfiles derivados de datos reales
+
+**Módulo:** derivación de Perfil_Viajero desde reservas reales (RealProfileBuilder)
+
+Para cualquier historial no vacío de reservas de un cliente, el perfil derivado SHALL cumplir que la suma de sus seis preferencias temáticas ∈ [0,99, 1,01] y que todas las preferencias individuales ∈ [0, 1], independientemente del número de reservas y del reparto de categorías entre ellas.
 
