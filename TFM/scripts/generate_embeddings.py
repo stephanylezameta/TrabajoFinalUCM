@@ -32,6 +32,41 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(na
 logger = logging.getLogger(__name__)
 
 
+def cargar_sentimiento_por_destino(conn: sqlite3.Connection) -> dict:
+    """Sentimiento real agregado por destino (media del score de resenas_sentimiento)."""
+    try:
+        rows = conn.execute("""
+            SELECT r.destino_nombre, AVG(s.sentiment_score)
+            FROM resenas r
+            JOIN resenas_sentimiento s ON r.id_resena = s.id_resena
+            GROUP BY r.destino_nombre
+        """).fetchall()
+        return {destino: score for destino, score in rows}
+    except Exception as e:
+        logger.warning("No se pudo cargar sentimiento por destino: %s", e)
+        return {}
+
+
+def cargar_ocupacion_por_destino(conn: sqlite3.Connection) -> dict:
+    """Ocupación real agregada por destino (indicadores_destino, Eurostat/INE)."""
+    try:
+        rows = conn.execute("""
+            SELECT destino_nombre, AVG(valor)
+            FROM indicadores_destino
+            WHERE tipo_indicador = 'ocupacion_hotelera_mensual'
+            GROUP BY destino_nombre
+        """).fetchall()
+        valores = {destino: val for destino, val in rows}
+        if valores:
+            vmin, vmax = min(valores.values()), max(valores.values())
+            if vmax > vmin:
+                valores = {d: (v - vmin) / (vmax - vmin) for d, v in valores.items()}
+        return valores
+    except Exception as e:
+        logger.warning("No se pudo cargar ocupación por destino: %s", e)
+        return {}
+
+
 def cargar_experiencias(conn: sqlite3.Connection) -> list[dict]:
     """Carga el catalogo de experiencias (reemplaza a la vieja tabla paquetes)."""
     rows = conn.execute(
@@ -116,6 +151,12 @@ def main():
         resenas_por_destino[destino].extend(textos)
     for destino, textos in cargar_reviews_sinteticas(conn).items():
         resenas_por_destino[destino].extend(textos)
+
+    logger.info("Cargando sentimiento real y ocupación real por destino...")
+    sentimiento_por_destino = cargar_sentimiento_por_destino(conn)
+    ocupacion_por_destino = cargar_ocupacion_por_destino(conn)
+    logger.info("  -> sentimiento real: %d destinos | ocupación real: %d destinos",
+                len(sentimiento_por_destino), len(ocupacion_por_destino))
     conn.close()
 
     logger.info("Inicializando TextEmbedder (MiniLM)...")
@@ -170,15 +211,24 @@ def main():
         review_emb = review_embeddings_by_destino.get(e["destination"], default_review_emb)
         fused = fuser.fuse(pkg_emb, review_emb)
 
-        # NOTA: nivel_ocupacion / accesibilidad / sostenibilidad no existen aun
-        # en 'experiencias'; quedan en 0.5 (neutro) hasta cruzar con
-        # indicadores_destino (ya poblado, 3342 registros) - pendiente.
+        # nivel_ocupacion: real cuando hay dato de indicadores_destino
+        # (Eurostat/INE), si no, neutro (0.5).
+        # estrellas_hotel_norm: mezcla 50/50 entre el rating sintético de
+        # 'experiencias' y el sentimiento real agregado de reseñas reales
+        # del destino (cuando existe). Sustituye el placeholder anterior.
+        rating_sintetico = norm(e["rating"], rating_min, rating_max)
+        sentimiento_real = sentimiento_por_destino.get(e["destination"])
+        if sentimiento_real is not None:
+            estrellas_final = 0.5 * rating_sintetico + 0.5 * sentimiento_real
+        else:
+            estrellas_final = rating_sintetico
+
         attrs = {
             "precio_base_eur_norm": norm(e["price_eur"], precio_min, precio_max),
             "duracion_dias_norm": norm(e["duration_hrs"], dur_min, dur_max),
-            "nivel_ocupacion": 0.5,
+            "nivel_ocupacion": ocupacion_por_destino.get(e["destination"], 0.5),
             "accesibilidad_destino_norm": 0.5,
-            "estrellas_hotel_norm": norm(e["rating"], rating_min, rating_max),
+            "estrellas_hotel_norm": estrellas_final,
             "num_valoraciones_hotel_norm": norm(e["review_count"], rc_min, rc_max),
             "indicador_sostenibilidad_tui": 0.0,
         }
