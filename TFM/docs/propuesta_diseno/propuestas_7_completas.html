@@ -1,0 +1,2518 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TUI - 7 Propuestas de Recomendacion + Dashboard TDRS</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:'Nunito Sans',sans-serif;background:#fff;color:#1d1d1b;font-size:15px;-webkit-font-smoothing:antialiased}
+    a{text-decoration:none;color:inherit;cursor:pointer}
+    img{display:block;width:100%;height:100%;object-fit:cover}
+
+    /* === HEADER === */
+    .hdr{background:#fff;padding:0;border-bottom:1px solid #eee;position:sticky;top:0;z-index:200}
+    .hdr-inner{max-width:1240px;margin:0 auto;padding:14px 28px;display:flex;align-items:center;justify-content:space-between}
+    .logo{display:flex;align-items:center;gap:4px}
+    .logo-mark{width:40px;height:40px;background:#d40e14;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:900;font-size:13px;letter-spacing:-0.5px}
+    .logo-text{font-size:22px;font-weight:900;color:#d40e14;letter-spacing:-1px}
+    .nav{display:flex;gap:32px}
+    .nav a{font-size:14px;font-weight:700;color:#1d1d1b;position:relative;padding:6px 0}
+    .nav a::after{content:'';position:absolute;bottom:0;left:0;width:0;height:2px;background:#d40e14;transition:width .2s}
+    .nav a:hover::after,.nav a.on::after{width:100%}
+    .nav a.on{color:#d40e14}
+    .usr{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;color:#555}
+    .usr-av{width:34px;height:34px;background:#f0f0f0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:12px;color:#888}
+
+    /* === HERO === */
+    .hero{position:relative;height:380px;overflow:hidden}
+    .hero img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+    .hero-overlay{position:absolute;inset:0;background:linear-gradient(to right,rgba(0,0,0,.6) 0%,rgba(0,0,0,.25) 60%,transparent 100%)}
+    .hero-content{position:relative;max-width:1240px;margin:0 auto;padding:80px 28px;color:#fff;z-index:1}
+    .hero-content h1{font-size:36px;font-weight:900;line-height:1.2;max-width:620px}
+    .hero-content p{font-size:15px;margin-top:10px;opacity:.88;max-width:520px;line-height:1.5}
+    .ai-tag{display:inline-flex;align-items:center;gap:6px;margin-top:16px;background:rgba(255,255,255,.15);backdrop-filter:blur(6px);border:1px solid rgba(255,255,255,.25);padding:6px 14px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.3px}
+    .ai-dot{width:8px;height:8px;background:#1b8a4b;border-radius:50%;animation:pulse 2s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+    /* === PILL NAV FIJA === */
+    .pillnav{position:sticky;top:69px;z-index:150;background:rgba(255,255,255,.96);backdrop-filter:blur(10px);border-bottom:1px solid #eee}
+    .pillnav-inner{max-width:1240px;margin:0 auto;padding:12px 28px;display:flex;gap:7px;flex-wrap:wrap}
+    .pill{padding:7px 15px;border-radius:20px;font-size:11px;font-weight:800;border:1.5px solid #e8e8e8;background:#fff;color:#555;transition:all .2s;white-space:nowrap}
+    .pill:hover{border-color:#d40e14;color:#d40e14}
+    .pill.dash{background:#0057b8;border-color:#0057b8;color:#fff}
+    .pill.dash:hover{background:#00459a;color:#fff}
+
+    /* === SECTION === */
+    .section{max-width:1240px;margin:0 auto;padding:52px 28px;scroll-margin-top:130px}
+    .section.alt{max-width:100%;background:#fafbfc;border-top:1px solid #f0f0f0;border-bottom:1px solid #f0f0f0}
+    .section.alt > .inner{max-width:1240px;margin:0 auto}
+    .sec-num{display:inline-block;background:#d40e14;color:#fff;font-size:10px;font-weight:900;padding:4px 10px;border-radius:4px;letter-spacing:.6px;margin-bottom:10px}
+    .section-title{font-size:23px;font-weight:900;margin-bottom:4px;letter-spacing:-.4px}
+    .section-sub{font-size:13px;color:#888;margin-bottom:26px;max-width:760px;line-height:1.5}
+    .ref{font-size:10px;font-weight:700;color:#6c2d82;margin-top:20px;letter-spacing:.3px}
+
+    /* === OFFER CARDS === */
+    .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+    .grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:20px}
+    .offer{background:#fff;border-radius:10px;overflow:hidden;border:1px solid #eee;transition:all .25s}
+    .offer:hover{box-shadow:0 12px 36px rgba(0,0,0,.1);transform:translateY(-3px)}
+    .offer-img{height:190px;position:relative;overflow:hidden}
+    .offer-tags{position:absolute;top:10px;left:10px;display:flex;gap:4px;flex-wrap:wrap;z-index:2}
+    .otag{padding:4px 9px;border-radius:3px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.4px}
+    .otag-red{background:#d40e14;color:#fff}
+    .otag-grn{background:#1b8a4b;color:#fff}
+    .otag-blu{background:#0057b8;color:#fff}
+    .otag-prp{background:#6c2d82;color:#fff}
+    .offer-match{position:absolute;bottom:10px;right:10px;background:rgba(0,0,0,.65);color:#fff;padding:4px 10px;border-radius:12px;font-size:10px;font-weight:800;backdrop-filter:blur(4px)}
+    .offer-body{padding:16px 18px}
+    .offer-dest{font-size:10px;font-weight:800;color:#d40e14;text-transform:uppercase;letter-spacing:.8px;margin-bottom:2px}
+    .offer-name{font-size:15px;font-weight:800;line-height:1.3;margin-bottom:6px}
+    .offer-meta{font-size:11px;color:#888;margin-bottom:10px}
+    .offer-route{font-size:11px;color:#555;margin-bottom:12px;line-height:1.4}
+    .offer-ai{background:#f9fafb;border-left:3px solid #d40e14;padding:10px 12px;border-radius:0 6px 6px 0;margin-bottom:14px}
+    .offer-ai-lbl{font-size:8px;font-weight:800;text-transform:uppercase;letter-spacing:1px;color:#d40e14;margin-bottom:3px}
+    .offer-ai-txt{font-size:11px;color:#444;line-height:1.5}
+    .offer-bottom{display:flex;justify-content:space-between;align-items:flex-end;padding-top:12px;border-top:1px solid #f5f5f5}
+    .offer-rating{font-size:11px;color:#666}
+    .offer-price{text-align:right}
+    .offer-price .from{font-size:9px;color:#aaa}
+    .offer-price .old{font-size:12px;color:#aaa;text-decoration:line-through}
+    .offer-price .new{font-size:21px;font-weight:900;color:#d40e14;line-height:1.1}
+    .offer-price .pp{font-size:9px;color:#aaa}
+
+    /* === BEST ACTION HERO CARD === */
+    .best{border:2px solid #d40e14;border-radius:14px;overflow:hidden;display:grid;grid-template-columns:1.1fr 1fr;background:#fff;box-shadow:0 14px 40px rgba(212,14,20,.08)}
+    .best-img{position:relative;min-height:420px}
+    .best-body{padding:30px 32px;display:flex;flex-direction:column}
+    .best-kicker{display:inline-flex;align-items:center;gap:6px;background:#fff0f0;color:#d40e14;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:1px;padding:5px 11px;border-radius:12px;align-self:flex-start;margin-bottom:12px}
+    .best-dest{font-size:11px;font-weight:800;color:#d40e14;text-transform:uppercase;letter-spacing:.9px}
+    .best-title{font-size:28px;font-weight:900;line-height:1.15;margin:4px 0 6px;letter-spacing:-.6px}
+    .best-meta{font-size:12px;color:#888;margin-bottom:4px}
+    .best-route{font-size:12px;color:#555;margin-bottom:18px;line-height:1.5}
+    .benefits{list-style:none;margin-bottom:20px}
+    .benefits li{font-size:12.5px;color:#333;line-height:1.5;padding:7px 0 7px 24px;position:relative;border-bottom:1px solid #f6f6f6}
+    .benefits li:before{content:'\2713';position:absolute;left:0;top:7px;color:#1b8a4b;font-weight:900;font-size:13px}
+    .best-pricerow{display:flex;align-items:flex-end;justify-content:space-between;margin-bottom:16px;padding-top:14px;border-top:1px solid #f0f0f0}
+    .btn-big{display:block;width:100%;padding:15px;background:#d40e14;color:#fff;border:none;border-radius:8px;font-family:inherit;font-size:15px;font-weight:900;letter-spacing:.3px;cursor:pointer;transition:background .2s}
+    .btn-big:hover{background:#b00c11}
+    .urgency{margin-top:11px;font-size:11px;font-weight:700;color:#c47f00;background:#fff8e6;border:1px solid #ffe8b0;padding:8px 12px;border-radius:6px;text-align:center}
+
+    /* === RANKING === */
+    .rank{border:1px solid #eee;border-radius:12px;overflow:hidden}
+    .rank-row{display:grid;grid-template-columns:44px 84px 1fr 190px 120px 130px;gap:16px;align-items:center;padding:14px 18px;border-bottom:1px solid #f4f4f4;transition:background .2s}
+    .rank-row:last-child{border-bottom:none}
+    .rank-row:hover{background:#fafbfc}
+    .rank-pos{font-size:20px;font-weight:900;color:#d40e14;text-align:center}
+    .rank-thumb{height:58px;border-radius:7px;overflow:hidden}
+    .rank-dest{font-size:9.5px;font-weight:800;color:#d40e14;text-transform:uppercase;letter-spacing:.7px}
+    .rank-name{font-size:14px;font-weight:800;margin:1px 0 2px}
+    .rank-note{font-size:11px;color:#888}
+    .rank-scorewrap{font-size:10px;color:#888;font-weight:700}
+    .rank-bar{height:7px;background:#f0f0f0;border-radius:4px;overflow:hidden;margin-top:5px}
+    .rank-bar span{display:block;height:100%;background:linear-gradient(90deg,#d40e14,#ff5a5f);border-radius:4px}
+    .rank-price{text-align:right}
+    .rank-price .old{font-size:11px;color:#aaa;text-decoration:line-through}
+    .rank-price .new{font-size:18px;font-weight:900;color:#d40e14}
+    .btn-sm{padding:9px 14px;background:#d40e14;color:#fff;border:none;border-radius:6px;font-family:inherit;font-size:11.5px;font-weight:800;cursor:pointer;width:100%}
+    .btn-sm:hover{background:#b00c11}
+    .btn-sm.ghost{background:#fff;color:#d40e14;border:1.5px solid #d40e14}
+    .btn-sm.ghost:hover{background:#fff5f5}
+
+    /* === BEFORE / AFTER === */
+    .ba{display:grid;grid-template-columns:1fr 64px 1fr;gap:0;align-items:stretch}
+    .ba-card{border:1px solid #eee;border-radius:12px;overflow:hidden;background:#fff}
+    .ba-card.bad{border-color:#f3c7c8}
+    .ba-card.good{border-color:#bfe3cd}
+    .ba-head{padding:14px 18px;font-size:12px;font-weight:900;text-transform:uppercase;letter-spacing:.8px;color:#fff}
+    .ba-card.bad .ba-head{background:#c0392b}
+    .ba-card.good .ba-head{background:#1b8a4b}
+    .ba-img{height:150px}
+    .ba-name{padding:14px 18px 0;font-size:18px;font-weight:900}
+    .ba-tagline{padding:2px 18px 12px;font-size:11.5px;color:#888}
+    .ba-list{padding:0 18px 18px}
+    .ba-item{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-bottom:1px solid #f6f6f6;font-size:12.5px}
+    .ba-item:last-child{border-bottom:none}
+    .ba-item .k{color:#777;font-weight:600}
+    .ba-item .v{font-weight:900}
+    .ba-card.bad .v{color:#c0392b}
+    .ba-card.good .v{color:#1b8a4b}
+    .ba-arrow{display:flex;align-items:center;justify-content:center;font-size:26px;font-weight:900;color:#d40e14}
+    .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-top:24px}
+    .stat{background:#f4fbf6;border:1px solid #d3ecdd;border-radius:10px;padding:20px 18px;text-align:center}
+    .stat .n{font-size:28px;font-weight:900;color:#1b8a4b;letter-spacing:-1px}
+    .stat .l{font-size:11px;color:#5c7a68;font-weight:700;margin-top:4px}
+
+    /* === CHAT === */
+    .chatwrap{max-width:640px;border:1px solid #e6e6e6;border-radius:14px;overflow:hidden;box-shadow:0 12px 34px rgba(0,0,0,.07)}
+    .chat-hd{background:#d40e14;color:#fff;padding:14px 18px;display:flex;align-items:center;gap:11px}
+    .chat-av{width:34px;height:34px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:900}
+    .chat-hd .t{font-size:13.5px;font-weight:900}
+    .chat-hd .s{font-size:10px;opacity:.85;display:flex;align-items:center;gap:5px;margin-top:1px}
+    .chat-body{background:#f7f8fa;padding:20px 18px;display:flex;flex-direction:column;gap:12px;max-height:none}
+    .msg{max-width:80%;font-size:12.5px;line-height:1.55;padding:11px 14px;border-radius:14px}
+    .msg.bot{background:#fff;border:1px solid #ececec;border-bottom-left-radius:4px;align-self:flex-start}
+    .msg.me{background:#0057b8;color:#fff;border-bottom-right-radius:4px;align-self:flex-end}
+    .msg-time{font-size:9px;color:#aaa;margin-top:4px}
+    .minicards{display:flex;flex-direction:column;gap:9px;align-self:flex-start;width:88%}
+    .mini{background:#fff;border:1px solid #ececec;border-radius:10px;padding:10px;display:grid;grid-template-columns:64px 1fr auto;gap:11px;align-items:center}
+    .mini-img{height:52px;border-radius:6px;overflow:hidden}
+    .mini-dest{font-size:9px;font-weight:800;color:#d40e14;text-transform:uppercase;letter-spacing:.6px}
+    .mini-name{font-size:12.5px;font-weight:800;margin:1px 0}
+    .mini-meta{font-size:10.5px;color:#888}
+    .mini-price{font-size:15px;font-weight:900;color:#d40e14;text-align:right;margin-bottom:5px}
+    .mini-btn{padding:6px 11px;background:#d40e14;color:#fff;border:none;border-radius:5px;font-family:inherit;font-size:10px;font-weight:800;cursor:pointer}
+    .itin{background:#fff;border:1px solid #ececec;border-radius:12px;padding:14px 16px;align-self:flex-start;width:92%}
+    .itin-t{font-size:11px;font-weight:900;color:#0057b8;text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px}
+    .itin-day{display:grid;grid-template-columns:58px 1fr;gap:12px;padding:8px 0;border-bottom:1px solid #f6f6f6;font-size:11.5px;line-height:1.45}
+    .itin-day:last-child{border-bottom:none}
+    .itin-day .d{font-weight:900;color:#d40e14;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;padding-top:1px}
+    .chat-input{display:flex;gap:9px;padding:13px 15px;background:#fff;border-top:1px solid #eee}
+    .chat-input input{flex:1;border:1px solid #e2e2e2;border-radius:20px;padding:10px 15px;font-family:inherit;font-size:12px;outline:none}
+    .chat-input input:focus{border-color:#0057b8}
+    .chat-input button{width:38px;height:38px;border-radius:50%;background:#d40e14;color:#fff;border:none;font-size:15px;font-weight:900;cursor:pointer}
+
+    /* === SOCIAL === */
+    .soc{background:#fff;border:1px solid #eee;border-radius:12px;overflow:hidden;display:flex;flex-direction:column}
+    .soc-top{display:flex;gap:14px;padding:20px 22px 0;align-items:center}
+    .soc-av{width:50px;height:50px;border-radius:50%;background:#0057b8;color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;font-weight:900;flex-shrink:0}
+    .soc-who{font-size:14px;font-weight:900}
+    .soc-sub{font-size:11px;color:#999}
+    .soc-quote{padding:16px 22px;font-size:14px;line-height:1.65;color:#333;font-style:italic;position:relative}
+    .soc-quote:before{content:'\201C';font-size:46px;color:#f0c8ca;font-family:Georgia,serif;position:absolute;left:12px;top:6px;line-height:1}
+    .soc-quote span{position:relative;z-index:1}
+    .soc-tags{display:flex;gap:5px;flex-wrap:wrap;padding:0 22px 14px}
+    .stag{background:#f4f5f7;color:#555;font-size:9.5px;font-weight:800;padding:4px 9px;border-radius:11px;text-transform:uppercase;letter-spacing:.4px}
+    .soc-trip{display:grid;grid-template-columns:78px 1fr;gap:13px;align-items:center;margin:0 22px 16px;padding:11px;background:#fafbfc;border:1px solid #f0f0f0;border-radius:9px}
+    .soc-trip-img{height:60px;border-radius:6px;overflow:hidden}
+    .soc-foot{margin-top:auto;padding:0 22px 22px}
+
+    /* === P7 SIMULADOR === */
+    .scen{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:22px}
+    .scen-card{border:2px solid #ececec;border-radius:12px;padding:18px 20px;cursor:pointer;transition:all .22s;background:#fff;text-align:left;font-family:inherit;display:block;width:100%}
+    .scen-card:hover{transform:translateY(-3px);box-shadow:0 10px 26px rgba(0,0,0,.08)}
+    .scen-card:focus-visible{outline:3px solid #0057b8;outline-offset:2px}
+    .scen-card.on{box-shadow:0 10px 26px rgba(0,0,0,.1)}
+    .scen-tag{font-size:9px;font-weight:900;letter-spacing:1px;text-transform:uppercase;color:#aaa;margin-bottom:7px}
+    .scen-name{font-size:17px;font-weight:900;margin-bottom:6px}
+    .scen-desc{font-size:11.5px;color:#777;line-height:1.55}
+    .scen-w{font-size:10.5px;font-weight:800;margin-top:11px;padding-top:10px;border-top:1px solid #f0f0f0;color:#0057b8}
+    .scen-custom{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.8px;color:#c47f00;background:#fff8e6;border:1px solid #ffe8b0;padding:7px 13px;border-radius:6px;margin-bottom:18px;display:none}
+    .scen-custom.show{display:block}
+
+    /* layout simulador */
+    .sim{display:grid;grid-template-columns:330px 1fr;gap:22px;align-items:start}
+    .sim-ctrl{background:#fafbfc;border:1px solid #ececec;border-radius:12px;padding:20px;position:sticky;top:132px}
+    .sim-ctrl h4{font-size:11px;font-weight:900;text-transform:uppercase;letter-spacing:.9px;color:#1d1d1b;margin-bottom:3px}
+    .sim-ctrl .hint{font-size:10.5px;color:#999;line-height:1.45;margin-bottom:16px}
+    .sim-ctrl .divider{height:1px;background:#ececec;margin:18px 0}
+    .sl{margin-bottom:13px}
+    .sl-top{display:flex;justify-content:space-between;align-items:baseline;font-size:11.5px;font-weight:700;color:#444;margin-bottom:3px}
+    .sl-top .v{font-size:11px;font-weight:900;color:#d40e14;font-variant-numeric:tabular-nums}
+    .sl input[type=range]{width:100%;accent-color:#d40e14;height:16px;cursor:pointer}
+    .sl input[type=range]:focus-visible{outline:2px solid #0057b8;outline-offset:2px}
+    .sl.hard .sl-top .v{color:#0057b8}
+    .sl.hard input[type=range]{accent-color:#0057b8}
+    .sim-reset{width:100%;margin-top:6px;padding:10px;border-radius:7px;border:1.5px solid #ddd;background:#fff;font-family:inherit;font-size:11.5px;font-weight:800;color:#555;cursor:pointer}
+    .sim-reset:hover{border-color:#d40e14;color:#d40e14}
+
+    /* KPIs vivos */
+    .sim-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:18px}
+    .skpi{background:#fff;border:1px solid #ececec;border-radius:9px;padding:12px 13px;border-top:3px solid #0057b8}
+    .skpi .l{font-size:8.5px;font-weight:900;text-transform:uppercase;letter-spacing:.6px;color:#999;line-height:1.3;min-height:22px}
+    .skpi .n{font-size:20px;font-weight:900;letter-spacing:-.6px;font-variant-numeric:tabular-nums;transition:color .3s}
+    .skpi .d{font-size:9.5px;font-weight:700;color:#aaa;margin-top:1px}
+
+    .scen-msg{padding:14px 17px;border-radius:9px;font-size:12.5px;line-height:1.6;font-weight:600;margin-bottom:16px;border-left:4px solid;transition:background .3s,border-color .3s,color .3s}
+    .sim-count{font-size:11px;color:#999;font-weight:700;margin-bottom:10px}
+
+    /* ranking vivo */
+    .scen-list{display:flex;flex-direction:column;gap:8px}
+    .scen-item{border:1px solid #eee;border-radius:10px;background:#fff;overflow:hidden;transition:border-color .25s,box-shadow .25s}
+    .scen-item.top{border-color:#e2e2e2;box-shadow:0 3px 12px rgba(0,0,0,.05)}
+    .scen-head{display:grid;grid-template-columns:34px 1fr 92px 190px 96px 24px;gap:14px;align-items:center;padding:12px 16px;cursor:pointer;background:none;border:none;width:100%;font-family:inherit;text-align:left}
+    .scen-head:hover{background:#fafbfc}
+    .scen-head:focus-visible{outline:2px solid #0057b8;outline-offset:-2px}
+    .scen-item .p{font-size:16px;font-weight:900;text-align:center;font-variant-numeric:tabular-nums}
+    .scen-item .nm{font-size:13.5px;font-weight:800;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+    .scen-item .sub{font-size:10.5px;color:#888;margin-top:2px}
+    .zbadge{font-size:8.5px;font-weight:900;text-transform:uppercase;letter-spacing:.4px;background:#f2f4f7;color:#667;padding:2px 7px;border-radius:9px}
+    .dchip{font-size:10px;font-weight:900;font-variant-numeric:tabular-nums;padding:3px 8px;border-radius:10px;white-space:nowrap;text-align:center;display:inline-block;min-width:56px}
+    .dchip.up{background:#e8f6ee;color:#177a43}
+    .dchip.dn{background:#fdeceb;color:#b8352a}
+    .dchip.eq{background:#f2f4f7;color:#888}
+    .scen-bar{height:8px;background:#f0f0f0;border-radius:5px;overflow:hidden}
+    .scen-bar span{display:block;height:100%;border-radius:5px;transition:width .45s cubic-bezier(.4,0,.2,1),background .3s}
+    .scen-sc{font-size:9.5px;font-weight:800;color:#999;margin-bottom:4px;font-variant-numeric:tabular-nums}
+    .scen-item .pr{font-size:15px;font-weight:900;text-align:right;font-variant-numeric:tabular-nums}
+    .scen-item .pr small{display:block;font-size:9px;font-weight:700;color:#aaa}
+    .caret{font-size:18px;line-height:1;color:#bbb;font-weight:900;transition:transform .25s;text-align:center}
+    .scen-item.open .caret{transform:rotate(90deg)}
+    .scen-xai{display:none;padding:2px 16px 16px;border-top:1px solid #f4f4f4;background:#fcfdfe}
+    .scen-item.open .scen-xai{display:block}
+    .xai-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;padding-top:14px}
+    .xai-lbl{font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.9px;color:#0057b8;margin-bottom:9px}
+    .fbar{margin-bottom:9px}
+    .fbar-top{display:flex;justify-content:space-between;font-size:10.5px;font-weight:700;color:#555;margin-bottom:3px}
+    .fbar-top .c{font-weight:900;color:#0057b8;font-variant-numeric:tabular-nums}
+    .fbar-track{height:6px;background:#eef0f3;border-radius:4px;overflow:hidden}
+    .fbar-track span{display:block;height:100%;border-radius:4px;background:linear-gradient(90deg,#0057b8,#5b9be2);transition:width .4s}
+    .fbar.off .fbar-top{color:#bbb}
+    .fbar.off .fbar-top .c{color:#bbb}
+    .xai-note{font-size:11px;line-height:1.65;color:#555;background:#fff;border:1px solid #eef0f3;border-radius:8px;padding:12px 14px}
+    .xai-note strong{color:#1d1d1b}
+    .xai-facts{list-style:none;margin-top:10px}
+    .xai-facts li{font-size:10.5px;color:#666;padding:4px 0 4px 16px;position:relative}
+    .xai-facts li:before{content:'\2713';position:absolute;left:0;color:#1b8a4b;font-weight:900}
+    .excluded{margin-top:16px;font-size:11px;color:#999;line-height:1.6;background:#fafbfc;border:1px dashed #e2e2e2;border-radius:9px;padding:12px 14px}
+    .excluded strong{color:#b8352a;font-weight:900}
+
+    /* === DASHBOARD === */
+    .dash-wrap{background:#f7f8fa;border-top:1px solid #ececec}
+    .dash-inner{max-width:1240px;margin:0 auto;padding:52px 28px}
+    .panel{background:#fff;border:1px solid #ececec;border-radius:12px;padding:22px 24px;margin-bottom:20px}
+    .panel-t{font-size:14px;font-weight:900;margin-bottom:3px}
+    .panel-s{font-size:11px;color:#999;margin-bottom:18px}
+    .filters{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+    .f{display:flex;flex-direction:column;gap:6px}
+    .f label{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.7px;color:#777}
+    .f select{padding:9px 11px;border:1px solid #e0e0e0;border-radius:7px;font-family:inherit;font-size:12px;background:#fff;outline:none;cursor:pointer}
+    .f select:focus{border-color:#0057b8}
+    .f input[type=range]{width:100%;accent-color:#d40e14;margin-top:6px}
+    .f .val{font-size:11px;font-weight:800;color:#d40e14}
+    .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+    .kpi{background:#fff;border:1px solid #ececec;border-radius:10px;padding:17px 18px;border-top:3px solid #0057b8}
+    .kpi .l{font-size:9.5px;font-weight:900;text-transform:uppercase;letter-spacing:.7px;color:#999;margin-bottom:7px;line-height:1.3;min-height:25px}
+    .kpi .n{font-size:26px;font-weight:900;letter-spacing:-1px;color:#1d1d1b}
+    .kpi .d{font-size:10.5px;font-weight:800;margin-top:3px}
+    .kpi .d.up{color:#1b8a4b}
+    .kpi .d.down{color:#c0392b}
+    .kpi .d.neu{color:#999}
+    table.tbl{width:100%;border-collapse:collapse}
+    table.tbl th{text-align:left;font-size:9.5px;font-weight:900;text-transform:uppercase;letter-spacing:.7px;color:#999;padding:10px 12px;border-bottom:2px solid #f0f0f0}
+    table.tbl td{padding:12px;font-size:12.5px;border-bottom:1px solid #f6f6f6}
+    table.tbl tr.push{background:#f4fbf6}
+    table.tbl tr.cut{background:#fdf4f4}
+    table.tbl td.num{font-weight:800;text-align:right}
+    .badge{display:inline-block;padding:4px 10px;border-radius:4px;font-size:9.5px;font-weight:900;text-transform:uppercase;letter-spacing:.5px}
+    .badge.push{background:#1b8a4b;color:#fff}
+    .badge.cut{background:#c0392b;color:#fff}
+    .delta.up{color:#1b8a4b;font-weight:900}
+    .delta.down{color:#c0392b;font-weight:900}
+    .insight{background:#f8f9ff;border:1px solid #dce4f5;border-left:4px solid #0057b8;border-radius:0 9px 9px 0;padding:17px 20px;margin-top:18px}
+    .insight-l{font-size:9.5px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#0057b8;margin-bottom:6px}
+    .insight-t{font-size:12.5px;line-height:1.7;color:#333}
+    .xai{display:grid;grid-template-columns:1fr 1fr;gap:26px}
+    .xbar{margin-bottom:13px}
+    .xbar-top{display:flex;justify-content:space-between;font-size:11.5px;font-weight:800;margin-bottom:5px}
+    .xbar-top .w{color:#0057b8}
+    .xbar-track{height:9px;background:#f0f0f0;border-radius:5px;overflow:hidden}
+    .xbar-track span{display:block;height:100%;background:linear-gradient(90deg,#0057b8,#4d93e0);border-radius:5px}
+    .xtext{font-size:12px;line-height:1.7;color:#444;background:#fafbfc;border:1px solid #f0f0f0;border-radius:9px;padding:14px 16px;margin-bottom:14px}
+    .constraints{list-style:none}
+    .constraints li{font-size:11.5px;color:#444;padding:7px 0 7px 22px;position:relative;border-bottom:1px solid #f6f6f6}
+    .constraints li:last-child{border-bottom:none}
+    .constraints li:before{content:'\2713';position:absolute;left:0;color:#1b8a4b;font-weight:900}
+    .impact{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+    .icard{background:#f4fbf6;border:1px solid #d3ecdd;border-radius:10px;padding:19px 18px}
+    .icard .l{font-size:9.5px;font-weight:900;text-transform:uppercase;letter-spacing:.7px;color:#5c7a68;margin-bottom:7px}
+    .icard .n{font-size:25px;font-weight:900;color:#1b8a4b;letter-spacing:-1px}
+    .icard .d{font-size:10.5px;color:#6a8a76;margin-top:4px;line-height:1.4}
+    .actions-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-top:4px}
+    .abtn{padding:14px;border-radius:9px;border:1.5px solid #e0e0e0;background:#fff;font-family:inherit;font-size:12.5px;font-weight:800;color:#444;cursor:pointer;transition:all .2s}
+    .abtn:hover{border-color:#0057b8;color:#0057b8}
+    .abtn.primary{background:#d40e14;border-color:#d40e14;color:#fff}
+    .abtn.primary:hover{background:#b00c11;color:#fff}
+
+    /* === AI SELLER PANEL === */
+    .ai-panel{background:linear-gradient(135deg,#f8f9ff 0%,#f0f4ff 100%);border:1px solid #dce4f5;border-radius:12px;padding:24px}
+    .ai-panel-head{display:flex;align-items:center;gap:11px;margin-bottom:16px}
+    .ai-panel-icon{width:32px;height:32px;background:#0057b8;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:900}
+    .ai-panel-title{font-size:14px;font-weight:900;color:#0057b8}
+    .ai-panel-sub{font-size:10px;color:#888;margin-top:1px}
+    .ai-input-row{display:flex;gap:10px;margin-bottom:16px}
+    .ai-input{flex:1;padding:10px 14px;border-radius:8px;border:1px solid #ddd;font-size:12px;font-family:inherit;outline:none}
+    .ai-input:focus{border-color:#0057b8}
+    .ai-send{padding:10px 22px;border-radius:8px;background:#d40e14;color:#fff;border:none;font-size:12px;font-weight:900;cursor:pointer;font-family:inherit}
+    .ai-send:hover{background:#b00c11}
+    .ai-response{background:#fff;border:1px solid #e8eef8;border-radius:8px;padding:16px}
+    .ai-response-lbl{font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:1px;color:#0057b8;margin-bottom:8px}
+    .ai-response-txt{font-size:12px;color:#333;line-height:1.75;white-space:pre-line}
+    .ai-actions{display:flex;gap:6px;margin-top:13px;flex-wrap:wrap}
+    .ai-act{padding:6px 13px;border-radius:4px;font-size:10px;font-weight:800;border:1px solid #ddd;background:#fff;color:#555;cursor:pointer;font-family:inherit}
+    .ai-act:hover{border-color:#0057b8;color:#0057b8}
+
+    /* === DASHBOARD: FLUJO DE DECISION === */
+    .flow{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;margin-bottom:22px}
+    .fstep{background:#fff;border:1px solid #ececec;border-radius:9px;padding:11px 13px;position:relative}
+    .fstep .fn{font-size:9px;font-weight:900;color:#0057b8;letter-spacing:.7px}
+    .fstep .ft{font-size:11.5px;font-weight:800;margin-top:2px;line-height:1.25}
+    .fstep .fq{font-size:9.5px;color:#aaa;margin-top:3px;line-height:1.3}
+
+    .dstep{margin-bottom:20px}
+    .dstep-hd{display:flex;align-items:baseline;gap:10px;margin-bottom:12px}
+    .dstep-n{background:#0057b8;color:#fff;font-size:9.5px;font-weight:900;padding:4px 9px;border-radius:4px;letter-spacing:.5px;white-space:nowrap}
+    .dstep-t{font-size:16px;font-weight:900;letter-spacing:-.3px}
+    .dstep-q{font-size:11.5px;color:#999;font-weight:700}
+
+    /* pestanas de escenario */
+    .stabs{display:flex;gap:7px;margin-bottom:16px;flex-wrap:wrap}
+    .stab{padding:9px 17px;border-radius:20px;border:1.5px solid #e2e2e2;background:#fff;font-family:inherit;font-size:11.5px;font-weight:800;color:#666;cursor:pointer;transition:all .2s}
+    .stab:hover{border-color:#0057b8;color:#0057b8}
+    .stab.on{background:#0057b8;border-color:#0057b8;color:#fff}
+    .stab:focus-visible{outline:2px solid #d40e14;outline-offset:2px}
+
+    /* KPIs dinamicos */
+    .kpi .n.big{font-size:24px}
+    .kpi.hl{border-top-color:#d40e14}
+    .kpi.hl .n{color:#d40e14}
+    .conf-track{height:7px;background:#eef0f3;border-radius:4px;overflow:hidden;margin-top:7px}
+    .conf-track span{display:block;height:100%;border-radius:4px;transition:width .4s,background .3s}
+
+    /* tarjeta de recomendacion */
+    .reco{background:linear-gradient(135deg,#f8f9ff 0%,#eef3fd 100%);border:1px solid #d7e2f5;border-radius:12px;padding:22px 24px}
+    .reco-hd{display:flex;align-items:flex-start;gap:12px;margin-bottom:16px}
+    .reco-ic{width:34px;height:34px;background:#0057b8;border-radius:9px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:900;flex-shrink:0}
+    .reco-hl{font-size:15px;font-weight:900;line-height:1.35;color:#12305e}
+    .reco-sub{font-size:11px;color:#7286a5;margin-top:3px;font-weight:700}
+    .reco-conf{background:#fff;border:1px solid #e2eaf6;border-radius:9px;padding:12px 14px;min-width:190px}
+    .reco-conf .cl{font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.8px;color:#8a9ab5}
+    .reco-conf .cv{font-size:22px;font-weight:900;letter-spacing:-.8px;margin-top:2px}
+    .reco-conf .cd{font-size:9.5px;color:#9aa8bf;margin-top:2px}
+    .reco-body{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:16px}
+    .ud{background:#fff;border:1px solid #e6ecf7;border-radius:10px;padding:14px 16px}
+    .ud-t{font-size:9.5px;font-weight:900;text-transform:uppercase;letter-spacing:.9px;margin-bottom:10px}
+    .ud.up .ud-t{color:#177a43}
+    .ud.dn .ud-t{color:#b8352a}
+    .ud-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid #f5f7fa;font-size:12px}
+    .ud-item:last-child{border-bottom:none}
+    .ud-item .sn{font-weight:700;color:#333;line-height:1.3}
+    .ud-item .sn small{display:block;font-size:9.5px;color:#aaa;font-weight:700}
+    .ud-item .sv{font-weight:900;white-space:nowrap;text-align:right;font-variant-numeric:tabular-nums}
+    .ud.up .sv{color:#177a43}
+    .ud.dn .sv{color:#b8352a}
+    .ud-empty{font-size:11px;color:#aaa;font-style:italic;padding:7px 0}
+    .why{background:#fff;border:1px solid #e6ecf7;border-radius:10px;padding:14px 16px;margin-bottom:14px}
+    .why-t{font-size:9.5px;font-weight:900;text-transform:uppercase;letter-spacing:.9px;color:#0057b8;margin-bottom:9px}
+    .why ol{margin:0;padding-left:17px}
+    .why li{font-size:11.5px;line-height:1.6;color:#3c4a5e;margin-bottom:6px}
+    .why li:last-child{margin-bottom:0}
+    .why li strong{color:#12305e}
+    .impact-chips{display:flex;gap:8px;flex-wrap:wrap}
+    .chip{background:#fff;border:1px solid #e2eaf6;border-radius:8px;padding:9px 13px;min-width:132px}
+    .chip .cl{font-size:8.5px;font-weight:900;text-transform:uppercase;letter-spacing:.6px;color:#8a9ab5}
+    .chip .cv{font-size:16px;font-weight:900;letter-spacing:-.5px;margin-top:1px;font-variant-numeric:tabular-nums}
+
+    /* barras actual vs recomendado */
+    .dualbar{display:flex;flex-direction:column;gap:3px;min-width:150px}
+    .db-row{display:flex;align-items:center;gap:6px}
+    .db-lbl{font-size:8px;font-weight:900;color:#bbb;width:26px;letter-spacing:.4px}
+    .db-track{flex:1;height:9px;background:#f1f3f6;border-radius:5px;overflow:hidden}
+    .db-track span{display:block;height:100%;border-radius:5px;transition:width .45s cubic-bezier(.4,0,.2,1)}
+    .db-a span{background:#b9c2cf}
+    .db-r span{background:#0057b8}
+    .db-val{font-size:10px;font-weight:800;color:#888;width:56px;text-align:right;font-variant-numeric:tabular-nums}
+
+    /* sliders por segmento */
+    .segsl{display:grid;grid-template-columns:1fr 250px 108px;gap:16px;align-items:center;padding:11px 0;border-bottom:1px solid #f5f6f8}
+    .segsl:last-of-type{border-bottom:none}
+    .segsl-nm{font-size:12.5px;font-weight:800}
+    .segsl-meta{font-size:10px;color:#9aa3ae;margin-top:2px}
+    .segsl input[type=range]{width:100%;accent-color:#0057b8;cursor:pointer}
+    .segsl input[type=range]:focus-visible{outline:2px solid #d40e14;outline-offset:2px}
+    .segsl-v{text-align:right}
+    .segsl-v .ev{font-size:14px;font-weight:900;font-variant-numeric:tabular-nums}
+    .segsl-v .dv{font-size:9.5px;font-weight:800;font-variant-numeric:tabular-nums}
+    .segsl-v .dv.up{color:#177a43}
+    .segsl-v .dv.dn{color:#b8352a}
+    .segsl-v .dv.eq{color:#bbb}
+    .budget{display:flex;align-items:center;justify-content:space-between;gap:16px;background:#fafbfc;border:1px solid #ececec;border-radius:10px;padding:13px 16px;margin-bottom:14px}
+    .budget-l{font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.8px;color:#999}
+    .budget-n{font-size:20px;font-weight:900;letter-spacing:-.6px;font-variant-numeric:tabular-nums}
+    .budget-bar{flex:1;height:10px;background:#eef0f3;border-radius:5px;overflow:hidden;max-width:340px}
+    .budget-bar span{display:block;height:100%;border-radius:5px;transition:width .3s,background .3s}
+    .budget-warn{font-size:11px;font-weight:800;padding:7px 12px;border-radius:6px;white-space:nowrap}
+    .budget-warn.ok{background:#eaf7f0;color:#177a43}
+    .budget-warn.bad{background:#fdeceb;color:#b8352a}
+    .simbtns{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+    .sbtn{padding:9px 15px;border-radius:7px;border:1.5px solid #e0e0e0;background:#fff;font-family:inherit;font-size:11.5px;font-weight:800;color:#555;cursor:pointer}
+    .sbtn:hover{border-color:#0057b8;color:#0057b8}
+
+    /* comparativa de escenarios */
+    .cmp{width:100%;border-collapse:collapse}
+    .cmp th{font-size:9.5px;font-weight:900;text-transform:uppercase;letter-spacing:.7px;color:#999;padding:10px 12px;border-bottom:2px solid #f0f0f0;text-align:right}
+    .cmp th:first-child{text-align:left}
+    .cmp th.sc-ia{color:#0057b8}
+    .cmp th.sc-cu{color:#c47f00}
+    .cmp td{padding:11px 12px;font-size:13px;border-bottom:1px solid #f6f6f6;text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
+    .cmp td:first-child{text-align:left;font-weight:700;color:#666;font-size:12px}
+    .cmp td.best{background:#f4fbf6;color:#177a43}
+    .cmp tr:last-child td{border-bottom:none}
+    .cmp .unit{font-size:9.5px;color:#bbb;font-weight:700}
+
+    /* decision */
+    .decision{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+    .dbtn{padding:16px 18px;border-radius:10px;border:2px solid #e2e2e2;background:#fff;font-family:inherit;cursor:pointer;text-align:left;transition:all .2s}
+    .dbtn:hover{transform:translateY(-2px);box-shadow:0 8px 22px rgba(0,0,0,.08)}
+    .dbtn:focus-visible{outline:3px solid #0057b8;outline-offset:2px}
+    .dbtn .dt{font-size:13.5px;font-weight:900;margin-bottom:3px}
+    .dbtn .dd{font-size:10.5px;color:#999;line-height:1.4;font-weight:600}
+    .dbtn.apply{border-color:#1b8a4b}
+    .dbtn.apply .dt{color:#177a43}
+    .dbtn.apply:hover{background:#f4fbf6}
+    .dbtn.custom{border-color:#0057b8}
+    .dbtn.custom .dt{color:#0057b8}
+    .dbtn.custom:hover{background:#f7faff}
+    .dbtn.reject{border-color:#d9534f}
+    .dbtn.reject .dt{color:#b8352a}
+    .dbtn.reject:hover{background:#fdf5f5}
+    .dstatus{margin-top:14px;border-radius:9px;padding:13px 16px;font-size:12px;line-height:1.6;border-left:4px solid;display:none}
+    .dstatus.show{display:block}
+    .dstatus .dl{font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.9px;margin-bottom:4px}
+    .dlog{margin-top:12px;font-size:10.5px;color:#999;line-height:1.7;font-family:inherit}
+    .dlog div{padding:3px 0;border-bottom:1px dashed #eee}
+    .dlog div:last-child{border-bottom:none}
+
+    /* === FOOTER === */
+    .ftr{background:#1d1d1b;color:#999;padding:36px 28px;text-align:center;font-size:11px;line-height:1.9}
+    .ftr strong{color:#fff}
+    .ftr .formula{font-size:9.5px;color:#666;margin-top:6px}
+
+    .stars{color:#d40e14;letter-spacing:1px}
+
+    @media(max-width:1100px){
+        .sim{grid-template-columns:1fr}
+        .sim-ctrl{position:static}
+        .scen-head{grid-template-columns:30px 1fr 150px 80px;row-gap:9px}
+        .scen-head .caret{display:none}
+    }
+    /* === IMPRESION / PDF === */
+    @page{size:A4;margin:11mm 9mm}
+    @media print{
+        /* Chrome no imprime fondos salvo que se fuerce explicitamente */
+        *{-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;box-shadow:none !important}
+        body{font-size:11px}
+        /* los elementos pegajosos se solapan al paginar */
+        .hdr,.pillnav,.sim-ctrl{position:static !important}
+        .pillnav{display:none}
+        .hero{height:290px}
+        .hero-content{padding:56px 28px}
+        .section{padding:26px 28px}
+        .dash-inner{padding:26px 28px}
+        /* cada propuesta empieza en pagina nueva */
+        #p2,#p3,#p4,#p5,#p6,#p7,#dashboard{break-before:page;page-break-before:always}
+        /* no partir tarjetas ni tablas por la mitad */
+        .offer,.best,.rank-row,.ba-card,.chatwrap,.soc,.scen-card,.panel,.reco,.stat,
+        .kpi,.skpi,.icard,.chip,.scen-item,.fstep,.itin,.mini,.segsl,.dbtn{
+            break-inside:avoid;page-break-inside:avoid}
+        .dstep-hd,.section-title,.panel-t{break-after:avoid;page-break-after:avoid}
+        /* el simulador de P7 y el dashboard a una columna para que quepan */
+        .sim{grid-template-columns:1fr !important}
+        .scen-head{grid-template-columns:34px 1fr 92px 190px 96px !important}
+        .caret{display:none}
+        .offer:hover,.scen-card:hover,.dbtn:hover{transform:none !important}
+        /* los rangos nativos salen mal impresos: se marca el valor al lado */
+        input[type=range]{height:6px}
+    }
+
+    @media(max-width:1100px){
+        .flow{grid-template-columns:repeat(3,1fr)}
+        .reco-body{grid-template-columns:1fr}
+        .segsl{grid-template-columns:1fr 180px 96px;gap:12px}
+    }
+    @media(max-width:1000px){
+        .grid,.grid2,.stats,.kpis,.filters,.impact,.actions-row,.scen{grid-template-columns:1fr 1fr}
+        .sim-kpis{grid-template-columns:1fr 1fr}
+        .flow{grid-template-columns:1fr 1fr}
+        .decision{grid-template-columns:1fr}
+        .segsl{grid-template-columns:1fr;row-gap:8px}
+        .reco-hd{flex-direction:column}
+        .best{grid-template-columns:1fr}
+        .best-img{min-height:230px}
+        .ba{grid-template-columns:1fr}
+        .ba-arrow{padding:14px 0;transform:rotate(90deg)}
+        .xai,.xai-grid{grid-template-columns:1fr}
+        .rank-row{grid-template-columns:36px 1fr;row-gap:10px}
+        .scen-head{grid-template-columns:30px 1fr;row-gap:9px}
+        .nav{display:none}
+        .hero-content h1{font-size:25px}
+    }
+</style>
+</head>
+<body>
+
+<!-- ================= HEADER ================= -->
+<header class="hdr"><div class="hdr-inner">
+    <div class="logo"><div class="logo-mark">TUI</div><span class="logo-text">.com</span></div>
+    <nav class="nav">
+        <a href="#">Destinos</a><a href="#">Ofertas</a><a href="#p1" class="on">Para ti</a><a href="#">Circuitos</a><a href="#">Experiencias</a>
+    </nav>
+    <div class="usr"><div class="usr-av">MG</div>Maria Garcia</div>
+</div></header>
+
+<!-- ================= HERO ================= -->
+<div class="hero">
+    <img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=1600&h=560&fit=crop" alt="Costa mediterranea">
+    <div class="hero-overlay"></div>
+    <div class="hero-content">
+        <h1>Siete formas de recomendarte el viaje perfecto</h1>
+        <p>Un mismo motor TDRS, siete experiencias de usuario. Personalizacion real, redistribucion territorial y transparencia en cada recomendacion.</p>
+        <div class="ai-tag"><span class="ai-dot"></span> Personalizado en tiempo real</div>
+    </div>
+</div>
+
+<!-- ================= PILL NAV ================= -->
+<div class="pillnav"><div class="pillnav-inner">
+    <a class="pill" href="#p1">1. Card</a>
+    <a class="pill" href="#p2">2. Best Action</a>
+    <a class="pill" href="#p3">3. Ranking</a>
+    <a class="pill" href="#p4">4. Impacto</a>
+    <a class="pill" href="#p5">5. Chat</a>
+    <a class="pill" href="#p6">6. Social</a>
+    <a class="pill" href="#p7">7. Escenarios</a>
+    <a class="pill dash" href="#dashboard">Dashboard</a>
+</div></div>
+
+<!-- ================= P1 - RECOMMENDATION CARD ================= -->
+<section class="section" id="p1">
+    <div class="sec-num">Propuesta 1</div>
+    <div class="section-title">Recommendation Card</div>
+    <div class="section-sub">Tarjetas de producto con el lenguaje visual de es.tui.com/es/ofertas-tui, enriquecidas con el porcentaje de afinidad TDRS y la explicacion "por que para ti". Perfil: cultura + gastronomia, salida noviembre 2025.</div>
+
+    <div class="grid">
+        <!-- Mallorca -->
+        <article class="offer">
+            <div class="offer-img">
+                <img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=600&h=380&fit=crop" alt="Mallorca">
+                <div class="offer-tags"><span class="otag otag-grn">Sostenible</span><span class="otag otag-blu">Temporada baja</span></div>
+                <div class="offer-match">92% match</div>
+            </div>
+            <div class="offer-body">
+                <div class="offer-dest">Espana - Islas Baleares</div>
+                <div class="offer-name">Mallorca Autentica</div>
+                <div class="offer-meta">7 dias / 6 noches - Todo incluido - Desde Madrid</div>
+                <div class="offer-route">Palma → Soller → Valldemossa → Calas del Este → Mercado Santa Catalina</div>
+                <div class="offer-ai">
+                    <div class="offer-ai-lbl">Por que para ti</div>
+                    <div class="offer-ai-txt">Noviembre en Mallorca combina tus dos pasiones: calas sin aglomeraciones y mercados gastronomicos locales. Ocupacion del 31% y un 35% mas barato que en verano.</div>
+                </div>
+                <div class="offer-bottom">
+                    <div class="offer-rating"><span class="stars">● ● ● ● ●</span><br>4.6/5 (342 opiniones)</div>
+                    <div class="offer-price"><div class="from">desde</div><div class="old">1.380 EUR</div><div class="new">899 EUR</div><div class="pp">por persona</div></div>
+                </div>
+            </div>
+        </article>
+
+        <!-- Split -->
+        <article class="offer">
+            <div class="offer-img">
+                <img src="https://images.unsplash.com/photo-1555990538-1e7e5e6f2b24?w=600&h=380&fit=crop" alt="Split">
+                <div class="offer-tags"><span class="otag otag-prp">Descubrimiento</span><span class="otag otag-grn">Sostenible</span></div>
+                <div class="offer-match">87% match</div>
+            </div>
+            <div class="offer-body">
+                <div class="offer-dest">Croacia - Dalmacia</div>
+                <div class="offer-name">Split y la Costa Adriatica</div>
+                <div class="offer-meta">6 dias / 5 noches - Media pension - Desde Barcelona</div>
+                <div class="offer-route">Split → Palacio Diocleciano → Trogir → Isla de Hvar → Playa Bacvice</div>
+                <div class="offer-ai">
+                    <div class="offer-ai-lbl">Por que para ti</div>
+                    <div class="offer-ai-txt">Patrimonio UNESCO mas playas cristalinas, con solo un 28% de ocupacion en noviembre. Gastronomia mediterranea autentica lejos de los circuitos masificados.</div>
+                </div>
+                <div class="offer-bottom">
+                    <div class="offer-rating"><span class="stars">● ● ● ● ●</span><br>4.4/5 (189 opiniones)</div>
+                    <div class="offer-price"><div class="from">desde</div><div class="old">1.050 EUR</div><div class="new">780 EUR</div><div class="pp">por persona</div></div>
+                </div>
+            </div>
+        </article>
+
+        <!-- Algarve -->
+        <article class="offer">
+            <div class="offer-img">
+                <img src="https://images.unsplash.com/photo-1539635278303-d4002c07eae3?w=600&h=380&fit=crop" alt="Algarve">
+                <div class="offer-tags"><span class="otag otag-grn">Sostenible</span><span class="otag otag-red">Mejor precio</span></div>
+                <div class="offer-match">81% match</div>
+            </div>
+            <div class="offer-body">
+                <div class="offer-dest">Portugal - Algarve</div>
+                <div class="offer-name">Algarve: Acantilados y Marisqueria</div>
+                <div class="offer-meta">6 dias / 5 noches - Desayuno - Desde Madrid</div>
+                <div class="offer-route">Faro → Lagos → Praia da Marinha → Albufeira → Cuevas de Benagil</div>
+                <div class="offer-ai">
+                    <div class="offer-ai-lbl">Por que para ti</div>
+                    <div class="offer-ai-txt">La mejor marisqueria de Europa en playas virgenes, a una hora de vuelo. Certificacion sostenible maxima y un 35% de ocupacion en la fecha elegida.</div>
+                </div>
+                <div class="offer-bottom">
+                    <div class="offer-rating"><span class="stars">● ● ● ● ●</span><br>4.4/5 (256 opiniones)</div>
+                    <div class="offer-price"><div class="from">desde</div><div class="old">890 EUR</div><div class="new">650 EUR</div><div class="pp">por persona</div></div>
+                </div>
+            </div>
+        </article>
+    </div>
+
+    <div class="ref">Ref: Nezasa TripBuilder + Murmuration</div>
+</section>
+
+<!-- ================= P2 - BEST ACTION ================= -->
+<section class="section alt" id="p2"><div class="inner">
+    <div class="sec-num">Propuesta 2</div>
+    <div class="section-title">Top Recommendation / Best Action</div>
+    <div class="section-sub">El motor no muestra una lista: decide. Una sola recomendacion generada automaticamente, con paquete completo montado, argumentos de valor y llamada a la accion directa.</div>
+
+    <div class="best">
+        <div class="best-img">
+            <img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=900&h=900&fit=crop" alt="Mallorca">
+            <div class="offer-tags" style="top:16px;left:16px">
+                <span class="otag otag-red">Mejor precio</span>
+                <span class="otag otag-grn">Sostenible</span>
+                <span class="otag otag-blu">Temporada baja</span>
+            </div>
+            <div class="offer-match" style="bottom:16px;right:16px;font-size:12px;padding:6px 14px">92% match</div>
+        </div>
+        <div class="best-body">
+            <div class="best-kicker"><span class="ai-dot" style="background:#d40e14"></span> Tu mejor viaje ahora</div>
+            <div class="best-dest">Espana - Islas Baleares</div>
+            <h3 class="best-title">Mallorca Autentica</h3>
+            <div class="best-meta">7 dias / 6 noches - Todo incluido - Vuelo directo desde Madrid</div>
+            <div class="best-route">Palma → Soller → Valldemossa → Calas del Este → Mercado Santa Catalina</div>
+
+            <ul class="benefits">
+                <li>92% de afinidad con tu perfil cultural y gastronomico</li>
+                <li>Ocupacion del 31%: calas y mercados sin aglomeraciones</li>
+                <li>Ahorro de 481 EUR frente a la misma ruta en agosto</li>
+                <li>Hotel con certificacion Travelife Gold y proveedores locales</li>
+                <li>Cancelacion gratuita hasta 14 dias antes de la salida</li>
+                <li>Huella de carbono un 87% inferior a un destino transatlantico</li>
+            </ul>
+
+            <div class="best-pricerow">
+                <div class="offer-rating"><span class="stars">● ● ● ● ●</span><br>4.6/5 (342 opiniones verificadas)</div>
+                <div class="offer-price"><div class="from">desde</div><div class="old">1.380 EUR</div><div class="new">899 EUR</div><div class="pp">por persona</div></div>
+            </div>
+
+            <button class="btn-big">Reservar este viaje</button>
+            <div class="urgency">12 personas estan mirando este paquete ahora mismo - Quedan 4 plazas para el 15 de noviembre</div>
+        </div>
+    </div>
+
+    <div class="ref">Ref: Nezasa (generacion automatica)</div>
+</div></section>
+
+<!-- ================= P3 - RANKING ================= -->
+<section class="section" id="p3">
+    <div class="sec-num">Propuesta 3</div>
+    <div class="section-title">Ranking de recomendaciones</div>
+    <div class="section-sub">Lista ordenada por score TDRS. El viajero mantiene el control: ve la puntuacion, compara precios y reserva desde la propia fila.</div>
+
+    <div class="rank">
+        <div class="rank-row">
+            <div class="rank-pos">1</div>
+            <div class="rank-thumb"><img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=200&h=140&fit=crop" alt="Mallorca"></div>
+            <div>
+                <div class="rank-dest">Espana - Baleares</div>
+                <div class="rank-name">Mallorca Autentica</div>
+                <div class="rank-note">7 dias / 6 noches - Ocupacion 31% - Todo incluido</div>
+            </div>
+            <div class="rank-scorewrap">Score TDRS 0.92<div class="rank-bar"><span style="width:92%"></span></div></div>
+            <div class="rank-price"><div class="old">1.380 EUR</div><div class="new">899 EUR</div></div>
+            <div><button class="btn-sm">Reservar</button></div>
+        </div>
+
+        <div class="rank-row">
+            <div class="rank-pos">2</div>
+            <div class="rank-thumb"><img src="https://images.unsplash.com/photo-1555990538-1e7e5e6f2b24?w=200&h=140&fit=crop" alt="Split"></div>
+            <div>
+                <div class="rank-dest">Croacia - Dalmacia</div>
+                <div class="rank-name">Split y la Costa Adriatica</div>
+                <div class="rank-note">6 dias / 5 noches - Ocupacion 28% - Media pension</div>
+            </div>
+            <div class="rank-scorewrap">Score TDRS 0.87<div class="rank-bar"><span style="width:87%"></span></div></div>
+            <div class="rank-price"><div class="old">1.050 EUR</div><div class="new">780 EUR</div></div>
+            <div><button class="btn-sm">Reservar</button></div>
+        </div>
+
+        <div class="rank-row">
+            <div class="rank-pos">3</div>
+            <div class="rank-thumb"><img src="https://images.unsplash.com/photo-1539635278303-d4002c07eae3?w=200&h=140&fit=crop" alt="Algarve"></div>
+            <div>
+                <div class="rank-dest">Portugal - Algarve</div>
+                <div class="rank-name">Algarve: Acantilados y Marisqueria</div>
+                <div class="rank-note">6 dias / 5 noches - Ocupacion 35% - Desayuno</div>
+            </div>
+            <div class="rank-scorewrap">Score TDRS 0.81<div class="rank-bar"><span style="width:81%"></span></div></div>
+            <div class="rank-price"><div class="old">890 EUR</div><div class="new">650 EUR</div></div>
+            <div><button class="btn-sm">Reservar</button></div>
+        </div>
+
+        <div class="rank-row">
+            <div class="rank-pos">4</div>
+            <div class="rank-thumb"><img src="https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?w=200&h=140&fit=crop" alt="Creta"></div>
+            <div>
+                <div class="rank-dest">Grecia - Creta</div>
+                <div class="rank-name">Creta Milenaria</div>
+                <div class="rank-note">8 dias / 7 noches - Ocupacion 24% - Media pension</div>
+            </div>
+            <div class="rank-scorewrap">Score TDRS 0.76<div class="rank-bar"><span style="width:76%"></span></div></div>
+            <div class="rank-price"><div class="old">1.190 EUR</div><div class="new">845 EUR</div></div>
+            <div><button class="btn-sm ghost">Reservar</button></div>
+        </div>
+
+        <div class="rank-row">
+            <div class="rank-pos">5</div>
+            <div class="rank-thumb"><img src="https://images.unsplash.com/photo-1544735716-392fe2489ffa?w=200&h=140&fit=crop" alt="Cabo Verde"></div>
+            <div>
+                <div class="rank-dest">Cabo Verde - Sal</div>
+                <div class="rank-name">Cabo Verde Esencial</div>
+                <div class="rank-note">9 dias / 8 noches - Ocupacion 19% - Todo incluido</div>
+            </div>
+            <div class="rank-scorewrap">Score TDRS 0.69<div class="rank-bar"><span style="width:69%"></span></div></div>
+            <div class="rank-price"><div class="old">1.560 EUR</div><div class="new">1.190 EUR</div></div>
+            <div><button class="btn-sm ghost">Reservar</button></div>
+        </div>
+    </div>
+
+    <div class="ref">Ref: Ranking ponderado del motor TDRS</div>
+</section>
+
+<!-- ================= P4 - BEFORE / AFTER ================= -->
+<section class="section alt" id="p4"><div class="inner">
+    <div class="sec-num">Propuesta 4</div>
+    <div class="section-title">Before / After: el impacto de aceptar la recomendacion</div>
+    <div class="section-sub">Comparativa directa entre la eleccion por defecto del viajero y la alternativa que propone el motor. El valor no es solo el precio: es presion turistica, clima, satisfaccion y huella.</div>
+
+    <div class="ba">
+        <div class="ba-card bad">
+            <div class="ba-head">Antes - Destino saturado</div>
+            <div class="ba-img"><img src="https://images.unsplash.com/photo-1570077188670-e3a8d69ac5ff?w=700&h=300&fit=crop" alt="Destino saturado"></div>
+            <div class="ba-name">Cancun</div>
+            <div class="ba-tagline">Mexico - Riviera Maya - Eleccion inicial del viajero</div>
+            <div class="ba-list">
+                <div class="ba-item"><span class="k">Precio por persona</span><span class="v">1.870 EUR</span></div>
+                <div class="ba-item"><span class="k">Ocupacion del destino</span><span class="v">89%</span></div>
+                <div class="ba-item"><span class="k">Clima en noviembre</span><span class="v">Temporada de lluvias</span></div>
+                <div class="ba-item"><span class="k">Satisfaccion esperada</span><span class="v">3.8 / 5</span></div>
+                <div class="ba-item"><span class="k">Emisiones CO2 (ida y vuelta)</span><span class="v">2.310 kg</span></div>
+            </div>
+        </div>
+
+        <div class="ba-arrow">→</div>
+
+        <div class="ba-card good">
+            <div class="ba-head">Despues - Destino recomendado</div>
+            <div class="ba-img"><img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=700&h=300&fit=crop" alt="Destino recomendado"></div>
+            <div class="ba-name">Mallorca</div>
+            <div class="ba-tagline">Espana - Baleares - Recomendacion TDRS 92% match</div>
+            <div class="ba-list">
+                <div class="ba-item"><span class="k">Precio por persona</span><span class="v">899 EUR</span></div>
+                <div class="ba-item"><span class="k">Ocupacion del destino</span><span class="v">31%</span></div>
+                <div class="ba-item"><span class="k">Clima en noviembre</span><span class="v">Seco, 21 grados</span></div>
+                <div class="ba-item"><span class="k">Satisfaccion esperada</span><span class="v">4.6 / 5</span></div>
+                <div class="ba-item"><span class="k">Emisiones CO2 (ida y vuelta)</span><span class="v">295 kg</span></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="stats">
+        <div class="stat"><div class="n">-52%</div><div class="l">Ahorro en precio final</div></div>
+        <div class="stat"><div class="n">-55%</div><div class="l">Menos gente en destino</div></div>
+        <div class="stat"><div class="n">+21%</div><div class="l">Satisfaccion esperada</div></div>
+        <div class="stat"><div class="n">-87%</div><div class="l">Emisiones de CO2</div></div>
+    </div>
+
+    <div class="ref">Ref: Murmuration (presion ambiental)</div>
+</div></section>
+
+<!-- ================= P5 - CHAT ================= -->
+<section class="section" id="p5">
+    <div class="sec-num">Propuesta 5</div>
+    <div class="section-title">Recomendacion conversacional</div>
+    <div class="section-sub">El viajero describe lo que busca en lenguaje natural. El asistente traduce la intencion a filtros TDRS, propone paquetes reservables y monta el itinerario dia a dia.</div>
+
+    <div class="chatwrap">
+        <div class="chat-hd">
+            <div class="chat-av">TUI</div>
+            <div>
+                <div class="t">Asistente de viajes TUI</div>
+                <div class="s"><span class="ai-dot"></span> En linea - Responde al instante</div>
+            </div>
+        </div>
+
+        <div class="chat-body">
+            <div class="msg bot">Hola Maria. Cuentame que tipo de viaje te apetece para noviembre y me encargo del resto.<div class="msg-time">10:02</div></div>
+
+            <div class="msg me">Quiero algo con historia y buena comida, playa cerca, y que no este lleno de turistas. Presupuesto sobre 800 EUR.<div class="msg-time">10:03</div></div>
+
+            <div class="msg bot">Perfecto. He leido tres cosas: patrimonio cultural, gastronomia local y baja presion turistica. Con eso he filtrado 1.240 paquetes y me quedan dos que encajan de verdad en tu presupuesto.<div class="msg-time">10:03</div></div>
+
+            <div class="minicards">
+                <div class="mini">
+                    <div class="mini-img"><img src="https://images.unsplash.com/photo-1555990538-1e7e5e6f2b24?w=180&h=140&fit=crop" alt="Split"></div>
+                    <div>
+                        <div class="mini-dest">Croacia - Dalmacia</div>
+                        <div class="mini-name">Split y la Costa Adriatica</div>
+                        <div class="mini-meta">6 dias / 5 noches - 87% match - Ocupacion 28%</div>
+                    </div>
+                    <div><div class="mini-price">780 EUR</div><button class="mini-btn">Reservar</button></div>
+                </div>
+                <div class="mini">
+                    <div class="mini-img"><img src="https://images.unsplash.com/photo-1539635278303-d4002c07eae3?w=180&h=140&fit=crop" alt="Algarve"></div>
+                    <div>
+                        <div class="mini-dest">Portugal - Algarve</div>
+                        <div class="mini-name">Acantilados y Marisqueria</div>
+                        <div class="mini-meta">6 dias / 5 noches - 81% match - Ocupacion 35%</div>
+                    </div>
+                    <div><div class="mini-price">650 EUR</div><button class="mini-btn">Reservar</button></div>
+                </div>
+            </div>
+
+            <div class="msg me">Split me llama. Que haria alli cada dia?<div class="msg-time">10:05</div></div>
+
+            <div class="msg bot">Te propongo este itinerario. Todo esta a menos de una hora del hotel y evita los horarios punta de los cruceros.<div class="msg-time">10:05</div></div>
+
+            <div class="itin">
+                <div class="itin-t">Itinerario sugerido - Split, 6 dias</div>
+                <div class="itin-day"><span class="d">Dia 1</span><span>Vuelo Barcelona - Split. Paseo por el Riva y cena de pescado en Konoba Matejuska.</span></div>
+                <div class="itin-day"><span class="d">Dia 2</span><span>Palacio de Diocleciano y catedral de San Duje con guia local. Tarde en el mercado Pazar.</span></div>
+                <div class="itin-day"><span class="d">Dia 3</span><span>Excursion a Trogir, ciudad UNESCO. Cata de vinos autoctonos en bodega familiar.</span></div>
+                <div class="itin-day"><span class="d">Dia 4</span><span>Ferry a la isla de Hvar. Campos de lavanda, casco viejo y bano en Dubovica.</span></div>
+                <div class="itin-day"><span class="d">Dia 5</span><span>Manana libre en la playa de Bacvice. Taller de cocina dalmata al mediodia.</span></div>
+                <div class="itin-day"><span class="d">Dia 6</span><span>Parque Marjan al amanecer, compras en el barrio de Varos y vuelo de regreso.</span></div>
+            </div>
+
+            <div class="msg bot">Puedo bloquear las plazas 20 minutos sin compromiso mientras lo decides. Quieres que lo haga?<div class="msg-time">10:06</div></div>
+        </div>
+
+        <div class="chat-input">
+            <input type="text" placeholder="Escribe tu mensaje..." aria-label="Mensaje para el asistente">
+            <button aria-label="Enviar mensaje">→</button>
+        </div>
+    </div>
+
+    <div class="ref">Ref: Mindtrip (personalizacion conversacional)</div>
+</section>
+
+<!-- ================= P6 - SOCIAL DISCOVERY ================= -->
+<section class="section alt" id="p6"><div class="inner">
+    <div class="sec-num">Propuesta 6</div>
+    <div class="section-title">Social Discovery</div>
+    <div class="section-sub">Recomendacion por afinidad entre perfiles. En lugar de explicar el algoritmo, se muestra el viaje que hizo alguien parecido a ti y lo que se llevo de vuelta.</div>
+
+    <div class="grid2">
+        <article class="soc">
+            <div class="soc-top">
+                <div class="soc-av">AR</div>
+                <div><div class="soc-who">Ana R.</div><div class="soc-sub">34 anos - Madrid - Perfil cultura y gastronomia</div></div>
+            </div>
+            <div class="soc-quote"><span>Iba a repetir Cancun por tercera vez. El buscador me sugirio Mallorca en noviembre y fue el mejor viaje de mi vida: mercados vacios, calas para nosotros solos y la mitad de precio.</span></div>
+            <div class="soc-tags">
+                <span class="stag">Cultura</span><span class="stag">Gastronomia</span><span class="stag">Temporada baja</span><span class="stag">Sin masificacion</span>
+            </div>
+            <div class="soc-trip">
+                <div class="soc-trip-img"><img src="https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=200&h=150&fit=crop" alt="Mallorca"></div>
+                <div>
+                    <div class="mini-dest">Espana - Baleares</div>
+                    <div class="mini-name">Mallorca Autentica</div>
+                    <div class="mini-meta">7 dias / 6 noches - 899 EUR - Valorado 5/5</div>
+                </div>
+            </div>
+            <div class="soc-foot"><button class="btn-sm">Quiero lo mismo →</button></div>
+        </article>
+
+        <article class="soc">
+            <div class="soc-top">
+                <div class="soc-av">CM</div>
+                <div><div class="soc-who">Carlos M.</div><div class="soc-sub">42 anos - Barcelona - Perfil patrimonio e historia</div></div>
+            </div>
+            <div class="soc-quote"><span>No conocia Split y ahora se lo recomiendo a todo el mundo. Patrimonio UNESCO sin colas, comida excelente y precios de hace diez anos. Volvimos con la sensacion de haber descubierto algo.</span></div>
+            <div class="soc-tags">
+                <span class="stag">Patrimonio</span><span class="stag">Descubrimiento</span><span class="stag">Playa</span><span class="stag">Relacion calidad-precio</span>
+            </div>
+            <div class="soc-trip">
+                <div class="soc-trip-img"><img src="https://images.unsplash.com/photo-1555990538-1e7e5e6f2b24?w=200&h=150&fit=crop" alt="Split"></div>
+                <div>
+                    <div class="mini-dest">Croacia - Dalmacia</div>
+                    <div class="mini-name">Split y la Costa Adriatica</div>
+                    <div class="mini-meta">6 dias / 5 noches - 780 EUR - Valorado 4.8/5</div>
+                </div>
+            </div>
+            <div class="soc-foot"><button class="btn-sm">Quiero lo mismo →</button></div>
+        </article>
+    </div>
+
+    <div class="ref">Ref: Recomendacion colaborativa por similitud de perfil</div>
+</div></section>
+
+<!-- ================= P7 - ESCENARIOS ================= -->
+<section class="section" id="p7">
+    <div class="sec-num">Propuesta 7</div>
+    <div class="section-title">Simulador de escenarios TDRS</div>
+    <div class="section-sub">No es una maqueta: el ranking se calcula en vivo sobre una muestra de 16 destinos repartidos en 6 zonas geograficas. Elige un modo predefinido o mueve los pesos de la formula TDRS y observa como cambian el orden, las metricas de negocio y el equilibrio territorial. Pulsa cualquier destino para desplegar por que ocupa esa posicion. Las cifras aproximan las del dashboard, que se calcula sobre el catalogo completo de 1.240 paquetes.</div>
+
+    <div class="scen">
+        <button type="button" class="scen-card" id="sc-popular" onclick="applyPreset('popular')" aria-pressed="false">
+            <div class="scen-tag">Modo 1</div>
+            <div class="scen-name">Popular</div>
+            <div class="scen-desc">Prioriza demanda historica y conversion inmediata. Recomienda lo que todo el mundo reserva, sin corregir la concentracion territorial.</div>
+            <div class="scen-w">Demanda 100 - Capacidad 0 - Impacto local 0</div>
+        </button>
+        <button type="button" class="scen-card on" id="sc-balanced" onclick="applyPreset('balanced')" aria-pressed="true">
+            <div class="scen-tag">Modo 2</div>
+            <div class="scen-name">Equilibrado</div>
+            <div class="scen-desc">Combina afinidad del viajero con capacidad real del destino. Mantiene la conversion y alivia los puntos saturados.</div>
+            <div class="scen-w">Demanda 75 - Capacidad 60 - Impacto local 50</div>
+        </button>
+        <button type="button" class="scen-card" id="sc-explorer" onclick="applyPreset('explorer')" aria-pressed="false">
+            <div class="scen-tag">Modo 3</div>
+            <div class="scen-name">Explorador</div>
+            <div class="scen-desc">Maximiza descubrimiento y desarrollo local. Empuja destinos emergentes con baja presion turistica y alto margen.</div>
+            <div class="scen-w">Demanda 20 - Capacidad 95 - Impacto local 90</div>
+        </button>
+    </div>
+
+    <div class="scen-custom" id="scenCustom">Escenario personalizado: has modificado los pesos manualmente. Pulsa un modo para volver a un preset.</div>
+
+    <div class="sim">
+        <!-- CONTROLES -->
+        <aside class="sim-ctrl">
+            <h4>Pesos de la formula TDRS</h4>
+            <div class="hint">Cada peso multiplica un factor normalizado (0-1). El score final es la media ponderada.</div>
+
+            <div class="sl">
+                <div class="sl-top"><label for="w-afinidad">Afinidad con el perfil</label><span class="v" id="vw-afinidad">85</span></div>
+                <input type="range" id="w-afinidad" min="0" max="100" value="85" oninput="onWeightChange()">
+            </div>
+            <div class="sl">
+                <div class="sl-top"><label for="w-demanda">Demanda historica</label><span class="v" id="vw-demanda">75</span></div>
+                <input type="range" id="w-demanda" min="0" max="100" value="75" oninput="onWeightChange()">
+            </div>
+            <div class="sl">
+                <div class="sl-top"><label for="w-capacidad">Capacidad disponible</label><span class="v" id="vw-capacidad">60</span></div>
+                <input type="range" id="w-capacidad" min="0" max="100" value="60" oninput="onWeightChange()">
+            </div>
+            <div class="sl">
+                <div class="sl-top"><label for="w-impacto">Impacto en economia local</label><span class="v" id="vw-impacto">50</span></div>
+                <input type="range" id="w-impacto" min="0" max="100" value="50" oninput="onWeightChange()">
+            </div>
+            <div class="sl">
+                <div class="sl-top"><label for="w-temporada">Temporada y clima</label><span class="v" id="vw-temporada">60</span></div>
+                <input type="range" id="w-temporada" min="0" max="100" value="60" oninput="onWeightChange()">
+            </div>
+            <div class="sl">
+                <div class="sl-top"><label for="w-accesibilidad">Accesibilidad</label><span class="v" id="vw-accesibilidad">50</span></div>
+                <input type="range" id="w-accesibilidad" min="0" max="100" value="50" oninput="onWeightChange()">
+            </div>
+            <div class="sl">
+                <div class="sl-top"><label for="w-sostenibilidad">Sostenibilidad</label><span class="v" id="vw-sostenibilidad">55</span></div>
+                <input type="range" id="w-sostenibilidad" min="0" max="100" value="55" oninput="onWeightChange()">
+            </div>
+
+            <div class="divider"></div>
+            <h4>Restricciones duras</h4>
+            <div class="hint">Los destinos que no las cumplen quedan fuera del ranking.</div>
+
+            <div class="sl hard">
+                <div class="sl-top"><label for="c-precio">Presupuesto maximo</label><span class="v" id="vc-precio">2.500 EUR</span></div>
+                <input type="range" id="c-precio" min="400" max="2500" step="50" value="2500" oninput="onWeightChange()">
+            </div>
+            <div class="sl hard">
+                <div class="sl-top"><label for="c-ocupacion">Ocupacion maxima admitida</label><span class="v" id="vc-ocupacion">100%</span></div>
+                <input type="range" id="c-ocupacion" min="15" max="100" step="1" value="100" oninput="onWeightChange()">
+            </div>
+
+            <button type="button" class="sim-reset" onclick="applyPreset('balanced')">Restablecer al modo Equilibrado</button>
+        </aside>
+
+        <!-- RESULTADOS -->
+        <div>
+            <div class="sim-kpis">
+                <div class="skpi"><div class="l">Presion en destinos saturados</div><div class="n" id="k-presion">-</div><div class="d">cuota de reservas con ocupacion &gt; 75%</div></div>
+                <div class="skpi"><div class="l">Cuota de destinos emergentes</div><div class="n" id="k-emerg">-</div><div class="d">demanda historica inferior a 0.35</div></div>
+                <div class="skpi"><div class="l">CTR estimado</div><div class="n" id="k-ctr">-</div><div class="d">demanda ponderada por posicion</div></div>
+                <div class="skpi"><div class="l">Saturados en top 5</div><div class="n" id="k-sat">-</div><div class="d">destinos por encima del 75%</div></div>
+                <div class="skpi"><div class="l">Equilibrio territorial</div><div class="n" id="k-gini">-</div><div class="d">Gini invertido sobre 6 zonas</div></div>
+                <div class="skpi"><div class="l">Precio medio top 5</div><div class="n" id="k-precio">-</div><div class="d">por persona</div></div>
+                <div class="skpi"><div class="l">CO2 medio top 5</div><div class="n" id="k-co2">-</div><div class="d">kg por viajero, ida y vuelta</div></div>
+                <div class="skpi"><div class="l">Destinos elegibles</div><div class="n" id="k-eleg">-</div><div class="d">cumplen las restricciones duras</div></div>
+            </div>
+
+            <div class="scen-msg" id="scenMsg"></div>
+            <div class="sim-count" id="scenCount"></div>
+            <div class="scen-list" id="scenList"></div>
+            <div class="excluded" id="scenExcluded"></div>
+        </div>
+    </div>
+
+    <div class="ref">Diferenciador unico del motor TDRS</div>
+</section>
+
+<!-- ================= DASHBOARD ================= -->
+<div class="dash-wrap" id="dashboard"><div class="dash-inner">
+    <div class="sec-num" style="background:#0057b8">Dashboard B2B</div>
+    <div class="section-title">Panel de control de redistribucion TDRS</div>
+    <div class="section-sub">Vista interna para revenue management y equipos de venta. Simula estrategias, mide el impacto y entrega argumentarios listos para el mostrador.</div>
+
+    <!-- FILTROS -->
+    <div class="panel">
+        <div class="panel-t">Filtros de simulacion</div>
+        <div class="panel-s">Ocho parametros que redefinen el conjunto de recomendaciones generadas por el motor</div>
+        <div class="filters">
+            <div class="f">
+                <label for="f1">Perfil de viajero</label>
+                <select id="f1"><option>Cultura y gastronomia</option><option>Familia con ninos</option><option>Aventura y naturaleza</option><option>Sol y playa</option><option>Lujo y bienestar</option></select>
+            </div>
+            <div class="f">
+                <label for="f2">Temporada</label>
+                <select id="f2"><option>Noviembre 2025 (baja)</option><option>Diciembre 2025 (media)</option><option>Semana Santa 2026</option><option>Agosto 2026 (alta)</option></select>
+            </div>
+            <div class="f">
+                <label for="f3">Sostenibilidad minima <span class="val" id="v3">70</span></label>
+                <input type="range" id="f3" min="0" max="100" value="70" oninput="document.getElementById('v3').textContent=this.value">
+            </div>
+            <div class="f">
+                <label for="f4">Estrategia TDRS</label>
+                <select id="f4"><option>Redistribucion moderada activa</option><option>Tradicional (redistribucion minima)</option><option>Redistribucion intensiva</option></select>
+            </div>
+            <div class="f">
+                <label for="f5">Ocupacion maxima admitida <span class="val" id="v5">65%</span></label>
+                <input type="range" id="f5" min="10" max="100" value="65" oninput="document.getElementById('v5').textContent=this.value+'%'">
+            </div>
+            <div class="f">
+                <label for="f6">Accesibilidad</label>
+                <select id="f6"><option>Vuelo directo o menos de 1h en tren</option><option>Hasta 1 escala</option><option>Sin restriccion</option></select>
+            </div>
+            <div class="f">
+                <label for="f7">Zona geografica</label>
+                <select id="f7"><option>Todas las zonas (6)</option><option>Andalucia</option><option>Levante y Baleares</option><option>Adriatico</option><option>Atlantico</option><option>Macaronesia</option></select>
+            </div>
+            <div class="f">
+                <label for="f8">Destino</label>
+                <select id="f8"><option>Todos los destinos</option><option>Sevilla</option><option>Carmona</option><option>Osuna</option><option>Mallorca</option><option>Split</option></select>
+            </div>
+        </div>
+    </div>
+
+    <!-- INDICADOR DE FLUJO -->
+    <div class="flow">
+        <div class="fstep"><div class="fn">PASO 1</div><div class="ft">Datos</div><div class="fq">Que esta pasando</div></div>
+        <div class="fstep"><div class="fn">PASO 2</div><div class="ft">Recomendacion IA</div><div class="fq">Que propone y por que</div></div>
+        <div class="fstep"><div class="fn">PASO 3</div><div class="ft">Redistribucion</div><div class="fq">Actual vs recomendado</div></div>
+        <div class="fstep"><div class="fn">PASO 4</div><div class="ft">Simulacion</div><div class="fq">Y si lo ajusto a mano</div></div>
+        <div class="fstep"><div class="fn">PASO 5</div><div class="ft">Impacto</div><div class="fq">Que gano y que pierdo</div></div>
+        <div class="fstep"><div class="fn">PASO 6</div><div class="ft">Decision</div><div class="fq">Que quiero hacer</div></div>
+    </div>
+
+    <!-- PASO 1: DATOS / KPIs DINAMICOS -->
+    <div class="dstep">
+        <div class="dstep-hd">
+            <span class="dstep-n">PASO 1</span>
+            <span class="dstep-t">Datos</span>
+            <span class="dstep-q">Que esta pasando ahora mismo</span>
+        </div>
+        <div class="panel">
+            <div class="panel-t">Indicadores del escenario activo</div>
+            <div class="panel-s">Presupuesto de 500.000 EUR repartido en 8 segmentos, sobre 18.400 sesiones simuladas. Cambia de escenario para ver como se mueven los indicadores.</div>
+
+            <div class="stabs" role="tablist" aria-label="Escenario activo">
+                <button type="button" class="stab on" id="tab-actual" role="tab" aria-selected="true" onclick="setScenario('actual')">Situacion actual</button>
+                <button type="button" class="stab" id="tab-ia" role="tab" aria-selected="false" onclick="setScenario('ia')">Recomendacion IA</button>
+                <button type="button" class="stab" id="tab-custom" role="tab" aria-selected="false" onclick="setScenario('custom')">Escenario personalizado</button>
+            </div>
+
+            <div class="kpis">
+                <div class="kpi"><div class="l">ROI global</div><div class="n big" id="k-roi">-</div><div class="d" id="k-roi-d">-</div></div>
+                <div class="kpi"><div class="l">Conversiones</div><div class="n big" id="k-conv">-</div><div class="d" id="k-conv-d">-</div></div>
+                <div class="kpi"><div class="l">Presupuesto asignado</div><div class="n big" id="k-presu">-</div><div class="d" id="k-presu-d">-</div></div>
+                <div class="kpi"><div class="l">Revenue proyectado</div><div class="n big" id="k-rev">-</div><div class="d" id="k-rev-d">-</div></div>
+                <div class="kpi hl"><div class="l">Mejora esperada</div><div class="n big" id="k-mejora">-</div><div class="d" id="k-mejora-d">sobre el ROI actual</div></div>
+                <div class="kpi"><div class="l">Confianza de la recomendacion</div><div class="n big" id="k-conf">-</div><div class="conf-track"><span id="k-conf-bar" style="width:0%"></span></div></div>
+                <div class="kpi"><div class="l">CPA medio</div><div class="n big" id="k-cpa">-</div><div class="d" id="k-cpa-d">-</div></div>
+                <div class="kpi"><div class="l">Capacidad utilizada</div><div class="n big" id="k-capuse">-</div><div class="d" id="k-capuse-d">-</div></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PASO 2: RECOMENDACION IA -->
+    <div class="dstep">
+        <div class="dstep-hd">
+            <span class="dstep-n">PASO 2</span>
+            <span class="dstep-t">Recomendacion IA</span>
+            <span class="dstep-q">Que propone el motor y por que</span>
+        </div>
+        <div class="reco">
+            <div class="reco-hd">
+                <div class="reco-ic">IA</div>
+                <div style="flex:1">
+                    <div class="reco-hl" id="reco-headline">-</div>
+                    <div class="reco-sub" id="reco-sub">-</div>
+                </div>
+                <div class="reco-conf">
+                    <div class="cl">Nivel de confianza</div>
+                    <div class="cv" id="reco-conf-v">-</div>
+                    <div class="conf-track"><span id="reco-conf-bar" style="width:0%"></span></div>
+                    <div class="cd" id="reco-conf-d">-</div>
+                </div>
+            </div>
+
+            <div class="reco-body">
+                <div class="ud up">
+                    <div class="ud-t">Aumentar inversion</div>
+                    <div id="reco-up"></div>
+                </div>
+                <div class="ud dn">
+                    <div class="ud-t">Reducir inversion</div>
+                    <div id="reco-dn"></div>
+                </div>
+            </div>
+
+            <div class="why">
+                <div class="why-t">Por que lo recomienda</div>
+                <ol id="reco-why"></ol>
+            </div>
+
+            <div class="impact-chips" id="reco-impact"></div>
+        </div>
+    </div>
+
+    <!-- PASO 3: REDISTRIBUCION -->
+    <div class="dstep">
+        <div class="dstep-hd">
+            <span class="dstep-n">PASO 3</span>
+            <span class="dstep-t">Redistribucion</span>
+            <span class="dstep-q">Como cambia el reparto respecto a hoy</span>
+        </div>
+        <div class="panel">
+            <div class="panel-t">Actual vs recomendado por segmento</div>
+            <div class="panel-s">Barra gris: asignacion actual. Barra azul: asignacion propuesta por la IA. El presupuesto total no cambia, solo su reparto.</div>
+            <table class="tbl">
+                <thead>
+                    <tr>
+                        <th>Segmento</th>
+                        <th style="text-align:right">Actual</th>
+                        <th style="text-align:right">Recomendado</th>
+                        <th style="text-align:right">Variacion</th>
+                        <th>Reparto</th>
+                        <th style="text-align:right">Ocupacion</th>
+                        <th>Accion</th>
+                    </tr>
+                </thead>
+                <tbody id="rd-body"></tbody>
+            </table>
+
+            <div class="insight">
+                <div class="insight-l">Insight del motor</div>
+                <div class="insight-t" id="rd-insight">-</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- XAI DINAMICO -->
+    <div class="panel">
+        <div class="panel-t">Explicabilidad de la recomendacion (XAI)</div>
+        <div class="panel-s" id="xai-sub">-</div>
+        <div class="xai">
+            <div id="xai-bars"></div>
+            <div>
+                <div class="xtext" id="xai-text">-</div>
+                <div style="font-size:10px;font-weight:900;text-transform:uppercase;letter-spacing:.9px;color:#1b8a4b;margin-bottom:8px">Restricciones respetadas</div>
+                <ul class="constraints" id="xai-constraints"></ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- PASO 4: SIMULACION INTERACTIVA -->
+    <div class="dstep">
+        <div class="dstep-hd">
+            <span class="dstep-n">PASO 4</span>
+            <span class="dstep-t">Simulacion</span>
+            <span class="dstep-q">Y si lo ajusto a mano</span>
+        </div>
+        <div class="panel">
+            <div class="panel-t">Ajuste manual de la asignacion</div>
+            <div class="panel-s">Mueve el presupuesto de cada segmento y los indicadores del paso 1 se recalculan al instante. El total debe cuadrar con los 500.000 EUR disponibles.</div>
+
+            <div class="budget">
+                <div>
+                    <div class="budget-l">Presupuesto asignado</div>
+                    <div class="budget-n" id="bg-total">-</div>
+                </div>
+                <div class="budget-bar"><span id="bg-bar" style="width:0%"></span></div>
+                <div class="budget-warn ok" id="bg-warn">-</div>
+            </div>
+
+            <div id="segsliders"></div>
+
+            <div class="simbtns">
+                <button type="button" class="sbtn" onclick="loadInto('actual')">Cargar situacion actual</button>
+                <button type="button" class="sbtn" onclick="loadInto('ia')">Cargar recomendacion IA</button>
+                <button type="button" class="sbtn" onclick="normalizeBudget()">Cuadrar al presupuesto</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PASO 5: IMPACTO -->
+    <div class="dstep">
+        <div class="dstep-hd">
+            <span class="dstep-n">PASO 5</span>
+            <span class="dstep-t">Impacto</span>
+            <span class="dstep-q">Que gano y que pierdo con cada opcion</span>
+        </div>
+        <div class="panel">
+            <div class="panel-t">Comparativa de los tres escenarios</div>
+            <div class="panel-s">El mejor valor de cada fila queda resaltado en verde. El escenario personalizado refleja lo que tengas ajustado en el paso 4.</div>
+            <table class="cmp">
+                <thead>
+                    <tr>
+                        <th>Metrica</th>
+                        <th>Situacion actual</th>
+                        <th class="sc-ia">Recomendacion IA</th>
+                        <th class="sc-cu">Personalizado</th>
+                    </tr>
+                </thead>
+                <tbody id="cmp-body"></tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- PASO 6: DECISION -->
+    <div class="dstep">
+        <div class="dstep-hd">
+            <span class="dstep-n">PASO 6</span>
+            <span class="dstep-t">Decision</span>
+            <span class="dstep-q">Que quiero hacer</span>
+        </div>
+        <div class="panel">
+            <div class="panel-t">Cerrar el ciclo</div>
+            <div class="panel-s">La decision queda registrada con el escenario, el impacto estimado y el nivel de confianza en el momento de tomarla.</div>
+            <div class="decision">
+                <button type="button" class="dbtn apply" onclick="decide('aplicar')">
+                    <div class="dt">Aplicar recomendacion</div>
+                    <div class="dd">Adopta la asignacion propuesta por la IA tal cual y la deja lista para publicar</div>
+                </button>
+                <button type="button" class="dbtn custom" onclick="decide('personalizar')">
+                    <div class="dt">Personalizar</div>
+                    <div class="dd">Parte de la propuesta de la IA y ajusta los segmentos a mano en el paso 4</div>
+                </button>
+                <button type="button" class="dbtn reject" onclick="decide('rechazar')">
+                    <div class="dt">Rechazar</div>
+                    <div class="dd">Mantiene la asignacion actual y registra el motivo para reentrenar el modelo</div>
+                </button>
+            </div>
+            <div class="dstatus" id="d-status">
+                <div class="dl" id="d-status-l">-</div>
+                <div id="d-status-t">-</div>
+            </div>
+            <div class="dlog" id="d-log"></div>
+        </div>
+    </div>
+
+    <!-- PANEL VENDEDOR -->
+    <div class="panel" style="padding:0;border:none;background:transparent">
+        <div class="ai-panel">
+            <div class="ai-panel-head">
+                <div class="ai-panel-icon">IA</div>
+                <div>
+                    <div class="ai-panel-title">Asistente de ventas TUI</div>
+                    <div class="ai-panel-sub">Genera argumentarios, resuelve objeciones y personaliza ofertas en tiempo real</div>
+                </div>
+            </div>
+            <div class="ai-input-row">
+                <input class="ai-input" type="text" id="aiInput" placeholder="Cliente o situacion: ej. 'Maria dice que Carmona es muy pequeno'">
+                <button class="ai-send" onclick="aiGenerate()">Generar</button>
+            </div>
+            <div class="ai-response">
+                <div class="ai-response-lbl">Argumentario generado</div>
+                <div class="ai-response-txt" id="aiText">"Senora Garcia, Carmona tiene 23.000 habitantes y un patrimonio monumental impresionante: la Puerta de Sevilla, el Alcazar del Rey Don Pedro y la necropolis romana. Es compacta pero inmensa en historia. Puede recorrerla a pie, sin autobuses turisticos ni colas. Eso es exactamente lo que valoran los viajeros con su perfil. Ademas, ahorrara un 35% frente a Sevilla centro y contribuira a la economia local."</div>
+                <div class="ai-actions">
+                    <span class="ai-act" onclick="aiAction('objecion')">Resolver objecion</span>
+                    <span class="ai-act" onclick="aiAction('upsell')">Upselling</span>
+                    <span class="ai-act" onclick="aiAction('email')">Email</span>
+                    <span class="ai-act" onclick="aiAction('comparar')">Comparar</span>
+                    <span class="ai-act" onclick="aiCopy(this)">Copiar</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div></div>
+
+<!-- ================= FOOTER ================= -->
+<footer class="ftr">
+    <strong>TFM UCM 2025</strong> - Motor de Recomendacion Turistica con TDRS<br>
+    Combinando: Mindtrip (personalizacion) + Nezasa (paquetes TUI) + Murmuration (redistribucion)<br>
+    <span class="formula">TDRS = Afinidad + Capacidad + Accesibilidad + Impacto local + Temporada + Diversificacion + Ocupacion + Sensibilidad ambiental</span><br>
+    <span class="formula">Simulacion academica - No es un sitio oficial de TUI Group</span>
+</footer>
+
+<script>
+/* =====================================================================
+   P7 - SIMULADOR TDRS
+   Motor de scoring en vivo. Score = media ponderada de factores 0-1.
+   Perfil de referencia: cultura + gastronomia, salida noviembre 2025.
+   ===================================================================== */
+
+/* --- Catalogo de destinos (factores normalizados 0-1) ---
+   16 destinos, 6 zonas geograficas. Cada zona incluye un destino consolidado
+   y al menos uno emergente, para que la redistribucion pueda medirse. --- */
+var DESTINOS = [
+    {n:'Cancun',      zona:'Larga distancia', pais:'Mexico - Riviera Maya',    afinidad:.62, demanda:.98, ocupacion:.89, impacto:.25, temporada:.30, accesibilidad:.55, sostenibilidad:.20, precio:1870, co2:2310},
+    {n:'Sevilla',     zona:'Andalucia',       pais:'Espana - Andalucia',       afinidad:.93, demanda:.92, ocupacion:.91, impacto:.45, temporada:.80, accesibilidad:.95, sostenibilidad:.40, precio:720,  co2:95},
+    {n:'Maldivas',    zona:'Larga distancia', pais:'Oceano Indico - Male',     afinidad:.40, demanda:.88, ocupacion:.86, impacto:.20, temporada:.70, accesibilidad:.30, sostenibilidad:.25, precio:2450, co2:3180},
+    {n:'Dubrovnik',   zona:'Adriatico',       pais:'Croacia - Dalmacia sur',   afinidad:.80, demanda:.85, ocupacion:.88, impacto:.35, temporada:.68, accesibilidad:.60, sostenibilidad:.35, precio:1120, co2:380},
+    {n:'Mallorca',    zona:'Baleares',        pais:'Espana - Islas Baleares',  afinidad:.90, demanda:.70, ocupacion:.31, impacto:.65, temporada:.85, accesibilidad:.90, sostenibilidad:.78, precio:899,  co2:295},
+    {n:'Algarve',     zona:'Atlantico',       pais:'Portugal - Faro',          afinidad:.82, demanda:.55, ocupacion:.35, impacto:.68, temporada:.82, accesibilidad:.85, sostenibilidad:.82, precio:650,  co2:310},
+    {n:'Creta',       zona:'Egeo',            pais:'Grecia - Creta',           afinidad:.84, demanda:.48, ocupacion:.24, impacto:.70, temporada:.72, accesibilidad:.60, sostenibilidad:.75, precio:845,  co2:520},
+    {n:'Split',       zona:'Adriatico',       pais:'Croacia - Dalmacia',       afinidad:.88, demanda:.45, ocupacion:.28, impacto:.72, temporada:.75, accesibilidad:.70, sostenibilidad:.80, precio:780,  co2:340},
+    {n:'Cabo Verde',  zona:'Larga distancia', pais:'Cabo Verde - Isla de Sal', afinidad:.60, demanda:.35, ocupacion:.19, impacto:.80, temporada:.88, accesibilidad:.35, sostenibilidad:.70, precio:1190, co2:1450},
+    {n:'Menorca',     zona:'Baleares',        pais:'Espana - Islas Baleares',  afinidad:.86, demanda:.34, ocupacion:.26, impacto:.78, temporada:.82, accesibilidad:.82, sostenibilidad:.86, precio:690,  co2:270},
+    {n:'Ronda',       zona:'Andalucia',       pais:'Espana - Malaga',          afinidad:.87, demanda:.30, ocupacion:.38, impacto:.85, temporada:.76, accesibilidad:.80, sostenibilidad:.85, precio:520,  co2:90},
+    {n:'Zadar',       zona:'Adriatico',       pais:'Croacia - Dalmacia norte', afinidad:.85, demanda:.22, ocupacion:.21, impacto:.84, temporada:.72, accesibilidad:.62, sostenibilidad:.87, precio:640,  co2:350},
+    {n:'Alentejo',    zona:'Atlantico',       pais:'Portugal - Alentejo',      afinidad:.89, demanda:.18, ocupacion:.17, impacto:.90, temporada:.76, accesibilidad:.78, sostenibilidad:.89, precio:480,  co2:200},
+    {n:'Naxos',       zona:'Egeo',            pais:'Grecia - Cicladas',        afinidad:.87, demanda:.16, ocupacion:.15, impacto:.88, temporada:.70, accesibilidad:.45, sostenibilidad:.88, precio:720,  co2:540},
+    {n:'Carmona',     zona:'Andalucia',       pais:'Espana - Sevilla',         afinidad:.95, demanda:.12, ocupacion:.22, impacto:.92, temporada:.80, accesibilidad:.92, sostenibilidad:.88, precio:450,  co2:85},
+    {n:'Osuna',       zona:'Andalucia',       pais:'Espana - Sevilla',         afinidad:.90, demanda:.08, ocupacion:.18, impacto:.95, temporada:.78, accesibilidad:.88, sostenibilidad:.90, precio:420,  co2:80}
+];
+
+/* Zonas geograficas usadas para el indice de equilibrio territorial */
+var ZONAS = ['Andalucia','Baleares','Adriatico','Atlantico','Egeo','Larga distancia'];
+
+/* Curva de posicion (sesgo de clic por puesto) usada en el modelo de CTR */
+var CURVA_POS = [1, 0.55, 0.35, 0.22, 0.14];
+var CTR_A = 8.759, CTR_B = 7.681;   /* calibrado: Popular 15.2% -> Explorador 9.8% */
+
+/* --- Definicion de factores. 'inv' invierte el valor (ocupacion alta = mala) --- */
+var FACTORES = [
+    {key:'afinidad',       label:'Afinidad con el perfil'},
+    {key:'demanda',        label:'Demanda historica'},
+    {key:'capacidad',      label:'Capacidad disponible', src:'ocupacion', inv:true},
+    {key:'impacto',        label:'Impacto en economia local'},
+    {key:'temporada',      label:'Temporada y clima'},
+    {key:'accesibilidad',  label:'Accesibilidad'},
+    {key:'sostenibilidad', label:'Sostenibilidad'}
+];
+
+/* --- Presets: valores de los sliders por modo --- */
+var PRESETS = {
+    popular:  {afinidad:40, demanda:100, capacidad:0,  impacto:0,  temporada:20, accesibilidad:30, sostenibilidad:0,  precio:2500, ocupacion:100,
+        color:'#d40e14', bg:'#fdf4f4',
+        msg:'Modo Popular: el motor replica la demanda historica. Gana el clic pero concentra las reservas en destinos que ya estan al limite de su capacidad.'},
+    balanced: {afinidad:85, demanda:75,  capacidad:60, impacto:50, temporada:60, accesibilidad:50, sostenibilidad:55, precio:2500, ocupacion:100,
+        color:'#1b8a4b', bg:'#f4fbf6',
+        msg:'Modo Equilibrado: se cruza la afinidad del viajero con la capacidad real del destino. Mantiene la conversion y alivia los puntos saturados. Es el escenario recomendado para produccion.'},
+    explorer: {afinidad:75, demanda:20,  capacidad:95, impacto:90, temporada:55, accesibilidad:35, sostenibilidad:85, precio:2500, ocupacion:100,
+        color:'#6c2d82', bg:'#faf5fc',
+        msg:'Modo Explorador: el motor empuja destinos emergentes con presion turistica minima y alto retorno para la economia local, a cambio de sacrificar CTR.'}
+};
+
+var CUSTOM = {color:'#c47f00', bg:'#fff8e6',
+    msg:'Escenario personalizado: el ranking responde a los pesos que has definido. Observa como cada punto de peso en capacidad o impacto local mueve destinos hacia arriba y cuesta CTR.'};
+
+var currentPreset = 'balanced';
+var baselineRank = {};   /* posiciones del modo Popular, para calcular deltas */
+var openRows = {};       /* filas de XAI desplegadas */
+
+/* --- Lectura de los controles --- */
+function readWeights() {
+    var w = {};
+    FACTORES.forEach(function (f) {
+        w[f.key] = parseInt(document.getElementById('w-' + f.key).value, 10);
+    });
+    return w;
+}
+function readConstraints() {
+    return {
+        precio: parseInt(document.getElementById('c-precio').value, 10),
+        ocupacion: parseInt(document.getElementById('c-ocupacion').value, 10)
+    };
+}
+
+/* --- Valor normalizado de un factor para un destino --- */
+function factorValue(d, f) {
+    var raw = d[f.src || f.key];
+    return f.inv ? (1 - raw) : raw;
+}
+
+/* --- Nucleo: calcula scores y contribuciones por factor --- */
+function computeScores(w, cons) {
+    var total = 0;
+    FACTORES.forEach(function (f) { total += w[f.key]; });
+
+    var elegibles = [], excluidos = [];
+
+    DESTINOS.forEach(function (d) {
+        if (cons && (d.precio > cons.precio || d.ocupacion * 100 > cons.ocupacion)) {
+            excluidos.push(d);
+            return;
+        }
+        var score = 0, contrib = [];
+        FACTORES.forEach(function (f) {
+            var c = total > 0 ? (w[f.key] / total) * factorValue(d, f) : 0;
+            score += c;
+            contrib.push({label: f.label, weight: w[f.key], value: factorValue(d, f), contrib: c});
+        });
+        contrib.sort(function (a, b) { return b.contrib - a.contrib; });
+        elegibles.push({d: d, score: score, contrib: contrib});
+    });
+
+    elegibles.sort(function (a, b) {
+        if (b.score !== a.score) return b.score - a.score;
+        return a.d.n.localeCompare(b.d.n);
+    });
+    return {ranked: elegibles, excluded: excluidos, totalWeight: total};
+}
+
+/* --- Metricas de negocio derivadas del ranking --- */
+function computeMetrics(ranked) {
+    if (!ranked.length) return null;
+
+    /* Reparto de reservas simulado: softmax sobre el score TDRS */
+    var exps = ranked.map(function (r) { return Math.exp(r.score * 9); });
+    var sumExp = exps.reduce(function (a, b) { return a + b; }, 0);
+    var shares = exps.map(function (e) { return e / sumExp; });
+
+    /* Presion: cuota de reservas que cae en destinos ya saturados (ocupacion > 75%) */
+    var presion = 0, emergentes = 0;
+    ranked.forEach(function (r, i) {
+        if (r.d.ocupacion > 0.75) presion += shares[i];
+        if (r.d.demanda < 0.35) emergentes += shares[i];
+    });
+
+    var top5 = ranked.slice(0, 5);
+
+    /* CTR: demanda ponderada por la curva de posicion (los puestos altos pesan mas) */
+    var num = 0, den = 0;
+    top5.forEach(function (r, i) {
+        var c = CURVA_POS[i] || 0;
+        num += r.d.demanda * c;
+        den += c;
+    });
+    var ctr = den > 0 ? CTR_A + CTR_B * (num / den) : 0;
+
+    var sat = top5.filter(function (r) { return r.d.ocupacion > 0.75; }).length;
+    var precio = Math.round(top5.reduce(function (a, r) { return a + r.d.precio; }, 0) / top5.length);
+    var co2 = Math.round(top5.reduce(function (a, r) { return a + r.d.co2; }, 0) / top5.length);
+
+    /* Equilibrio territorial: 1 - Gini de la cuota por zona (6 zonas) */
+    var byZone = ZONAS.map(function (z) {
+        var s = 0;
+        ranked.forEach(function (r, i) { if (r.d.zona === z) s += shares[i]; });
+        return s;
+    });
+
+    return {
+        presion: presion, emergentes: emergentes, ctr: ctr, sat: sat,
+        precio: precio, co2: co2, equilibrio: 1 - giniCoef(byZone),
+        elegibles: ranked.length
+    };
+}
+
+function giniCoef(vals) {
+    var n = vals.length;
+    var sorted = vals.slice().sort(function (a, b) { return a - b; });
+    var sum = sorted.reduce(function (a, b) { return a + b; }, 0);
+    if (sum === 0) return 0;
+    var cum = 0;
+    for (var i = 0; i < n; i++) cum += (i + 1) * sorted[i];
+    return (2 * cum) / (n * sum) - (n + 1) / n;
+}
+
+/* --- Formato --- */
+function eur(v) { return v.toLocaleString('es-ES') + ' EUR'; }
+function pct(v) { return Math.round(v * 100) + '%'; }
+
+/* --- Render principal --- */
+function render() {
+    var w = readWeights();
+    var cons = readConstraints();
+    var theme = currentPreset ? PRESETS[currentPreset] : CUSTOM;
+
+    /* etiquetas de los sliders */
+    FACTORES.forEach(function (f) {
+        document.getElementById('vw-' + f.key).textContent = w[f.key];
+    });
+    document.getElementById('vc-precio').textContent = cons.precio >= 2500 ? 'Sin limite' : eur(cons.precio);
+    document.getElementById('vc-ocupacion').textContent = cons.ocupacion >= 100 ? 'Sin limite' : cons.ocupacion + '%';
+
+    var res = computeScores(w, cons);
+    var m = computeMetrics(res.ranked);
+
+    /* mensaje contextual */
+    var msg = document.getElementById('scenMsg');
+    msg.textContent = theme.msg;
+    msg.style.background = theme.bg;
+    msg.style.borderLeftColor = theme.color;
+    msg.style.color = theme.color;
+    document.getElementById('scenCustom').classList.toggle('show', currentPreset === null);
+
+    /* KPIs */
+    if (m) {
+        setKpi('k-presion', pct(m.presion), m.presion > 0.40 ? '#c0392b' : (m.presion > 0.15 ? '#c47f00' : '#1b8a4b'));
+        setKpi('k-emerg', pct(m.emergentes), m.emergentes >= 0.45 ? '#1b8a4b' : (m.emergentes >= 0.20 ? '#c47f00' : '#c0392b'));
+        setKpi('k-ctr', m.ctr.toFixed(1) + '%', m.ctr >= 13 ? '#1b8a4b' : (m.ctr >= 11 ? '#c47f00' : '#c0392b'));
+        setKpi('k-sat', String(m.sat), m.sat === 0 ? '#1b8a4b' : (m.sat <= 2 ? '#c47f00' : '#c0392b'));
+        setKpi('k-gini', m.equilibrio.toFixed(2), m.equilibrio >= 0.70 ? '#1b8a4b' : (m.equilibrio >= 0.50 ? '#c47f00' : '#c0392b'));
+        setKpi('k-precio', eur(m.precio), '#1d1d1b');
+        setKpi('k-co2', m.co2.toLocaleString('es-ES') + ' kg', m.co2 <= 500 ? '#1b8a4b' : (m.co2 <= 1200 ? '#c47f00' : '#c0392b'));
+        setKpi('k-eleg', m.elegibles + ' / ' + DESTINOS.length, '#1d1d1b');
+    } else {
+        ['k-presion','k-emerg','k-ctr','k-sat','k-gini','k-precio','k-co2','k-eleg'].forEach(function (id) { setKpi(id, '-', '#bbb'); });
+    }
+
+    /* contador */
+    document.getElementById('scenCount').textContent =
+        res.ranked.length + ' de ' + DESTINOS.length + ' destinos cumplen las restricciones - ordenados por score TDRS';
+
+    /* ranking */
+    if (!res.ranked.length) {
+        document.getElementById('scenList').innerHTML =
+            '<div class="excluded">Ningun destino cumple las restricciones actuales. Relaja el presupuesto o la ocupacion maxima.</div>';
+    } else {
+        document.getElementById('scenList').innerHTML = res.ranked.map(function (r, i) {
+            return rowHtml(r, i, theme, w);
+        }).join('');
+    }
+
+    /* excluidos */
+    var ex = document.getElementById('scenExcluded');
+    if (res.excluded.length) {
+        ex.style.display = 'block';
+        ex.innerHTML = '<strong>' + res.excluded.length + ' destinos excluidos</strong> por las restricciones duras: ' +
+            res.excluded.map(function (d) {
+                var why = d.precio > cons.precio ? eur(d.precio) : pct(d.ocupacion) + ' de ocupacion';
+                return d.n + ' (' + why + ')';
+            }).join(', ') + '.';
+    } else {
+        ex.style.display = 'none';
+    }
+}
+
+function setKpi(id, text, color) {
+    var el = document.getElementById(id);
+    el.textContent = text;
+    el.style.color = color;
+}
+
+/* --- Fila de destino + panel XAI --- */
+function rowHtml(r, i, theme, w) {
+    var d = r.d;
+    var pos = i + 1;
+    var base = baselineRank[d.n];
+    var delta = base ? base - pos : 0;
+    var chip = delta > 0 ? '<span class="dchip up">' + '\u2191' + ' ' + delta + ' pos</span>'
+             : delta < 0 ? '<span class="dchip dn">' + '\u2193' + ' ' + Math.abs(delta) + ' pos</span>'
+             : '<span class="dchip eq">= sin cambio</span>';
+
+    var isOpen = openRows[d.n] ? ' open' : '';
+    var topCls = pos <= 3 ? ' top' : '';
+
+    var bars = r.contrib.map(function (c) {
+        var maxC = r.contrib[0].contrib || 1;
+        var off = c.weight === 0 ? ' off' : '';
+        return '<div class="fbar' + off + '">'
+            + '<div class="fbar-top"><span>' + c.label + '<span style="color:#bbb;font-weight:700"> - peso ' + c.weight + ', valor ' + c.value.toFixed(2) + '</span></span>'
+            + '<span class="c">' + c.contrib.toFixed(3) + '</span></div>'
+            + '<div class="fbar-track"><span style="width:' + (maxC > 0 ? Math.round(c.contrib / maxC * 100) : 0) + '%"></span></div>'
+            + '</div>';
+    }).join('');
+
+    var top1 = r.contrib[0], top2 = r.contrib[1];
+    var note = '<strong>' + d.n + '</strong> ocupa la posicion ' + pos + ' con un score de ' + r.score.toFixed(3) + '. '
+        + 'Los dos factores que mas aportan son <strong>' + top1.label.toLowerCase() + '</strong> (' + top1.contrib.toFixed(3) + ') y <strong>'
+        + top2.label.toLowerCase() + '</strong> (' + top2.contrib.toFixed(3) + '). '
+        + (delta > 0 ? 'Sube ' + delta + ' posiciones frente al modo Popular.'
+          : delta < 0 ? 'Baja ' + Math.abs(delta) + ' posiciones frente al modo Popular.'
+          : 'Mantiene la misma posicion que en el modo Popular.');
+
+    var facts = '<ul class="xai-facts">'
+        + '<li>Ocupacion del destino: ' + pct(d.ocupacion) + '</li>'
+        + '<li>Precio por persona: ' + eur(d.precio) + '</li>'
+        + '<li>Huella de carbono: ' + d.co2.toLocaleString('es-ES') + ' kg ida y vuelta</li>'
+        + '<li>Zona geografica: ' + d.zona + '</li>'
+        + '</ul>';
+
+    return '<div class="scen-item' + topCls + isOpen + '" id="row-' + slug(d.n) + '">'
+        + '<button type="button" class="scen-head" onclick="toggleRow(\'' + d.n.replace(/'/g, "\\'") + '\')" aria-expanded="' + (openRows[d.n] ? 'true' : 'false') + '">'
+        + '<div class="p" style="color:' + theme.color + '">' + pos + '</div>'
+        + '<div><div class="nm" style="color:' + theme.color + '">' + d.n + ' <span class="zbadge">' + d.zona + '</span></div>'
+        + '<div class="sub">' + d.pais + ' - Ocupacion ' + pct(d.ocupacion) + ' - Afinidad ' + pct(d.afinidad) + '</div></div>'
+        + '<div>' + chip + '</div>'
+        + '<div><div class="scen-sc">Score TDRS ' + r.score.toFixed(3) + '</div>'
+        + '<div class="scen-bar"><span style="width:' + Math.round(r.score * 100) + '%;background:' + theme.color + '"></span></div></div>'
+        + '<div class="pr" style="color:' + theme.color + '">' + d.precio.toLocaleString('es-ES') + '<small>EUR / persona</small></div>'
+        + '<div class="caret">' + '\u203A' + '</div>'
+        + '</button>'
+        + '<div class="scen-xai"><div class="xai-grid">'
+        + '<div><div class="xai-lbl">Contribucion por factor</div>' + bars + '</div>'
+        + '<div><div class="xai-lbl">Lectura del motor</div><div class="xai-note">' + note + facts + '</div></div>'
+        + '</div></div>'
+        + '</div>';
+}
+
+function slug(s) { return s.toLowerCase().replace(/[^a-z0-9]/g, '-'); }
+
+function toggleRow(name) {
+    openRows[name] = !openRows[name];
+    var el = document.getElementById('row-' + slug(name));
+    if (el) {
+        el.classList.toggle('open', openRows[name]);
+        var btn = el.querySelector('.scen-head');
+        if (btn) btn.setAttribute('aria-expanded', openRows[name] ? 'true' : 'false');
+    }
+}
+
+/* --- Interaccion --- */
+function applyPreset(key) {
+    var p = PRESETS[key];
+    if (!p) return;
+    currentPreset = key;
+    FACTORES.forEach(function (f) { document.getElementById('w-' + f.key).value = p[f.key]; });
+    document.getElementById('c-precio').value = p.precio;
+    document.getElementById('c-ocupacion').value = p.ocupacion;
+    ['popular','balanced','explorer'].forEach(function (k) {
+        var card = document.getElementById('sc-' + k);
+        if (!card) return;
+        var on = k === key;
+        card.classList.toggle('on', on);
+        card.setAttribute('aria-pressed', on ? 'true' : 'false');
+        card.style.borderColor = on ? PRESETS[k].color : '#ececec';
+        card.style.background = on ? PRESETS[k].bg : '#fff';
+        card.querySelector('.scen-tag').style.color = on ? PRESETS[k].color : '#aaa';
+        card.querySelector('.scen-w').style.color = on ? PRESETS[k].color : '#0057b8';
+    });
+    render();
+}
+
+function onWeightChange() {
+    currentPreset = null;
+    ['popular','balanced','explorer'].forEach(function (k) {
+        var card = document.getElementById('sc-' + k);
+        if (!card) return;
+        card.classList.remove('on');
+        card.setAttribute('aria-pressed', 'false');
+        card.style.borderColor = '#ececec';
+        card.style.background = '#fff';
+        card.querySelector('.scen-tag').style.color = '#aaa';
+        card.querySelector('.scen-w').style.color = '#0057b8';
+    });
+    render();
+}
+
+/* --- Arranque: fija la linea base (modo Popular) y carga Equilibrado --- */
+(function initSim() {
+    var pop = PRESETS.popular;
+    var wPop = {};
+    FACTORES.forEach(function (f) { wPop[f.key] = pop[f.key]; });
+    computeScores(wPop, {precio: 2500, ocupacion: 100}).ranked.forEach(function (r, i) {
+        baselineRank[r.d.n] = i + 1;
+    });
+    applyPreset('balanced');
+})();
+
+/* ================= AGENTE VENDEDOR ================= */
+var RESPONSES = {
+    objecion: '"Entiendo la duda. Carmona tiene el Alcazar del Rey Don Pedro, la necropolis romana mas importante de Espana y una gastronomia de autor reconocida por Michelin. No es un pueblo pequeno: es una ciudad monumental compacta donde cada calle es un descubrimiento. Los viajeros con perfil cultural la valoran con 4.7/5 sobre 342 opiniones verificadas."',
+    upsell: '"Le sugiero anadir la Ruta del Aceite de Oliva por 85 EUR: visita a almazara centenaria, cata de cinco variedades y almuerzo maridado en cortijo privado. El 92% de los viajeros culturales la valoran 4.8/5. Tambien disponemos de upgrade a suite con terraza panoramica por 45 EUR por noche."',
+    email: 'Asunto: Su escapada cultural a Carmona - Propuesta personalizada\n\nEstimada Sra. Garcia,\n\nTras nuestra conversacion, le envio la propuesta para Carmona (15-19 de noviembre):\n- 4 noches en Parador Nacional, habitacion con vistas al valle\n- Desayuno buffet con productos locales\n- Visita guiada al Alcazar incluida\n- Precio: 450 EUR por persona (35% menos que Sevilla)\n\nQuedan 12 plazas para esas fechas.\n\nQuedo a su disposicion.',
+    comparar: 'Comparativa para el perfil de la Sra. Garcia:\n\nCarmona → Afinidad 87% | Ocupacion 22% | 450 EUR | 40 min de Sevilla | Gastronomia 4.7/5\nOsuna → Afinidad 83% | Ocupacion 18% | 420 EUR | 55 min de Sevilla | Gastronomia 4.5/5\nCordoba → Afinidad 83% | Ocupacion 58% | 620 EUR | 1h45 en AVE | Gastronomia 4.4/5\n\nRecomendacion: Carmona ofrece la mejor relacion calidad-precio, menor masificacion y gastronomia superior para este perfil.'
+};
+
+function aiGenerate() {
+    var raw = document.getElementById('aiInput').value;
+    var input = raw.toLowerCase();
+    var box = document.getElementById('aiText');
+
+    if (input.trim() === '') {
+        box.textContent = RESPONSES.objecion;
+    } else if (input.indexOf('pequen') !== -1 || input.indexOf('pueblo') !== -1) {
+        box.textContent = RESPONSES.objecion;
+    } else if (input.indexOf('preci') !== -1 || input.indexOf('caro') !== -1 || input.indexOf('cara') !== -1 || input.indexOf('presupuesto') !== -1) {
+        box.textContent = '"El precio de Carmona es un 35% inferior a Sevilla para las mismas fechas. Un menu degustacion cuesta entre 25 y 35 EUR frente a 50-70 EUR en Sevilla centro, y el alojamiento en Parador sale por 450 EUR con desayuno incluido. Las 342 opiniones verificadas confirman la mejor relacion calidad-precio de la zona."';
+    } else if (input.indexOf('email') !== -1 || input.indexOf('correo') !== -1) {
+        box.textContent = RESPONSES.email;
+    } else if (input.indexOf('compar') !== -1 || input.indexOf('altern') !== -1) {
+        box.textContent = RESPONSES.comparar;
+    } else if (input.indexOf('upsell') !== -1 || input.indexOf('anadir') !== -1 || input.indexOf('extra') !== -1 || input.indexOf('ampliar') !== -1) {
+        box.textContent = RESPONSES.upsell;
+    } else {
+        box.textContent = '"Sobre el caso planteado (' + raw + '): argumente que el destino recomendado presenta un 87% de afinidad con el perfil del cliente, un desplazamiento inferior a una hora y una satisfaccion un 21% superior a la alternativa masificada, segun 342 opiniones verificadas. El ahorro medio es del 35% y la ocupacion del 22% garantiza una experiencia sin colas."';
+    }
+}
+
+function aiAction(type) {
+    document.getElementById('aiText').textContent = RESPONSES[type];
+}
+
+function aiCopy(el) {
+    var txt = document.getElementById('aiText').textContent;
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(txt);
+        var prev = el.textContent;
+        el.textContent = 'Copiado ✓';
+        setTimeout(function () { el.textContent = prev; }, 1500);
+    }
+}
+
+
+/* =====================================================================
+   DASHBOARD DE DECISION
+   Flujo: Datos -> Recomendacion IA -> Redistribucion -> Simulacion
+          -> Impacto -> Decision
+
+   Los datos y la recomendacion son SIMULADOS. La estructura esta
+   preparada para conectar un modelo real: basta sustituir
+   recommendationEngine.recommend() por una llamada al backend que
+   devuelva el mismo contrato de salida (ver JSDoc mas abajo).
+   ===================================================================== */
+
+/* ---------------------------------------------------------------------
+   1. DATOS SIMULADOS: 8 segmentos de inversion
+   asignacion: EUR invertidos actualmente
+   cpa:        coste por adquisicion en EUR
+   ticket:     valor medio de reserva en EUR
+   capacidad:  reservas maximas que el destino puede absorber
+   tendencia:  variacion de demanda interanual en puntos porcentuales
+   ocupacion:  ocupacion actual del destino (0-1)
+   --------------------------------------------------------------------- */
+var SEGMENTOS = [
+    {id:'sev', nombre:'Sevilla ciudad',            zona:'Andalucia',       asignacion:145000, cpa:210, ticket:720,  capacidad:2400, tendencia:-6,  ocupacion:.91},
+    {id:'car', nombre:'Caribe larga distancia',    zona:'Larga distancia', asignacion:120000, cpa:620, ticket:1870, capacidad:1100, tendencia:-9,  ocupacion:.89},
+    {id:'dub', nombre:'Dubrovnik y Adriatico sur', zona:'Adriatico',       asignacion:55000,  cpa:340, ticket:1120, capacidad:900,  tendencia:-4,  ocupacion:.88},
+    {id:'mal', nombre:'Mallorca temporada baja',   zona:'Baleares',        asignacion:70000,  cpa:160, ticket:899,  capacidad:3200, tendencia:11,  ocupacion:.31},
+    {id:'alg', nombre:'Algarve y Alentejo',        zona:'Atlantico',       asignacion:45000,  cpa:105, ticket:650,  capacidad:2800, tendencia:14,  ocupacion:.35},
+    {id:'spl', nombre:'Split y Dalmacia norte',    zona:'Adriatico',       asignacion:32000,  cpa:118, ticket:780,  capacidad:2100, tendencia:17,  ocupacion:.28},
+    {id:'cao', nombre:'Carmona y Osuna',           zona:'Andalucia',       asignacion:18000,  cpa:62,  ticket:450,  capacidad:2600, tendencia:23,  ocupacion:.20},
+    {id:'cre', nombre:'Creta y Cicladas',          zona:'Egeo',            asignacion:15000,  cpa:142, ticket:845,  capacidad:1800, tendencia:9,   ocupacion:.22}
+];
+
+/* Asignacion original, congelada como linea base */
+var ASIGNACION_BASE = {};
+SEGMENTOS.forEach(function (s) { ASIGNACION_BASE[s.id] = s.asignacion; });
+var PRESUPUESTO_TOTAL = SEGMENTOS.reduce(function (a, s) { return a + s.asignacion; }, 0);
+
+
+/* ---------------------------------------------------------------------
+   2. simulationEngine
+   Calcula el impacto de una asignacion cualquiera.
+   Modelo de retornos decrecientes: cada euro adicional en un segmento
+   rinde menos, y el techo es la capacidad del destino.
+       conversiones = capacidad * (1 - e^(-asignacion / (cpa * capacidad)))
+   La derivada en asignacion=0 es 1/cpa, asi que a inversion baja el
+   modelo se comporta como un CPA lineal, y se satura al acercarse
+   a la capacidad.
+   --------------------------------------------------------------------- */
+var simulationEngine = {
+    version: 'mock-v1',
+
+    /** Conversiones de un segmento para una asignacion dada. */
+    conversiones: function (seg, asignacion) {
+        if (asignacion <= 0) return 0;
+        var escala = seg.cpa * seg.capacidad;
+        return seg.capacidad * (1 - Math.exp(-asignacion / escala));
+    },
+
+    /** ROI marginal: revenue extra por el siguiente euro invertido. */
+    roiMarginal: function (seg, asignacion) {
+        var escala = seg.cpa * seg.capacidad;
+        return (seg.ticket / seg.cpa) * Math.exp(-asignacion / escala);
+    },
+
+    /**
+     * Evalua una asignacion completa.
+     * @param {Object} alloc mapa id -> EUR
+     * @returns {Object} metricas globales y por segmento
+     */
+    evaluate: function (alloc) {
+        var presupuesto = 0, conversiones = 0, revenue = 0, capacidadTotal = 0;
+        var saturados = 0, porSegmento = [];
+
+        SEGMENTOS.forEach(function (s) {
+            var a = alloc[s.id] || 0;
+            var conv = simulationEngine.conversiones(s, a);
+            var rev = conv * s.ticket;
+            var convBase = simulationEngine.conversiones(s, ASIGNACION_BASE[s.id]);
+            var ocupProy = convBase > 0 ? Math.min(1, s.ocupacion * (conv / convBase)) : 0;
+
+            if (ocupProy > 0.80) saturados++;
+
+            presupuesto += a;
+            conversiones += conv;
+            revenue += rev;
+            capacidadTotal += s.capacidad;
+
+            porSegmento.push({
+                seg: s, asignacion: a, conversiones: conv, revenue: rev,
+                roi: a > 0 ? rev / a : 0,
+                marginal: simulationEngine.roiMarginal(s, a),
+                ocupacionProyectada: ocupProy
+            });
+        });
+
+        return {
+            presupuesto: presupuesto,
+            conversiones: conversiones,
+            revenue: revenue,
+            roi: presupuesto > 0 ? revenue / presupuesto : 0,
+            cpaMedio: conversiones > 0 ? presupuesto / conversiones : 0,
+            capacidadUsada: capacidadTotal > 0 ? conversiones / capacidadTotal : 0,
+            saturados: saturados,
+            porSegmento: porSegmento
+        };
+    }
+};
+
+
+/* ---------------------------------------------------------------------
+   3. recommendationEngine
+   Optimizador voraz sobre el ROI marginal: mueve presupuesto en pasos
+   pequenos desde el segmento con menor rendimiento marginal hacia el
+   de mayor rendimiento, respetando cotas de negocio y el limite de
+   ocupacion admitido. Se detiene cuando ya no hay ganancia posible o
+   cuando alcanza el desplazamiento maximo permitido por la estrategia.
+
+   CONTRATO DE SALIDA (para sustituir por un modelo real):
+   {
+     allocation: {id: EUR, ...},
+     changes: [{id, nombre, actual, recomendado, delta, deltaPct, accion}],
+     reasons: [String],
+     confidence: Number 0-100,
+     expectedImpact: {deltaRoi, deltaRoiPct, deltaConversiones, deltaRevenue},
+     drivers: [{label, value, pct}],
+     meta: {desplazado, iteraciones, estrategia}
+   }
+   --------------------------------------------------------------------- */
+var recommendationEngine = {
+    version: 'mock-v1',
+
+    /** Cotas por segmento: no vaciar de golpe ni pasarse de ocupacion. */
+    bounds: function (seg, ocupacionMax) {
+        var techoOcup = seg.cpa * seg.capacidad * (-Math.log(1 - Math.min(0.99, ocupacionMax)));
+        return {
+            min: 0.30 * ASIGNACION_BASE[seg.id],
+            max: Math.min(3 * ASIGNACION_BASE[seg.id], techoOcup)
+        };
+    },
+
+    /**
+     * @param {Array} segmentos
+     * @param {Object} opts {maxShiftPct, ocupacionMax, estrategia}
+     */
+    recommend: function (segmentos, opts) {
+        var maxShiftPct = opts.maxShiftPct;
+        var ocupacionMax = opts.ocupacionMax;
+
+        var alloc = {};
+        segmentos.forEach(function (s) { alloc[s.id] = ASIGNACION_BASE[s.id]; });
+
+        var base = simulationEngine.evaluate(alloc);
+        var paso = PRESUPUESTO_TOTAL * 0.002;          /* 0,2% del presupuesto */
+        var limite = PRESUPUESTO_TOTAL * maxShiftPct;
+        var desplazado = 0, iteraciones = 0;
+
+        while (desplazado + paso <= limite && iteraciones < 600) {
+            iteraciones++;
+            var donante = null, receptor = null;
+
+            segmentos.forEach(function (s) {
+                var b = recommendationEngine.bounds(s, ocupacionMax);
+                var a = alloc[s.id];
+                var m = simulationEngine.roiMarginal(s, a);
+
+                if (a - paso >= b.min && (donante === null || m < donante.m)) {
+                    donante = {s: s, m: m};
+                }
+                if (a + paso <= b.max && (receptor === null || m > receptor.m)) {
+                    receptor = {s: s, m: m};
+                }
+            });
+
+            /* sin donante, sin receptor o sin ganancia marginal: parar */
+            if (!donante || !receptor || donante.s.id === receptor.s.id) break;
+            if (receptor.m <= donante.m) break;
+
+            alloc[donante.s.id] -= paso;
+            alloc[receptor.s.id] += paso;
+            desplazado += paso;
+        }
+
+        var res = simulationEngine.evaluate(alloc);
+
+        /* --- cambios por segmento --- */
+        var changes = segmentos.map(function (s) {
+            var actual = ASIGNACION_BASE[s.id];
+            var rec = alloc[s.id];
+            var delta = rec - actual;
+            return {
+                id: s.id, nombre: s.nombre, zona: s.zona,
+                actual: actual, recomendado: rec, delta: delta,
+                deltaPct: actual > 0 ? (delta / actual) * 100 : 0,
+                accion: delta > paso / 2 ? 'aumentar' : (delta < -paso / 2 ? 'reducir' : 'mantener')
+            };
+        });
+
+        var suben = changes.filter(function (c) { return c.accion === 'aumentar'; })
+                           .sort(function (a, b) { return b.delta - a.delta; });
+        var bajan = changes.filter(function (c) { return c.accion === 'reducir'; })
+                           .sort(function (a, b) { return a.delta - b.delta; });
+
+        /* --- impacto esperado --- */
+        var expectedImpact = {
+            deltaRoi: res.roi - base.roi,
+            deltaRoiPct: base.roi > 0 ? ((res.roi - base.roi) / base.roi) * 100 : 0,
+            deltaConversiones: res.conversiones - base.conversiones,
+            deltaRevenue: res.revenue - base.revenue,
+            deltaSaturados: res.saturados - base.saturados
+        };
+
+        /* --- confianza: cuatro terminos con signo economico claro.
+               Sube con la mejora esperada, con la coherencia respecto a la
+               tendencia observada y con el volumen de datos. Baja cuanto mas
+               lejos queda la propuesta de la asignacion observada, porque
+               extrapolar mucho aumenta la varianza del estimado. --- */
+        var conf = 55;
+        conf += Math.min(15, Math.max(0, expectedImpact.deltaRoiPct * 0.55));
+        if (suben.length) {
+            var alineados = suben.filter(function (c) {
+                var s = segmentoPorId(c.id);
+                return s && s.tendencia > 0;
+            }).length;
+            conf += (alineados / suben.length) * 10;
+        }
+        conf += 8;                                  /* volumen: 18.400 sesiones simuladas */
+        var shiftReal = desplazado / PRESUPUESTO_TOTAL;
+        conf -= 20 * Math.pow(shiftReal, 1.4);      /* penalizacion por extrapolacion */
+        var confidence = Math.max(45, Math.min(92, Math.round(conf)));
+
+        /* --- razones, generadas desde el propio calculo --- */
+        var reasons = [];
+        if (suben.length && bajan.length) {
+            var top = suben[0], peor = bajan[0];
+            var segTop = segmentoPorId(top.id), segPeor = segmentoPorId(peor.id);
+            var mTop = simulationEngine.roiMarginal(segTop, ASIGNACION_BASE[segTop.id]);
+            var mPeor = simulationEngine.roiMarginal(segPeor, ASIGNACION_BASE[segPeor.id]);
+
+            reasons.push('<strong>' + segTop.nombre + '</strong> tiene el ROI marginal mas alto del catalogo (' +
+                mTop.toFixed(2) + 'x) con solo un ' + pct(segTop.ocupacion) +
+                ' de ocupacion: cada euro adicional rinde ' + (mTop / mPeor).toFixed(1) +
+                ' veces mas que en ' + segPeor.nombre + '.');
+
+            reasons.push('<strong>' + segPeor.nombre + '</strong> combina el ROI marginal mas bajo (' +
+                mPeor.toFixed(2) + 'x), una tendencia de ' + (segPeor.tendencia > 0 ? '+' : '') + segPeor.tendencia +
+                '% y un ' + pct(segPeor.ocupacion) + ' de ocupacion. Reducir su inversion libera presupuesto ' +
+                'sin sacrificar capacidad util.');
+
+            reasons.push('La capacidad libre de los segmentos reforzados permite absorber ' +
+                Math.round(expectedImpact.deltaConversiones) + ' reservas adicionales sin superar el ' +
+                pct(ocupacionMax) + ' de ocupacion fijado en los filtros.');
+
+            reasons.push('El movimiento total es de ' + eur(Math.round(desplazado)) + ', un ' +
+                (desplazado / PRESUPUESTO_TOTAL * 100).toFixed(1) + '% del presupuesto, dentro del margen ' +
+                'de la estrategia "' + opts.estrategia + '".');
+        } else {
+            reasons.push('La estrategia seleccionada no permite desplazar presupuesto, ' +
+                'asi que el motor mantiene la asignacion actual. Cambia a una estrategia de ' +
+                'redistribucion en los filtros para ver la propuesta completa.');
+        }
+
+        /* --- drivers de la decision, normalizados para el panel XAI --- */
+        var drivers = recommendationEngine.explain(suben, bajan, ocupacionMax);
+
+        return {
+            allocation: alloc, changes: changes, suben: suben, bajan: bajan,
+            reasons: reasons, confidence: confidence,
+            expectedImpact: expectedImpact, drivers: drivers,
+            meta: {desplazado: desplazado, iteraciones: iteraciones, estrategia: opts.estrategia}
+        };
+    },
+
+    /** Descompone la decision en factores medibles (panel XAI). */
+    explain: function (suben, bajan, ocupacionMax) {
+        if (!suben.length || !bajan.length) return [];
+        var r = segmentoPorId(suben[0].id), d = segmentoPorId(bajan[0].id);
+        var mR = simulationEngine.roiMarginal(r, ASIGNACION_BASE[r.id]);
+        var mD = simulationEngine.roiMarginal(d, ASIGNACION_BASE[d.id]);
+
+        var crudos = [
+            {label: 'Diferencial de ROI marginal', value: (mR - mD) / mR},
+            {label: 'Capacidad libre en destino receptor', value: 1 - r.ocupacion},
+            {label: 'Presion turistica en el donante', value: d.ocupacion},
+            {label: 'Tendencia de demanda del receptor', value: Math.max(0, r.tendencia) / 25},
+            {label: 'Eficiencia de coste de adquisicion', value: Math.max(0, (d.cpa - r.cpa) / d.cpa)}
+        ];
+        var suma = crudos.reduce(function (a, f) { return a + f.value; }, 0) || 1;
+        var maxV = Math.max.apply(null, crudos.map(function (f) { return f.value; })) || 1;
+
+        return crudos.map(function (f) {
+            return {label: f.label, value: f.value / suma, pct: Math.round(f.value / maxV * 100)};
+        }).sort(function (a, b) { return b.value - a.value; });
+    }
+};
+
+function segmentoPorId(id) {
+    for (var i = 0; i < SEGMENTOS.length; i++) {
+        if (SEGMENTOS[i].id === id) return SEGMENTOS[i];
+    }
+    return null;
+}
+
+
+/* ---------------------------------------------------------------------
+   4. CAPA DE INTERACCION
+   --------------------------------------------------------------------- */
+var dashState = {
+    scenario: 'actual',    /* actual | ia | custom */
+    custom: {},            /* asignacion editada a mano */
+    rec: null              /* ultima recomendacion generada */
+};
+
+/* --- formato --- */
+function dNum(v) { return Math.round(v).toLocaleString('es-ES'); }
+function dEur(v) { return dNum(v) + ' EUR'; }
+function dK(v) { return dNum(v / 1000) + 'k'; }
+function dSign(v, dec) { return (v > 0 ? '+' : '') + v.toFixed(dec === undefined ? 1 : dec); }
+
+/* --- lectura de filtros --- */
+var ESTRATEGIAS = {
+    'Redistribucion moderada activa': 0.25,
+    'Tradicional (redistribucion minima)': 0.06,
+    'Redistribucion intensiva': 0.45
+};
+function readEstrategia() {
+    var el = document.getElementById('f4');
+    var txt = el ? el.value : 'Redistribucion moderada activa';
+    return {nombre: txt, maxShiftPct: ESTRATEGIAS[txt] !== undefined ? ESTRATEGIAS[txt] : 0.25};
+}
+function readOcupacionMax() {
+    var el = document.getElementById('f5');
+    return el ? parseInt(el.value, 10) / 100 : 0.65;
+}
+
+/* --- recalcula la recomendacion con los filtros actuales ---
+   Para conectar un modelo real, sustituir esta llamada por un fetch
+   al endpoint que devuelva el mismo contrato documentado arriba. */
+function computeRecommendation() {
+    var est = readEstrategia();
+    dashState.rec = recommendationEngine.recommend(SEGMENTOS, {
+        maxShiftPct: est.maxShiftPct,
+        ocupacionMax: readOcupacionMax(),
+        estrategia: est.nombre
+    });
+    return dashState.rec;
+}
+
+/* --- asignacion de cada escenario --- */
+function allocActual() {
+    var a = {};
+    SEGMENTOS.forEach(function (s) { a[s.id] = ASIGNACION_BASE[s.id]; });
+    return a;
+}
+function allocFor(scenario) {
+    if (scenario === 'ia') return dashState.rec.allocation;
+    if (scenario === 'custom') return dashState.custom;
+    return allocActual();
+}
+
+/* --- render principal --- */
+function renderDashboard() {
+    var rec = dashState.rec || computeRecommendation();
+    var act = simulationEngine.evaluate(allocActual());
+    var cur = simulationEngine.evaluate(allocFor(dashState.scenario));
+
+    renderKpis(act, cur, rec);
+    renderReco(rec, act);
+    renderRedistribucion(rec);
+    renderXai(rec);
+    renderComparativa(act, rec);
+    renderBudget();
+}
+
+/* --- PASO 1: KPIs --- */
+function renderKpis(act, cur, rec) {
+    var esBase = dashState.scenario === 'actual';
+
+    dSet('k-roi', cur.roi.toFixed(2) + 'x');
+    dDelta('k-roi-d', cur.roi - act.roi, esBase, dSign(cur.roi - act.roi, 2) + 'x vs actual', 2);
+
+    dSet('k-conv', dNum(cur.conversiones));
+    dDelta('k-conv-d', cur.conversiones - act.conversiones, esBase,
+        dSign(cur.conversiones - act.conversiones, 0) + ' reservas', 0);
+
+    dSet('k-presu', dK(cur.presupuesto));
+    var difP = cur.presupuesto - PRESUPUESTO_TOTAL;
+    var elP = document.getElementById('k-presu-d');
+    if (Math.abs(difP) < 1) {
+        elP.className = 'd neu'; elP.textContent = 'cuadra con el disponible';
+    } else {
+        elP.className = 'd ' + (difP > 0 ? 'down' : 'up');
+        elP.textContent = (difP > 0 ? 'excede ' : 'sin asignar ') + dEur(Math.abs(difP));
+    }
+
+    dSet('k-rev', dK(cur.revenue));
+    dDelta('k-rev-d', cur.revenue - act.revenue, esBase,
+        dSign((cur.revenue - act.revenue) / 1000, 0) + 'k EUR vs actual', 0);
+
+    var mejora = act.roi > 0 ? ((cur.roi - act.roi) / act.roi) * 100 : 0;
+    dSet('k-mejora', dSign(mejora, 1) + '%');
+    document.getElementById('k-mejora-d').className = 'd ' + (mejora > 0.05 ? 'up' : (mejora < -0.05 ? 'down' : 'neu'));
+    document.getElementById('k-mejora-d').textContent = esBase ? 'escenario de referencia' : 'sobre el ROI actual';
+
+    dSet('k-conf', rec.confidence + '%');
+    var bar = document.getElementById('k-conf-bar');
+    bar.style.width = rec.confidence + '%';
+    bar.style.background = rec.confidence >= 78 ? '#1b8a4b' : (rec.confidence >= 65 ? '#c47f00' : '#c0392b');
+
+    dSet('k-cpa', dEur(cur.cpaMedio));
+    dDelta('k-cpa-d', act.cpaMedio - cur.cpaMedio, esBase,
+        dSign(cur.cpaMedio - act.cpaMedio, 0) + ' EUR vs actual', 0);
+
+    dSet('k-capuse', pct(cur.capacidadUsada));
+    dDelta('k-capuse-d', cur.capacidadUsada - act.capacidadUsada, esBase,
+        dSign((cur.capacidadUsada - act.capacidadUsada) * 100, 1) + ' pp vs actual', 1);
+}
+
+function dSet(id, txt) { document.getElementById(id).textContent = txt; }
+
+function dDelta(id, delta, esBase, txt) {
+    var el = document.getElementById(id);
+    if (esBase) { el.className = 'd neu'; el.textContent = 'linea base'; return; }
+    el.className = 'd ' + (delta > 0 ? 'up' : (delta < 0 ? 'down' : 'neu'));
+    el.textContent = txt;
+}
+
+/* --- PASO 2: tarjeta de recomendacion --- */
+function renderReco(rec, act) {
+    var mueve = rec.meta.desplazado;
+    document.getElementById('reco-headline').textContent = mueve > 0
+        ? 'Mover ' + dEur(mueve) + ' desde ' + rec.bajan.length + ' segmentos saturados o en declive hacia ' +
+          rec.suben.length + ' segmentos con capacidad libre y mejor rendimiento marginal'
+        : 'Mantener la asignacion actual: la estrategia seleccionada no permite desplazar presupuesto';
+
+    document.getElementById('reco-sub').textContent =
+        'Estrategia: ' + rec.meta.estrategia + '  -  Ocupacion maxima admitida: ' + pct(readOcupacionMax()) +
+        '  -  Motor: recommendationEngine ' + recommendationEngine.version + ' (' + rec.meta.iteraciones + ' iteraciones)';
+
+    document.getElementById('reco-conf-v').textContent = rec.confidence + '%';
+    var cbar = document.getElementById('reco-conf-bar');
+    cbar.style.width = rec.confidence + '%';
+    var ccol = rec.confidence >= 78 ? '#1b8a4b' : (rec.confidence >= 65 ? '#c47f00' : '#c0392b');
+    cbar.style.background = ccol;
+    document.getElementById('reco-conf-v').style.color = ccol;
+    document.getElementById('reco-conf-d').textContent =
+        rec.confidence >= 78 ? 'Alta: aplicar sin reservas' :
+        rec.confidence >= 65 ? 'Media: revisar antes de aplicar' : 'Baja: conviene validar con datos reales';
+
+    document.getElementById('reco-up').innerHTML = udList(rec.suben, 'up');
+    document.getElementById('reco-dn').innerHTML = udList(rec.bajan, 'dn');
+
+    document.getElementById('reco-why').innerHTML = rec.reasons.map(function (r) {
+        return '<li>' + r + '</li>';
+    }).join('');
+
+    var im = rec.expectedImpact;
+    document.getElementById('reco-impact').innerHTML =
+        chip('ROI', act.roi.toFixed(2) + 'x → ' + (act.roi + im.deltaRoi).toFixed(2) + 'x', im.deltaRoi >= 0) +
+        chip('Mejora de ROI', dSign(im.deltaRoiPct, 1) + '%', im.deltaRoiPct >= 0) +
+        chip('Conversiones', dSign(im.deltaConversiones, 0) + ' reservas', im.deltaConversiones >= 0) +
+        chip('Revenue', dSign(im.deltaRevenue / 1000, 0) + 'k EUR', im.deltaRevenue >= 0) +
+        chip('Segmentos saturados', dSign(im.deltaSaturados, 0), im.deltaSaturados <= 0);
+}
+
+function udList(items, dir) {
+    if (!items.length) return '<div class="ud-empty">Sin cambios en este escenario</div>';
+    return items.map(function (c) {
+        var s = segmentoPorId(c.id);
+        return '<div class="ud-item"><div class="sn">' + c.nombre +
+            '<small>' + c.zona + '  -  ocupacion ' + pct(s.ocupacion) +
+            '  -  tendencia ' + (s.tendencia > 0 ? '+' : '') + s.tendencia + '%</small></div>' +
+            '<div class="sv">' + (c.delta > 0 ? '+' : '') + dK(c.delta) + '<br><span style="font-size:9.5px">' +
+            dSign(c.deltaPct, 0) + '%</span></div></div>';
+    }).join('');
+}
+
+function chip(label, value, bueno) {
+    return '<div class="chip"><div class="cl">' + label + '</div><div class="cv" style="color:' +
+        (bueno ? '#177a43' : '#b8352a') + '">' + value + '</div></div>';
+}
+
+/* --- PASO 3: tabla actual vs recomendado --- */
+function renderRedistribucion(rec) {
+    var maxA = 0;
+    rec.changes.forEach(function (c) { maxA = Math.max(maxA, c.actual, c.recomendado); });
+
+    document.getElementById('rd-body').innerHTML = rec.changes.map(function (c) {
+        var s = segmentoPorId(c.id);
+        var cls = c.accion === 'aumentar' ? ' class="push"' : (c.accion === 'reducir' ? ' class="cut"' : '');
+        var badge = c.accion === 'aumentar' ? '<span class="badge push">Aumentar</span>'
+                  : c.accion === 'reducir' ? '<span class="badge cut">Reducir</span>'
+                  : '<span class="badge" style="background:#eef0f3;color:#888">Mantener</span>';
+        var dl = c.delta > 0 ? '<span class="delta up">' + dSign(c.deltaPct, 0) + '%</span>'
+               : c.delta < 0 ? '<span class="delta down">' + dSign(c.deltaPct, 0) + '%</span>'
+               : '<span style="color:#bbb">sin cambio</span>';
+
+        return '<tr' + cls + '>' +
+            '<td><strong>' + c.nombre + '</strong><div style="font-size:10.5px;color:#999">' + c.zona +
+                '  -  tendencia ' + (s.tendencia > 0 ? '+' : '') + s.tendencia + '%</div></td>' +
+            '<td class="num">' + dK(c.actual) + '</td>' +
+            '<td class="num">' + dK(c.recomendado) + '</td>' +
+            '<td class="num">' + dl + '</td>' +
+            '<td>' + dualBar(c.actual, c.recomendado, maxA) + '</td>' +
+            '<td class="num">' + pct(s.ocupacion) + '</td>' +
+            '<td>' + badge + '</td>' +
+            '</tr>';
+    }).join('');
+
+    var top = rec.suben[0], peor = rec.bajan[0];
+    document.getElementById('rd-insight').textContent = (top && peor)
+        ? 'El presupuesto total no cambia: se mantiene en ' + dEur(PRESUPUESTO_TOTAL) + '. Lo que cambia es su reparto. ' +
+          peor.nombre + ' cede ' + dEur(Math.abs(peor.delta)) + ' y ' + top.nombre + ' recibe ' + dEur(top.delta) +
+          '. La redistribucion se concentra en segmentos con ocupacion por debajo del ' + pct(readOcupacionMax()) +
+          ', de forma que el crecimiento sea absorbible sin generar nueva saturacion.'
+        : 'La estrategia actual no desplaza presupuesto. Selecciona una estrategia de redistribucion en los filtros.';
+}
+
+function dualBar(actual, rec, max) {
+    var wa = max > 0 ? (actual / max) * 100 : 0;
+    var wr = max > 0 ? (rec / max) * 100 : 0;
+    return '<div class="dualbar">' +
+        '<div class="db-row"><span class="db-lbl">HOY</span><div class="db-track db-a"><span style="width:' + wa + '%"></span></div><span class="db-val">' + dK(actual) + '</span></div>' +
+        '<div class="db-row"><span class="db-lbl">IA</span><div class="db-track db-r"><span style="width:' + wr + '%"></span></div><span class="db-val">' + dK(rec) + '</span></div>' +
+        '</div>';
+}
+
+/* --- XAI --- */
+function renderXai(rec) {
+    if (!rec.drivers.length) {
+        document.getElementById('xai-sub').textContent = 'Sin redistribucion que explicar en la estrategia actual.';
+        document.getElementById('xai-bars').innerHTML = '';
+        document.getElementById('xai-text').textContent =
+            'El motor no ha desplazado presupuesto, por lo que no hay factores que descomponer.';
+        document.getElementById('xai-constraints').innerHTML = '';
+        return;
+    }
+
+    var top = rec.suben[0], peor = rec.bajan[0];
+    var r = segmentoPorId(top.id), d = segmentoPorId(peor.id);
+
+    document.getElementById('xai-sub').textContent =
+        'Peso de cada factor en la decision de mover presupuesto de ' + d.nombre + ' hacia ' + r.nombre;
+
+    document.getElementById('xai-bars').innerHTML = rec.drivers.map(function (f) {
+        return '<div class="xbar"><div class="xbar-top"><span>' + f.label + '</span>' +
+            '<span class="w">' + f.value.toFixed(3) + '</span></div>' +
+            '<div class="xbar-track"><span style="width:' + f.pct + '%"></span></div></div>';
+    }).join('');
+
+    var mR = simulationEngine.roiMarginal(r, ASIGNACION_BASE[r.id]);
+    var mD = simulationEngine.roiMarginal(d, ASIGNACION_BASE[d.id]);
+    document.getElementById('xai-text').textContent =
+        r.nombre + ' recibe inversion porque su ROI marginal (' + mR.toFixed(2) + 'x) supera el de ' + d.nombre +
+        ' (' + mD.toFixed(2) + 'x) y porque su ocupacion del ' + pct(r.ocupacion) + ' deja ' +
+        dNum(r.capacidad * (1 - r.ocupacion)) + ' plazas libres que absorber. Su coste de adquisicion es de ' +
+        dEur(r.cpa) + ' frente a ' + dEur(d.cpa) + ', y su demanda crece un ' + r.tendencia +
+        '% interanual mientras la de ' + d.nombre + ' cae un ' + Math.abs(d.tendencia) +
+        '%. El movimiento se detiene en cuanto los rendimientos marginales se igualan: por eso el motor no vacia ' +
+        d.nombre + ', solo lo reduce hasta el punto en que dejaria de ser rentable seguir recortando.';
+
+    document.getElementById('xai-constraints').innerHTML = [
+        'Presupuesto total invariable: ' + dEur(PRESUPUESTO_TOTAL),
+        'Ningun segmento baja del 30% de su asignacion actual',
+        'Ningun segmento supera el triple de su asignacion actual',
+        'Ocupacion proyectada por debajo del ' + pct(readOcupacionMax()) + ' fijado en los filtros',
+        'Retornos decrecientes aplicados: el techo es la capacidad real del destino',
+        'Movimiento maximo permitido por la estrategia: ' + pct(readEstrategia().maxShiftPct) + ' del presupuesto'
+    ].map(function (t) { return '<li>' + t + '</li>'; }).join('');
+}
+
+/* --- PASO 5: comparativa de escenarios --- */
+function renderComparativa(act, rec) {
+    var ia = simulationEngine.evaluate(rec.allocation);
+    var cu = simulationEngine.evaluate(dashState.custom);
+
+    var filas = [
+        {l: 'ROI global', v: [act.roi, ia.roi, cu.roi], f: function (v) { return v.toFixed(2) + 'x'; }, mejor: 'alto'},
+        {l: 'Conversiones', v: [act.conversiones, ia.conversiones, cu.conversiones], f: function (v) { return dNum(v); }, mejor: 'alto'},
+        {l: 'Revenue proyectado', v: [act.revenue, ia.revenue, cu.revenue], f: function (v) { return dK(v) + ' EUR'; }, mejor: 'alto'},
+        {l: 'CPA medio', v: [act.cpaMedio, ia.cpaMedio, cu.cpaMedio], f: function (v) { return dEur(v); }, mejor: 'bajo'},
+        {l: 'Capacidad utilizada', v: [act.capacidadUsada, ia.capacidadUsada, cu.capacidadUsada], f: function (v) { return pct(v); }, mejor: 'alto'},
+        {l: 'Segmentos saturados', v: [act.saturados, ia.saturados, cu.saturados], f: function (v) { return dNum(v); }, mejor: 'bajo'},
+        {l: 'Presupuesto asignado', v: [act.presupuesto, ia.presupuesto, cu.presupuesto], f: function (v) { return dK(v) + ' EUR'; }, mejor: 'ninguno'}
+    ];
+
+    document.getElementById('cmp-body').innerHTML = filas.map(function (f) {
+        var best = -1;
+        if (f.mejor === 'alto') best = f.v.indexOf(Math.max.apply(null, f.v));
+        if (f.mejor === 'bajo') best = f.v.indexOf(Math.min.apply(null, f.v));
+        return '<tr><td>' + f.l + '</td>' + f.v.map(function (v, i) {
+            return '<td' + (i === best ? ' class="best"' : '') + '>' + f.f(v) + '</td>';
+        }).join('') + '</tr>';
+    }).join('');
+}
+
+/* --- PASO 4: sliders --- */
+function buildSliders() {
+    document.getElementById('segsliders').innerHTML = SEGMENTOS.map(function (s) {
+        var base = ASIGNACION_BASE[s.id];
+        return '<div class="segsl">' +
+            '<div><div class="segsl-nm"><label for="sl-' + s.id + '">' + s.nombre + '</label></div>' +
+            '<div class="segsl-meta">' + s.zona + '  -  CPA ' + dEur(s.cpa) + '  -  ticket ' + dEur(s.ticket) +
+            '  -  capacidad ' + dNum(s.capacidad) + '  -  ocupacion ' + pct(s.ocupacion) +
+            '  -  tendencia ' + (s.tendencia > 0 ? '+' : '') + s.tendencia + '%</div></div>' +
+            '<div><input type="range" id="sl-' + s.id + '" min="0" max="' + (base * 3) +
+            '" step="1000" value="' + base + '" oninput="onSegInput(\'' + s.id + '\')"></div>' +
+            '<div class="segsl-v"><div class="ev" id="slv-' + s.id + '">-</div><div class="dv" id="sld-' + s.id + '">-</div></div>' +
+            '</div>';
+    }).join('');
+}
+
+function onSegInput(id) {
+    dashState.custom[id] = parseInt(document.getElementById('sl-' + id).value, 10);
+    if (dashState.scenario !== 'custom') setScenario('custom');
+    else renderDashboard();
+}
+
+function renderBudget() {
+    var total = 0;
+    SEGMENTOS.forEach(function (s) {
+        var v = dashState.custom[s.id];
+        total += v;
+        var base = ASIGNACION_BASE[s.id];
+        document.getElementById('slv-' + s.id).textContent = dK(v);
+        var dv = document.getElementById('sld-' + s.id);
+        var dif = v - base;
+        dv.className = 'dv ' + (dif > 0 ? 'up' : (dif < 0 ? 'dn' : 'eq'));
+        dv.textContent = dif === 0 ? 'sin cambio' : dSign(dif / 1000, 0) + 'k';
+        document.getElementById('sl-' + s.id).value = v;
+    });
+
+    document.getElementById('bg-total').textContent = dEur(total);
+    var bar = document.getElementById('bg-bar');
+    bar.style.width = Math.min(100, (total / PRESUPUESTO_TOTAL) * 100) + '%';
+
+    var dif = total - PRESUPUESTO_TOTAL;
+    var warn = document.getElementById('bg-warn');
+    if (Math.abs(dif) < 1) {
+        bar.style.background = '#1b8a4b';
+        warn.className = 'budget-warn ok';
+        warn.textContent = 'Cuadra con los ' + dK(PRESUPUESTO_TOTAL) + ' EUR disponibles';
+    } else {
+        bar.style.background = '#c0392b';
+        warn.className = 'budget-warn bad';
+        warn.textContent = dif > 0
+            ? 'Excede el presupuesto en ' + dEur(dif)
+            : 'Quedan ' + dEur(-dif) + ' sin asignar';
+    }
+}
+
+/* --- escenarios --- */
+function setScenario(key) {
+    dashState.scenario = key;
+    ['actual', 'ia', 'custom'].forEach(function (k) {
+        var t = document.getElementById('tab-' + k);
+        if (!t) return;
+        t.classList.toggle('on', k === key);
+        t.setAttribute('aria-selected', k === key ? 'true' : 'false');
+    });
+    renderDashboard();
+}
+
+function loadInto(key) {
+    var src = key === 'ia' ? dashState.rec.allocation : allocActual();
+    SEGMENTOS.forEach(function (s) { dashState.custom[s.id] = Math.round(src[s.id]); });
+    setScenario('custom');
+}
+
+/** Reparte proporcionalmente el desvio hasta cuadrar el presupuesto. */
+function normalizeBudget() {
+    var total = 0;
+    SEGMENTOS.forEach(function (s) { total += dashState.custom[s.id]; });
+    if (total <= 0) { loadInto('actual'); return; }
+    var factor = PRESUPUESTO_TOTAL / total;
+    SEGMENTOS.forEach(function (s) {
+        dashState.custom[s.id] = Math.round(dashState.custom[s.id] * factor);
+    });
+    /* corrige el redondeo en el segmento mayor */
+    var t2 = 0;
+    SEGMENTOS.forEach(function (s) { t2 += dashState.custom[s.id]; });
+    var mayor = SEGMENTOS.slice().sort(function (a, b) {
+        return dashState.custom[b.id] - dashState.custom[a.id];
+    })[0];
+    dashState.custom[mayor.id] += PRESUPUESTO_TOTAL - t2;
+    setScenario('custom');
+}
+
+/* --- PASO 6: decision --- */
+var decisionLog = [];
+
+function decide(accion) {
+    var rec = dashState.rec;
+    var box = document.getElementById('d-status');
+    var lbl = document.getElementById('d-status-l');
+    var txt = document.getElementById('d-status-t');
+    var cur = simulationEngine.evaluate(allocFor(dashState.scenario));
+    var act = simulationEngine.evaluate(allocActual());
+    var mejora = act.roi > 0 ? ((cur.roi - act.roi) / act.roi) * 100 : 0;
+    var etiqueta;
+
+    box.classList.add('show');
+
+    if (accion === 'aplicar') {
+        setScenario('ia');
+        var ia = simulationEngine.evaluate(rec.allocation);
+        var mejoraIa = ((ia.roi - act.roi) / act.roi) * 100;
+        box.style.background = '#f4fbf6';
+        box.style.borderLeftColor = '#1b8a4b';
+        lbl.style.color = '#177a43';
+        lbl.textContent = 'Recomendacion aplicada';
+        txt.innerHTML = 'Se adopta la asignacion propuesta por la IA: ' + dEur(rec.meta.desplazado) +
+            ' redistribuidos entre ' + rec.changes.length + ' segmentos. ROI ' + act.roi.toFixed(2) + 'x → ' +
+            ia.roi.toFixed(2) + 'x (' + dSign(mejoraIa, 1) + '%), ' + dSign(ia.conversiones - act.conversiones, 0) +
+            ' reservas y ' + dSign((ia.revenue - act.revenue) / 1000, 0) + 'k EUR de revenue. ' +
+            'Confianza registrada: ' + rec.confidence + '%.';
+        etiqueta = 'APLICADA';
+    } else if (accion === 'personalizar') {
+        loadInto('ia');
+        box.style.background = '#f7faff';
+        box.style.borderLeftColor = '#0057b8';
+        lbl.style.color = '#0057b8';
+        lbl.textContent = 'Modo personalizado';
+        txt.textContent = 'La propuesta de la IA se ha cargado en los sliders del paso 4 como punto de partida. ' +
+            'Ajusta los segmentos que quieras: los indicadores y la comparativa se recalculan en cada movimiento. ' +
+            'Recuerda cuadrar el presupuesto antes de decidir.';
+        etiqueta = 'PERSONALIZADA';
+    } else {
+        setScenario('actual');
+        box.style.background = '#fdf5f5';
+        box.style.borderLeftColor = '#d9534f';
+        lbl.style.color = '#b8352a';
+        lbl.textContent = 'Recomendacion rechazada';
+        txt.textContent = 'Se mantiene la asignacion actual. El rechazo queda registrado junto al escenario ' +
+            'propuesto (mejora estimada del ' + dSign(rec.expectedImpact.deltaRoiPct, 1) + '% de ROI y confianza del ' +
+            rec.confidence + '%) para incorporarlo como senal negativa en el reentrenamiento del modelo.';
+        etiqueta = 'RECHAZADA';
+    }
+
+    decisionLog.unshift(new Date().toLocaleTimeString('es-ES') + '  -  ' + etiqueta +
+        '  -  estrategia "' + rec.meta.estrategia + '"  -  confianza ' + rec.confidence +
+        '%  -  mejora evaluada ' + dSign(mejora, 1) + '%');
+    document.getElementById('d-log').innerHTML = '<div style="font-weight:900;color:#777;border:none">Registro de decisiones</div>' +
+        decisionLog.slice(0, 6).map(function (l) { return '<div>' + l + '</div>'; }).join('');
+}
+
+/* --- arranque --- */
+(function initDashboard() {
+    if (!document.getElementById('segsliders')) return;
+
+    SEGMENTOS.forEach(function (s) { dashState.custom[s.id] = ASIGNACION_BASE[s.id]; });
+    buildSliders();
+    computeRecommendation();
+
+    /* los filtros de estrategia y ocupacion alimentan al motor */
+    var f4 = document.getElementById('f4');
+    if (f4) f4.addEventListener('change', function () { computeRecommendation(); renderDashboard(); });
+    var f5 = document.getElementById('f5');
+    if (f5) f5.addEventListener('input', function () { computeRecommendation(); renderDashboard(); });
+
+    setScenario('actual');
+})();
+</script>
+</body>
+</html>

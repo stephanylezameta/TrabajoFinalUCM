@@ -1,0 +1,411 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TUI Business Hub — Dashboard de Recomendaciones B2B</title>
+    <link href="https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Open Sans', sans-serif; background: #f0f2f5; color: #1a1a2e; font-size: 14px; }
+
+        /* ===== SIDEBAR ===== */
+        .sidebar { position: fixed; left: 0; top: 0; width: 240px; height: 100vh; background: #1a1a2e; color: white; padding: 24px 0; overflow-y: auto; z-index: 100; }
+        .sidebar-logo { padding: 0 20px 24px; border-bottom: 1px solid rgba(255,255,255,0.1); display: flex; align-items: center; gap: 10px; }
+        .sidebar-logo .logo-icon { width: 36px; height: 36px; background: #d40e14; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 0.8rem; }
+        .sidebar-logo span { font-weight: 700; font-size: 1rem; }
+        .sidebar-nav { padding: 20px 0; }
+        .sidebar-nav a { display: flex; align-items: center; gap: 12px; padding: 12px 20px; color: rgba(255,255,255,0.6); text-decoration: none; font-size: 0.85rem; transition: all 0.2s; border-left: 3px solid transparent; }
+        .sidebar-nav a:hover { background: rgba(255,255,255,0.05); color: white; }
+        .sidebar-nav a.active { background: rgba(212,14,20,0.15); color: #ff6b6b; border-left-color: #d40e14; }
+        .sidebar-section { padding: 12px 20px 8px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1.5px; color: rgba(255,255,255,0.3); margin-top: 12px; }
+
+        /* ===== MAIN AREA ===== */
+        .main { margin-left: 240px; min-height: 100vh; }
+        .topbar { background: white; padding: 16px 32px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e0e0e0; position: sticky; top: 0; z-index: 50; }
+        .topbar-left h1 { font-size: 1.2rem; font-weight: 700; }
+        .topbar-left p { font-size: 0.8rem; color: #666; margin-top: 2px; }
+        .topbar-right { display: flex; gap: 16px; align-items: center; }
+        .topbar-btn { padding: 8px 16px; border-radius: 6px; border: 1px solid #ddd; background: white; font-size: 0.8rem; cursor: pointer; font-weight: 600; transition: all 0.2s; }
+        .topbar-btn:hover { border-color: #d40e14; color: #d40e14; }
+        .topbar-btn.primary { background: #d40e14; color: white; border-color: #d40e14; }
+        .topbar-btn.primary:hover { background: #b00c11; }
+
+        .content { padding: 32px; }
+
+        /* ===== KPI CARDS ===== */
+        .kpi-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; margin-bottom: 32px; }
+        .kpi-card { background: white; border-radius: 12px; padding: 20px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+        .kpi-card .kpi-label { font-size: 0.75rem; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; }
+        .kpi-card .kpi-value { font-size: 2rem; font-weight: 800; color: #1a1a2e; }
+        .kpi-card .kpi-change { font-size: 0.8rem; margin-top: 6px; }
+        .kpi-card .kpi-change.up { color: #1b8a4b; }
+        .kpi-card .kpi-change.down { color: #d40e14; }
+
+        /* ===== TABLES ===== */
+        .panel { background: white; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); margin-bottom: 24px; overflow: hidden; }
+        .panel-header { padding: 20px 24px; border-bottom: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center; }
+        .panel-header h3 { font-size: 1rem; font-weight: 700; }
+        .panel-header .panel-actions { display: flex; gap: 8px; }
+        .panel-filter { padding: 6px 12px; border-radius: 16px; border: 1px solid #e0e0e0; font-size: 0.75rem; cursor: pointer; background: white; }
+        .panel-filter.active { background: #d40e14; color: white; border-color: #d40e14; }
+        .table-wrap { overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #f8f9fa; padding: 12px 16px; text-align: left; font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.5px; color: #666; border-bottom: 1px solid #e8e8e8; }
+        td { padding: 14px 16px; border-bottom: 1px solid #f0f0f0; font-size: 0.85rem; }
+        tr:hover { background: #fafbfc; }
+        .dest-cell { display: flex; align-items: center; gap: 10px; }
+        .dest-flag { width: 28px; height: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; }
+        .score-bar { width: 80px; height: 6px; background: #e8e8e8; border-radius: 3px; overflow: hidden; display: inline-block; vertical-align: middle; margin-right: 8px; }
+        .score-fill { height: 100%; border-radius: 3px; }
+        .score-fill.high { background: #1b8a4b; }
+        .score-fill.mid { background: #f5a623; }
+        .score-fill.low { background: #d40e14; }
+        .badge-sm { display: inline-block; padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600; }
+        .badge-sm.green { background: #e6f7ee; color: #1b8a4b; }
+        .badge-sm.red { background: #fff0f0; color: #d40e14; }
+        .badge-sm.blue { background: #e8f4fd; color: #0066cc; }
+        .badge-sm.purple { background: #f3e8ff; color: #7b2d8b; }
+        .badge-sm.orange { background: #fff4e6; color: #d4770e; }
+        .action-btn { padding: 6px 12px; border-radius: 4px; border: 1px solid #ddd; background: white; font-size: 0.75rem; cursor: pointer; font-weight: 600; }
+        .action-btn:hover { border-color: #d40e14; color: #d40e14; }
+        .action-btn.push { background: #d40e14; color: white; border-color: #d40e14; }
+        .action-btn.push:hover { background: #b00c11; }
+
+        /* ===== STRATEGY PANEL ===== */
+        .strategy-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; padding: 20px 24px; }
+        .strategy-card { border: 2px solid #e8e8e8; border-radius: 10px; padding: 20px; cursor: pointer; transition: all 0.2s; }
+        .strategy-card:hover { border-color: #d40e14; box-shadow: 0 4px 12px rgba(212,14,20,0.1); }
+        .strategy-card.selected { border-color: #d40e14; background: #fff5f5; }
+        .strategy-card h4 { font-size: 0.95rem; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+        .strategy-card p { font-size: 0.8rem; color: #666; line-height: 1.5; margin-bottom: 12px; }
+        .strategy-card .strategy-metrics { display: flex; gap: 12px; }
+        .strategy-card .metric { text-align: center; }
+        .strategy-card .metric .val { font-size: 1.1rem; font-weight: 800; color: #1a1a2e; }
+        .strategy-card .metric .lbl { font-size: 0.65rem; color: #888; }
+
+        /* ===== ALERTS ===== */
+        .alert-item { display: flex; align-items: center; gap: 16px; padding: 14px 24px; border-bottom: 1px solid #f0f0f0; }
+        .alert-item:last-child { border-bottom: none; }
+        .alert-icon { width: 36px; height: 36px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1rem; }
+        .alert-icon.warn { background: #fff4e6; }
+        .alert-icon.success { background: #e6f7ee; }
+        .alert-icon.info { background: #e8f4fd; }
+        .alert-content { flex: 1; }
+        .alert-content .alert-title { font-weight: 600; font-size: 0.85rem; }
+        .alert-content .alert-desc { font-size: 0.8rem; color: #666; margin-top: 2px; }
+        .alert-time { font-size: 0.75rem; color: #aaa; }
+
+        @media (max-width: 1200px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } .strategy-cards { grid-template-columns: 1fr; } }
+        @media (max-width: 768px) { .sidebar { display: none; } .main { margin-left: 0; } }
+    </style>
+</head>
+<body>
+
+<!-- ===== SIDEBAR ===== -->
+<aside class="sidebar">
+    <div class="sidebar-logo">
+        <div class="logo-icon">TUI</div>
+        <span>Business Hub</span>
+    </div>
+    <nav class="sidebar-nav">
+        <div class="sidebar-section">Principal</div>
+        <a href="#" class="active">📊 Dashboard</a>
+        <a href="#">🎯 Recomendaciones</a>
+        <a href="#">📈 Rendimiento</a>
+        <div class="sidebar-section">Gestión</div>
+        <a href="#">🗺️ Destinos</a>
+        <a href="#">📦 Paquetes</a>
+        <a href="#">👥 Segmentos</a>
+        <div class="sidebar-section">Estrategia</div>
+        <a href="#">⚖️ Re-ranking TDRS</a>
+        <a href="#">🌿 Sostenibilidad</a>
+        <a href="#">🔔 Alertas</a>
+        <div class="sidebar-section">Sistema</div>
+        <a href="#">⚙️ Configuración</a>
+        <a href="#">📋 Logs del modelo</a>
+        <a href="#">🔑 API Keys</a>
+    </nav>
+</aside>
+
+<!-- ===== MAIN ===== -->
+<div class="main">
+
+    <!-- Topbar -->
+    <div class="topbar">
+        <div class="topbar-left">
+            <h1>Dashboard de Recomendaciones</h1>
+            <p>Motor TDRS v2.1 · Última ejecución: hace 12 min · 1,247 paquetes evaluados</p>
+        </div>
+        <div class="topbar-right">
+            <button class="topbar-btn">📥 Exportar informe</button>
+            <button class="topbar-btn primary">🔄 Ejecutar modelo</button>
+        </div>
+    </div>
+
+    <div class="content">
+
+        <!-- ===== KPIs ===== -->
+        <div class="kpi-grid">
+            <div class="kpi-card">
+                <div class="kpi-label">Tasa de adopción</div>
+                <div class="kpi-value">34.2%</div>
+                <div class="kpi-change up">↑ +5.8% vs mes anterior</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">CTR recomendaciones</div>
+                <div class="kpi-value">12.7%</div>
+                <div class="kpi-change up">↑ +2.1% vs mes anterior</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Redistribución lograda</div>
+                <div class="kpi-value">22.4%</div>
+                <div class="kpi-change up">↑ +8.3% vs baseline</div>
+            </div>
+            <div class="kpi-card">
+                <div class="kpi-label">Revenue incremental</div>
+                <div class="kpi-value">€47.2K</div>
+                <div class="kpi-change up">↑ +€12.8K vs sin modelo</div>
+            </div>
+        </div>
+
+        <!-- ===== STRATEGY SELECTOR ===== -->
+        <div class="panel">
+            <div class="panel-header">
+                <h3>🎯 Estrategia de Re-ranking Activa</h3>
+                <button class="topbar-btn" onclick="alert('Aplica la estrategia seleccionada al ranking en producción via API')">Aplicar cambios</button>
+            </div>
+            <div class="strategy-cards">
+                <div class="strategy-card" onclick="selectStrategy(this)">
+                    <h4>🔥 Tradicional</h4>
+                    <p>Maximiza afinidad usuario-paquete. Sin redistribución. Prioriza conversión inmediata.</p>
+                    <div class="strategy-metrics">
+                        <div class="metric"><div class="val">α=1.0</div><div class="lbl">Afinidad</div></div>
+                        <div class="metric"><div class="val">β=0</div><div class="lbl">TDRS</div></div>
+                        <div class="metric"><div class="val">15.2%</div><div class="lbl">CTR esperado</div></div>
+                    </div>
+                </div>
+                <div class="strategy-card selected" onclick="selectStrategy(this)">
+                    <h4>⚖️ Moderada</h4>
+                    <p>Equilibrio entre satisfacción del viajero y redistribución de demanda turística.</p>
+                    <div class="strategy-metrics">
+                        <div class="metric"><div class="val">α=0.5</div><div class="lbl">Afinidad</div></div>
+                        <div class="metric"><div class="val">β=0.2</div><div class="lbl">TDRS</div></div>
+                        <div class="metric"><div class="val">12.7%</div><div class="lbl">CTR esperado</div></div>
+                    </div>
+                </div>
+                <div class="strategy-card" onclick="selectStrategy(this)">
+                    <h4>💎 Intensiva</h4>
+                    <p>Máxima redistribución. Prioriza destinos sostenibles y poco masificados.</p>
+                    <div class="strategy-metrics">
+                        <div class="metric"><div class="val">α=0.3</div><div class="lbl">Afinidad</div></div>
+                        <div class="metric"><div class="val">β=0.3</div><div class="lbl">TDRS</div></div>
+                        <div class="metric"><div class="val">9.8%</div><div class="lbl">CTR esperado</div></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== TOP DESTINOS TABLE ===== -->
+        <div class="panel">
+            <div class="panel-header">
+                <h3>📊 Ranking de Destinos — Oportunidades de Redistribución</h3>
+                <div class="panel-actions">
+                    <span class="panel-filter active">Todos</span>
+                    <span class="panel-filter">Infrautilizados</span>
+                    <span class="panel-filter">Saturados</span>
+                </div>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Destino</th>
+                            <th>Score TDRS</th>
+                            <th>Ocupación</th>
+                            <th>Demanda</th>
+                            <th>Sostenibilidad</th>
+                            <th>Estado</th>
+                            <th>Acción B2B</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><div class="dest-cell"><span class="dest-flag">🇪🇸</span><strong>Mallorca</strong></div></td>
+                            <td><span class="score-bar"><span class="score-fill high" style="width:78%"></span></span> 0.78</td>
+                            <td>42%</td>
+                            <td><span class="badge-sm blue">Media</span></td>
+                            <td><span class="badge-sm green">🌿 Alta</span></td>
+                            <td><span class="badge-sm green">Oportunidad</span></td>
+                            <td><button class="action-btn push">Push destino</button></td>
+                        </tr>
+                        <tr>
+                            <td><div class="dest-cell"><span class="dest-flag">🇭🇷</span><strong>Split</strong></div></td>
+                            <td><span class="score-bar"><span class="score-fill high" style="width:85%"></span></span> 0.85</td>
+                            <td>28%</td>
+                            <td><span class="badge-sm green">Baja</span></td>
+                            <td><span class="badge-sm green">🌿 Alta</span></td>
+                            <td><span class="badge-sm green">Alta oportunidad</span></td>
+                            <td><button class="action-btn push">Push destino</button></td>
+                        </tr>
+                        <tr>
+                            <td><div class="dest-cell"><span class="dest-flag">🇵🇹</span><strong>Algarve</strong></div></td>
+                            <td><span class="score-bar"><span class="score-fill high" style="width:82%"></span></span> 0.82</td>
+                            <td>35%</td>
+                            <td><span class="badge-sm green">Baja</span></td>
+                            <td><span class="badge-sm green">🌿🌿 Muy alta</span></td>
+                            <td><span class="badge-sm green">Alta oportunidad</span></td>
+                            <td><button class="action-btn push">Push destino</button></td>
+                        </tr>
+                        <tr>
+                            <td><div class="dest-cell"><span class="dest-flag">🇲🇽</span><strong>Cancún</strong></div></td>
+                            <td><span class="score-bar"><span class="score-fill low" style="width:32%"></span></span> 0.32</td>
+                            <td>94%</td>
+                            <td><span class="badge-sm red">Muy alta</span></td>
+                            <td><span class="badge-sm red">Baja</span></td>
+                            <td><span class="badge-sm red">Saturado</span></td>
+                            <td><button class="action-btn">Reducir push</button></td>
+                        </tr>
+                        <tr>
+                            <td><div class="dest-cell"><span class="dest-flag">🇲🇻</span><strong>Maldivas</strong></div></td>
+                            <td><span class="score-bar"><span class="score-fill low" style="width:28%"></span></span> 0.28</td>
+                            <td>91%</td>
+                            <td><span class="badge-sm red">Muy alta</span></td>
+                            <td><span class="badge-sm orange">Media</span></td>
+                            <td><span class="badge-sm red">Saturado</span></td>
+                            <td><button class="action-btn">Reducir push</button></td>
+                        </tr>
+                        <tr>
+                            <td><div class="dest-cell"><span class="dest-flag">🇬🇷</span><strong>Creta</strong></div></td>
+                            <td><span class="score-bar"><span class="score-fill mid" style="width:65%"></span></span> 0.65</td>
+                            <td>55%</td>
+                            <td><span class="badge-sm blue">Media</span></td>
+                            <td><span class="badge-sm green">🌿 Alta</span></td>
+                            <td><span class="badge-sm blue">Equilibrado</span></td>
+                            <td><button class="action-btn">Mantener</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ===== ALERTAS ===== -->
+        <div class="panel">
+            <div class="panel-header">
+                <h3>🔔 Alertas del Sistema de Recomendación</h3>
+            </div>
+            <div class="alert-item">
+                <div class="alert-icon warn">⚠️</div>
+                <div class="alert-content">
+                    <div class="alert-title">Cancún supera umbral de saturación (>85%)</div>
+                    <div class="alert-desc">La ocupación ha alcanzado 94%. Se recomienda activar redistribución intensiva para temporada alta.</div>
+                </div>
+                <div class="alert-time">Hace 2h</div>
+            </div>
+            <div class="alert-item">
+                <div class="alert-icon success">✅</div>
+                <div class="alert-content">
+                    <div class="alert-title">Split: +45% en reservas tras activar push TDRS</div>
+                    <div class="alert-desc">La estrategia de redistribución hacia Split ha generado un incremento significativo sin canibalizar otros destinos.</div>
+                </div>
+                <div class="alert-time">Hace 5h</div>
+            </div>
+            <div class="alert-item">
+                <div class="alert-icon info">ℹ️</div>
+                <div class="alert-content">
+                    <div class="alert-title">Modelo re-entrenado con datos de agosto 2025</div>
+                    <div class="alert-desc">LightFM v2.1 re-entrenado. Precision@10: 0.82 (+0.03). Nuevo embedding de 384 dimensiones activo.</div>
+                </div>
+                <div class="alert-time">Hace 1d</div>
+            </div>
+            <div class="alert-item">
+                <div class="alert-icon warn">⚠️</div>
+                <div class="alert-content">
+                    <div class="alert-title">Segmento "aventura_joven" con baja adopción (8.2%)</div>
+                    <div class="alert-desc">Las recomendaciones para este segmento tienen CTR bajo. Considerar ajustar explicaciones o destinos ofrecidos.</div>
+                </div>
+                <div class="alert-time">Hace 2d</div>
+            </div>
+        </div>
+
+        <!-- ===== SEGMENT PERFORMANCE ===== -->
+        <div class="panel">
+            <div class="panel-header">
+                <h3>👥 Rendimiento por Segmento de Usuario</h3>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Segmento</th>
+                            <th>Usuarios</th>
+                            <th>CTR</th>
+                            <th>Conversión</th>
+                            <th>Revenue/User</th>
+                            <th>Adopción TDRS</th>
+                            <th>Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>🏖️ Beach Foodies</strong></td>
+                            <td>3,420</td>
+                            <td><span class="badge-sm green">18.4%</span></td>
+                            <td>5.2%</td>
+                            <td>€127</td>
+                            <td><span class="score-bar"><span class="score-fill high" style="width:72%"></span></span> 72%</td>
+                            <td><button class="action-btn">Ver detalle</button></td>
+                        </tr>
+                        <tr>
+                            <td><strong>🏛️ Cultural Explorers</strong></td>
+                            <td>2,180</td>
+                            <td><span class="badge-sm green">14.6%</span></td>
+                            <td>4.8%</td>
+                            <td>€145</td>
+                            <td><span class="score-bar"><span class="score-fill high" style="width:68%"></span></span> 68%</td>
+                            <td><button class="action-btn">Ver detalle</button></td>
+                        </tr>
+                        <tr>
+                            <td><strong>🧘 Wellness Seekers</strong></td>
+                            <td>1,890</td>
+                            <td><span class="badge-sm blue">11.2%</span></td>
+                            <td>3.9%</td>
+                            <td>€189</td>
+                            <td><span class="score-bar"><span class="score-fill mid" style="width:55%"></span></span> 55%</td>
+                            <td><button class="action-btn">Ver detalle</button></td>
+                        </tr>
+                        <tr>
+                            <td><strong>🧗 Adventure Young</strong></td>
+                            <td>4,100</td>
+                            <td><span class="badge-sm red">8.2%</span></td>
+                            <td>2.1%</td>
+                            <td>€78</td>
+                            <td><span class="score-bar"><span class="score-fill low" style="width:28%"></span></span> 28%</td>
+                            <td><button class="action-btn push">Optimizar</button></td>
+                        </tr>
+                        <tr>
+                            <td><strong>👨‍👩‍👧 Family All-Inclusive</strong></td>
+                            <td>5,670</td>
+                            <td><span class="badge-sm green">15.8%</span></td>
+                            <td>6.1%</td>
+                            <td>€210</td>
+                            <td><span class="score-bar"><span class="score-fill mid" style="width:45%"></span></span> 45%</td>
+                            <td><button class="action-btn">Ver detalle</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    function selectStrategy(el) {
+        document.querySelectorAll('.strategy-card').forEach(c => c.classList.remove('selected'));
+        el.classList.add('selected');
+    }
+</script>
+
+</body>
+</html>
