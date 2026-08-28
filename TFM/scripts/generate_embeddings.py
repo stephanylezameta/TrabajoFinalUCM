@@ -123,7 +123,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--db", default="data/tui_recomendador.db",
                          help="Ruta a la base de datos unificada")
-    parser.add_argument("--modelo", default="paraphrase-multilingual-MiniLM-L12-v2",
+    parser.add_argument("--modelo", default="intfloat/multilingual-e5-large",
                          choices=["paraphrase-multilingual-MiniLM-L12-v2",
                                   "intfloat/multilingual-e5-large"],
                          help="Modelo de embeddings a usar")

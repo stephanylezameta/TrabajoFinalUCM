@@ -521,6 +521,24 @@ Dimensión resultante: **D + 9** — 400 dimensiones con MiniLM-384 (antes 391).
 
 ---
 
+### DECISIÓN-021 | 2026-08-25 | Estado: Tomada
+
+**Área:** Embeddings — selección final de modelo y arquitectura del vector híbrido (actualiza DECISIÓN-006/018)
+
+**Contexto:** Las DECISIONES-016 a 020 (sesión 2026-08-02) quedan como guía inicial no vinculante. Tras verificación del equipo, se confirma que los datos sintéticos de `experiencias`, `customer_bookings` y `reviews_dataset` proceden del dataset compartido por TUI, no de datasets externos de otros proyectos académicos. Se retira por tanto el riesgo de autorización señalado en DECISIÓN-016, y se mantiene la arquitectura D+7 original (DECISIÓN-008), no la ampliación a D+9 de DECISIÓN-018.
+
+**Decisión:**
+1. **Modelo de embeddings**: `intfloat/multilingual-e5-large` (1024 dim), seleccionado sobre `paraphrase-multilingual-MiniLM-L12-v2` (384 dim) mediante el experimento de coherencia de clusters definido en DECISIÓN-006, sobre un corpus piloto de 100 experiencias. Resultado: e5-large = 0.9478, MiniLM = 0.8250 de similitud coseno intra-cluster (mismo destino+categoría). Costo: ~2.2h para regenerar el catálogo completo (5850 experiencias), asumible dentro del cronograma.
+2. **Sentimiento**: se mantiene D+7. El atributo `estrellas_hotel_norm` se calcula como mezcla 50/50 entre el rating sintético de `experiencias` y el sentimiento real agregado por destino, calculado con XLM-RoBERTa multilingüe (`cardiffnlp/twitter-xlm-roberta-base-sentiment`) sobre las 37.956 reseñas reales scrapeadas por el equipo (cobertura: 38/39 destinos del catálogo). No se usa el `Sentiment Score` de fuentes externas propuesto en DECISIÓN-018.
+3. **Ocupación**: `nivel_ocupacion` se calcula desde `indicadores_destino` (Eurostat/INE, ya poblado con 3342 registros), no desde Meta Movement Distribution (fuente propuesta en DECISIÓN-017, no verificada/disponible para el equipo).
+
+**Justificación:** Se prioriza usar fuentes de datos generadas y verificadas directamente por el equipo (scraping propio + análisis de sentimiento propio) sobre fuentes externas de procedencia no confirmada, manteniendo la arquitectura D+7 ya documentada y validada en el resto del pipeline (`HybridVectorBuilder`, `recommendation_engine.py`).
+
+**Archivos generados:** `data/embeddings/hybrid_vectors.npy`, `paquete_ids.npy`, `package_embeddings.npy` (versión oficial, e5-large). Se conservan además `hybrid_vectors_e5large.npy` y análogos como copia explícita de la versión ganadora, y puede regenerarse la versión MiniLM con `--modelo paraphrase-multilingual-MiniLM-L12-v2` si se necesita comparar de nuevo.
+
+**Pendiente de equipo:** Confirmar con Steph la procedencia exacta de `customer_bookings`/`reviews_dataset` para dejarlo documentado sin ambigüedad en la memoria final (citación correcta si en algún punto se usó material de otros TFM).
+
+---
 ## Historial de Conversaciones
 
 Esta sección referencia los temas discutidos en cada sesión de trabajo para trazabilidad del TFM.
