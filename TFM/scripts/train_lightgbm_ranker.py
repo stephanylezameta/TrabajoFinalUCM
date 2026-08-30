@@ -166,15 +166,35 @@ def construir_dataset(db_path: str):
     for r in reservas:
         por_cliente[r["customer_id"]].append(r)
 
-    # Items con al menos una reserva real en todo el dataset. Muestrear
-    # negativos SOLO de aqui (en vez de las 5850 experiencias completas,
-    # muchas nunca reservadas) evita que el modelo "haga trampa"
-    # distinguiendo trivialmente popular vs nunca-reservado en base a
-    # impacto_local/diversificacion -- eso inflaba las metricas sin medir
-    # preferencia personal real.
     items_con_reservas = {r["experience_id"] for r in reservas}
     print(f"   -> {len(items_con_reservas)} de {len(todos_los_ids)} experiencias "
           f"tienen al menos una reserva real (pool de negativos)")
+
+    conteo_reservas_destino = defaultdict(int)
+    for r in reservas:
+        destino = experiencias.get(r["experience_id"], {}).get("destination")
+        if destino:
+            conteo_reservas_destino[destino] += 1
+
+    destinos_ordenados = sorted(conteo_reservas_destino.items(), key=lambda x: x[1])
+    n_destinos = len(destinos_ordenados)
+    tercil_por_destino = {}
+    for i, (destino, _) in enumerate(destinos_ordenados):
+        if i < n_destinos / 3:
+            tercil_por_destino[destino] = "bajo"
+        elif i < 2 * n_destinos / 3:
+            tercil_por_destino[destino] = "medio"
+        else:
+            tercil_por_destino[destino] = "alto"
+
+    items_por_tercil = defaultdict(list)
+    for eid in items_con_reservas:
+        destino = experiencias[eid]["destination"]
+        tercil = tercil_por_destino.get(destino, "medio")
+        items_por_tercil[tercil].append(eid)
+
+    print(f"   -> negativos difíciles: muestreados del mismo tercil de "
+          f"popularidad del destino que el positivo (bajo/medio/alto)")
 
     por_cliente_train = {}
     por_cliente_test = {}
@@ -183,6 +203,14 @@ def construir_dataset(db_path: str):
             continue
         por_cliente_train[customer_id] = res_cliente[:-1]
         por_cliente_test[customer_id] = res_cliente[-1]
+
+    ids_train_completo = list(por_cliente_train.keys())
+    random.shuffle(ids_train_completo)
+    corte = int(len(ids_train_completo) * 0.85)
+    ids_train = set(ids_train_completo[:corte])
+    ids_val = set(ids_train_completo[corte:])
+    print(f"   -> split interno: {len(ids_train)} clientes para entrenar, "
+          f"{len(ids_val)} para validacion (early stopping)")
 
     impacto_local, diversificacion, temporada_baja = calcular_senales_train_only(
         por_cliente_train, experiencias
@@ -208,6 +236,7 @@ def construir_dataset(db_path: str):
 
     print("Construyendo pares (cliente, item) con negativos muestreados...")
     X, y, groups = [], [], []
+    X_val, y_val, groups_val = [], [], []
     X_test, y_test, test_customers, test_candidatos = [], [], [], []
 
     for customer_id, train_res in por_cliente_train.items():
@@ -215,27 +244,47 @@ def construir_dataset(db_path: str):
         test_res = por_cliente_test[customer_id]
         reservados_ids_completo = reservados_ids | {test_res["experience_id"]}
 
+        es_validacion = customer_id in ids_val
+        X_dest, y_dest, groups_dest = (X_val, y_val, groups_val) if es_validacion else (X, y, groups)
+
         grupo_size = 0
         for r in train_res:
-            X.append(features_item(r["experience_id"]))
-            y.append(1)
+            X_dest.append(features_item(r["experience_id"]))
+            y_dest.append(1)
             grupo_size += 1
 
+        terciles_cliente = {
+            tercil_por_destino.get(experiencias[eid]["destination"], "medio")
+            for eid in reservados_ids
+        }
+        pool_negativos = [
+            eid for t in terciles_cliente for eid in items_por_tercil[t]
+            if eid not in reservados_ids_completo
+        ]
+        if not pool_negativos:
+            pool_negativos = [eid for eid in items_con_reservas if eid not in reservados_ids_completo]
         negativos = random.sample(
-            [eid for eid in items_con_reservas if eid not in reservados_ids_completo],
-            min(N_NEGATIVOS_POR_CLIENTE, len(todos_los_ids)),
+            pool_negativos, min(N_NEGATIVOS_POR_CLIENTE, len(pool_negativos)),
         )
         for eid in negativos:
-            X.append(features_item(eid))
-            y.append(0)
+            X_dest.append(features_item(eid))
+            y_dest.append(0)
             grupo_size += 1
 
         if grupo_size > 0:
-            groups.append(grupo_size)
+            groups_dest.append(grupo_size)
 
+        tercil_test = tercil_por_destino.get(
+            experiencias[test_res["experience_id"]]["destination"], "medio"
+        )
+        pool_test_neg = [
+            eid for eid in items_por_tercil[tercil_test]
+            if eid not in reservados_ids_completo
+        ]
+        if not pool_test_neg:
+            pool_test_neg = [eid for eid in items_con_reservas if eid not in reservados_ids_completo]
         cand_negativos = random.sample(
-            [eid for eid in items_con_reservas if eid not in reservados_ids_completo],
-            min(N_NEGATIVOS_POR_CLIENTE, len(todos_los_ids)),
+            pool_test_neg, min(N_NEGATIVOS_POR_CLIENTE, len(pool_test_neg)),
         )
         candidatos = [test_res["experience_id"]] + cand_negativos
         for eid in candidatos:
@@ -245,6 +294,7 @@ def construir_dataset(db_path: str):
 
     return (
         np.array(X, dtype=np.float32), np.array(y, dtype=np.int32), groups,
+        np.array(X_val, dtype=np.float32), np.array(y_val, dtype=np.int32), groups_val,
         np.array(X_test, dtype=np.float32), test_customers, test_candidatos,
     )
 
@@ -274,12 +324,14 @@ def main():
 
     t0 = time.time()
     print("1) Construyendo dataset de entrenamiento (features + negativos)...")
-    X, y, groups, X_test, test_customers, test_candidatos = construir_dataset(db_path)
+    X, y, groups, X_val, y_val, groups_val, X_test, test_customers, test_candidatos = construir_dataset(db_path)
     print(f"   -> {X.shape[0]} filas de entrenamiento, {len(groups)} grupos (clientes)")
-    print(f"   -> {len(test_customers)} clientes en evaluacion")
+    print(f"   -> {X_val.shape[0]} filas de validacion, {len(groups_val)} grupos")
+    print(f"   -> {len(test_customers)} clientes en evaluacion final (test)")
 
-    print("2) Entrenando LightGBM Ranker (lambdarank)...")
+    print("2) Entrenando LightGBM Ranker (lambdarank) con early stopping...")
     train_data = lgb.Dataset(X, label=y, group=groups)
+    val_data = lgb.Dataset(X_val, label=y_val, group=groups_val, reference=train_data)
     params = {
         "objective": "lambdarank",
         "metric": "ndcg",
@@ -290,8 +342,18 @@ def main():
         "verbose": -1,
         "seed": RANDOM_SEED,
     }
-    model = lgb.train(params, train_data, num_boost_round=200)
-    print(f"   -> entrenado en {time.time()-t0:.1f}s")
+    model = lgb.train(
+        params, train_data,
+        num_boost_round=500,
+        valid_sets=[val_data],
+        valid_names=["validacion"],
+        callbacks=[
+            lgb.early_stopping(stopping_rounds=20, verbose=True),
+            lgb.log_evaluation(period=50),
+        ],
+    )
+    print(f"   -> entrenado en {time.time()-t0:.1f}s "
+          f"(mejor iteracion: {model.best_iteration})")
 
     print("3) Evaluando sobre reservas reales dejadas fuera (leave-one-out)...")
     precision, ndcg = evaluar(model, X_test, test_candidatos, k=10)

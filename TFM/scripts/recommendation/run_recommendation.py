@@ -109,7 +109,7 @@ def cargar_accesibilidad_por_destino(db_path: str) -> dict:
     conn = sqlite3.connect(db_path)
     try:
         rows = conn.execute(
-            "SELECT destino_nombre, pasajeros_anuales_estimados FROM conectividad_destinos"
+            "SELECT destino_nombre, pasajeros_anuales FROM conectividad_destinos"
         ).fetchall()
     except Exception:
         rows = []
@@ -354,7 +354,13 @@ def recomendar(
             # Mismo orden de features que en el entrenamiento (ver
             # train_lightgbm_ranker.py): precio, duracion, rating,
             # review_count, ocupacion, sensibilidad, accesibilidad,
-            # capacidad, diversificacion, temporada_baja, impacto_local.
+            # capacidad, diversificacion, temporada_baja, impacto_local,
+            # match_categoria_cliente, diferencia_precio_habitual_cliente.
+            # Las 2 ultimas son de PERSONALIZACION (requieren un cliente
+            # identificado con historial); en una consulta de texto libre
+            # anonima como esta no hay cliente conocido, se usan valores
+            # neutros (0.0 = sin coincidencia de categoria, 0.5 = sin
+            # diferencia de precio respecto a un habito desconocido).
             features = [[
                 precios.get(id_paq, 0.5),
                 duraciones.get(id_paq, 0.5),
