@@ -14,6 +14,7 @@ Uso:
 import argparse
 import sqlite3
 import sys
+from collections import defaultdict
 from pathlib import Path
 
 project_root = Path(__file__).resolve().parent.parent.parent
@@ -52,6 +53,134 @@ def cargar_ocupacion_por_destino(db_path: str) -> dict:
         vmin, vmax = min(valores.values()), max(valores.values())
         if vmax > vmin:
             valores = {d: (v - vmin) / (vmax - vmin) for d, v in valores.items()}
+        else:
+            valores = {d: 0.5 for d in valores}
+    return valores
+
+
+def cargar_caracteristicas_destino(db_path: str) -> dict:
+    """Sensibilidad ambiental por destino (destinos_caracteristicas).
+
+    NOTA: estos valores fueron asignados manualmente por el equipo en
+    scripts/extract_destination_features.py, no provienen de un índice
+    ambiental oficial. Documentar como limitación en la memoria.
+    """
+    conn = sqlite3.connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT destino_nombre, sensibilidad_ambiental FROM destinos_caracteristicas"
+        ).fetchall()
+    except Exception:
+        rows = []
+    finally:
+        conn.close()
+    return {d: v for d, v in rows if v is not None}
+
+
+def cargar_accesibilidad_por_destino(db_path: str) -> dict:
+    """Accesibilidad real normalizada [0,1] por destino, a partir de
+    pasajeros anuales estimados (conectividad_destinos, fuente AENA/CSV
+    de conectividad). A más pasajeros, mayor accesibilidad."""
+    conn = sqlite3.connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT destino_nombre, pasajeros_anuales_estimados FROM conectividad_destinos"
+        ).fetchall()
+    except Exception:
+        rows = []
+    finally:
+        conn.close()
+    valores = {d: v for d, v in rows if v}
+    if valores:
+        vmin, vmax = min(valores.values()), max(valores.values())
+        if vmax > vmin:
+            valores = {d: (v - vmin) / (vmax - vmin) for d, v in valores.items()}
+        else:
+            valores = {d: 0.5 for d in valores}
+    return valores
+
+
+def cargar_capacidad_por_destino(db_path: str) -> dict:
+    """Capacidad (ingenieria de variable): numero de experiencias distintas
+    ofertadas por destino en el catalogo, normalizado [0,1]. Proxy de
+    infraestructura/oferta turistica instalada -- a mas experiencias
+    catalogadas, mayor capacidad asumida del destino."""
+    conn = sqlite3.connect(db_path)
+    rows = conn.execute(
+        "SELECT destination, COUNT(*) FROM experiencias GROUP BY destination"
+    ).fetchall()
+    conn.close()
+    valores = {d: v for d, v in rows}
+    if valores:
+        vmin, vmax = min(valores.values()), max(valores.values())
+        if vmax > vmin:
+            valores = {d: (v - vmin) / (vmax - vmin) for d, v in valores.items()}
+        else:
+            valores = {d: 0.5 for d in valores}
+    return valores
+
+def cargar_diversificacion_por_destino(db_path: str) -> dict:
+    """Diversificacion (ingenieria de variable): numero de categorias
+    distintas de experiencias por destino / maximo observado, normalizado
+    [0,1]. Proxy de variedad de oferta (no solo playa, tambien cultura,
+    aventura, etc.)."""
+    conn = sqlite3.connect(db_path)
+    rows = conn.execute(
+        "SELECT destination, COUNT(DISTINCT category) FROM experiencias GROUP BY destination"
+    ).fetchall()
+    conn.close()
+    valores = {d: v for d, v in rows}
+    if valores:
+        vmin, vmax = min(valores.values()), max(valores.values())
+        if vmax > vmin:
+            valores = {d: (v - vmin) / (vmax - vmin) for d, v in valores.items()}
+        else:
+            valores = {d: 0.5 for d in valores}
+    return valores
+
+
+
+def cargar_temporada_baja_por_destino(db_path: str) -> dict:
+    """Temporada baja (ingenieria de variable): mide que tan repartidas
+    estan las reservas de un destino a lo largo del año (coeficiente de
+    variacion mensual, invertido). Un destino con reservas muy concentradas
+    en pocos meses puntua bajo (alta estacionalidad); uno con demanda
+    repartida todo el año puntua alto. Calculado desde customer_bookings
+    (travel_date) cruzado con experiencias.destination."""
+    import numpy as np
+    conn = sqlite3.connect(db_path)
+    try:
+        rows = conn.execute("""
+            SELECT e.destination, strftime('%m', b.travel_date) as mes
+            FROM customer_bookings b
+            JOIN experiencias e ON b.experience_id = e.experience_id
+            WHERE b.travel_date IS NOT NULL
+        """).fetchall()
+    except Exception:
+        rows = []
+    finally:
+        conn.close()
+
+    por_destino_mes = defaultdict(lambda: defaultdict(int))
+    for destino, mes in rows:
+        if mes:
+            por_destino_mes[destino][mes] += 1
+
+    valores = {}
+    for destino, meses in por_destino_mes.items():
+        conteos = list(meses.values())
+        if len(conteos) < 2 or np.mean(conteos) == 0:
+            continue
+        cv = np.std(conteos) / np.mean(conteos)  # coeficiente de variacion
+        valores[destino] = cv
+
+    if valores:
+        # Invertir: menor CV (mas repartido) -> mayor score temporada_baja
+        vmin, vmax = min(valores.values()), max(valores.values())
+        if vmax > vmin:
+            valores = {d: 1 - (v - vmin) / (vmax - vmin) for d, v in valores.items()}
+        else:
+            valores = {d: 0.5 for d in valores}
     return valores
 
 
@@ -74,6 +203,11 @@ def recomendar(
     print("3) Calculando TDRS por candidato (redistribución/sostenibilidad)...")
     metadata = cargar_metadata_experiencias(db_path)
     ocupacion_por_destino = cargar_ocupacion_por_destino(db_path)
+    sensibilidad_por_destino = cargar_caracteristicas_destino(db_path)
+    accesibilidad_por_destino = cargar_accesibilidad_por_destino(db_path)
+    capacidad_por_destino = cargar_capacidad_por_destino(db_path)
+    diversificacion_por_destino = cargar_diversificacion_por_destino(db_path)
+    temporada_baja_por_destino = cargar_temporada_baja_por_destino(db_path)
     tdrs_calc = TDRSCalculator()
 
     candidatos = []
@@ -85,16 +219,30 @@ def recomendar(
         # recorta a [0,1] porque TDRSCalculator exige ese rango.
         afinidad_norm = max(0.0, min(1.0, (c["score_similitud"] + 1) / 2))
         ocupacion_real = ocupacion_por_destino.get(destino, 0.5)
+        sensibilidad_real = sensibilidad_por_destino.get(destino, 0.3)
+        accesibilidad_real = accesibilidad_por_destino.get(destino, 0.5)
+        capacidad_real = capacidad_por_destino.get(destino, 0.5)
+        diversificacion_real = diversificacion_por_destino.get(destino, 0.5)
+        temporada_baja_real = temporada_baja_por_destino.get(destino, 0.5)
 
         tdrs = tdrs_calc.calculate(
             afinidad=afinidad_norm,
             ocupacion=ocupacion_real,
-            # Resto de componentes (capacidad, accesibilidad, impacto_local,
-            # temporada_baja, diversificacion, sensibilidad_ambiental):
-            # sin fuente real conectada aun, quedan en el valor neutro por
-            # defecto de TDRSCalculator.calculate(). Ver seccion "Pendientes"
-            # de la memoria tecnica -- prioridad para la proxima etapa.
+            sensibilidad_ambiental=sensibilidad_real,
+            accesibilidad=accesibilidad_real,
+            capacidad=capacidad_real,
+            diversificacion=diversificacion_real,
+            temporada_baja=temporada_baja_real,
+            # impacto_local: unico componente que sigue en valor neutro
+            # (0.5) -- sin fuente ni proxy razonable disponible en la
+            # base actual. Ver seccion "Pendientes" de la memoria tecnica.
         )
+
+        if len(candidatos) < 3:  # debug temporal, primeros 3 candidatos
+            print(f"    DEBUG {destino}: afin={afinidad_norm:.3f} ocup={ocupacion_real:.3f} "
+                  f"sens={sensibilidad_real:.3f} acces={accesibilidad_real:.3f} "
+                  f"capac={capacidad_real:.3f} divers={diversificacion_real:.3f} "
+                  f"temp_baja={temporada_baja_real:.3f} -> tdrs={tdrs:.4f}")
 
         candidatos.append({
             "id_paquete": id_paq,
@@ -102,7 +250,7 @@ def recomendar(
             "afinidad": afinidad_norm,
             "tdrs": tdrs,
             "sostenibilidad": max(0.0, tdrs),
-            "capacidad": 0.5,
+            "capacidad": capacidad_real,
             "ocupacion": ocupacion_real,
         })
 
