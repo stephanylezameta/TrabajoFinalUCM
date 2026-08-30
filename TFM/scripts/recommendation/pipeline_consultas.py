@@ -12,7 +12,9 @@ import sys
 
 # Asegurar la ruta raíz del proyecto de forma compatible con Notebooks y Scripts
 try:
-    project_root = Path(__file__).resolve().parent.parent
+    # El archivo está en scripts/recommendation/, dos niveles de profundidad
+    # bajo TFM/ -> hacen falta 3 .parent, no 2, para llegar a la raíz.
+    project_root = Path(__file__).resolve().parent.parent.parent
 except NameError:
     project_root = Path.cwd()
     if project_root.name == "scripts":
@@ -33,7 +35,11 @@ class QueryPipeline:
     def __init__(self):
         """Inicializa los modelos de embedding y fusión necesarios para la consulta."""
         print(" Inicializando componentes del pipeline de consultas...")
-        self.embedder = TextEmbedder()
+        # Debe coincidir con el modelo usado para generar el catálogo
+        # (ver DECISION-021: e5-large, no MiniLM). Un desajuste aquí
+        # produce vectores de dimensión distinta a la del catálogo y
+        # rompe la búsqueda por similitud.
+        self.embedder = TextEmbedder(model_name="intfloat/multilingual-e5-large")
         self.fuser = SemanticFuser(package_weight=0.6, review_weight=0.4)
         self.builder = HybridVectorBuilder()
         
@@ -50,7 +56,7 @@ class QueryPipeline:
             np.ndarray: Vector híbrido de la consulta listo para el recomendador.
         """
         # 1. Generar el embedding del texto de la consulta del usuario
-        text_emb = self.embedder.embed_single(text_query)
+        text_emb = self.embedder.embed_text(text_query)
         
         # 2. Fusionar el texto con un contexto base (reutilizamos el embedding de texto 
         # o un contexto neutro para mantener la simetría con los vectores de los paquetes)
@@ -58,14 +64,16 @@ class QueryPipeline:
         
         # 3. Definir atributos estructurados por defecto (valores neutros o medios)
         if target_attributes is None:
+            # Valores neutros/medios por defecto, todos en rango [0,1]
+            # (antes nivel_ocupacion=1.5, fuera de rango, rompía el TDRS).
             target_attributes = {
-                "precio_base_eur_norm": 1,
+                "precio_base_eur_norm": 0.5,
                 "duracion_dias_norm": 0.5,
-                "nivel_ocupacion": 1.5,
-                "accesibilidad_destino_norm": 0.8,
-                "estrellas_hotel_norm": 0.7,
-                "num_valoraciones_hotel_norm": 0.6,
-                "indicador_sostenibilidad_tui": 1,
+                "nivel_ocupacion": 0.5,
+                "accesibilidad_destino_norm": 0.5,
+                "estrellas_hotel_norm": 0.5,
+                "num_valoraciones_hotel_norm": 0.5,
+                "indicador_sostenibilidad_tui": 0.5,
             }
             
         # 4. Construir el vector híbrido final combinando semántica y atributos
