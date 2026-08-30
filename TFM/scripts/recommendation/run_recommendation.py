@@ -12,10 +12,13 @@ Uso:
     python scripts/recommendation/run_recommendation.py --db data/tui_recomendador.db --top-k 10
 """
 import argparse
+import pickle
 import sqlite3
 import sys
 from collections import defaultdict
 from pathlib import Path
+
+import numpy as np
 
 project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(project_root))
@@ -27,13 +30,35 @@ from src.recommender.reranking_engine import ReRankingEngine
 
 
 def cargar_metadata_experiencias(db_path: str) -> dict:
-    """id_paquete (experience_id) -> {destino_nombre, category}."""
+    """id_paquete (experience_id) -> atributos completos, incluyendo los
+    numericos que necesita el modelo LightGBM (precio, duracion, rating,
+    review_count) ademas del destino/categoria."""
     conn = sqlite3.connect(db_path)
-    rows = conn.execute(
-        "SELECT experience_id, destination, category FROM experiencias"
-    ).fetchall()
+    rows = conn.execute("""
+        SELECT experience_id, destination, category, price_eur,
+               duration_hrs, rating, review_count
+        FROM experiencias
+    """).fetchall()
     conn.close()
-    return {r[0]: {"destino_nombre": r[1], "category": r[2]} for r in rows}
+    return {
+        r[0]: {
+            "destino_nombre": r[1], "category": r[2], "price_eur": r[3],
+            "duration_hrs": r[4], "rating": r[5], "review_count": r[6],
+        }
+        for r in rows
+    }
+
+
+def normalizar_dict(d: dict) -> dict:
+    """Normaliza un dict numerico a [0,1] (mismo criterio usado al
+    entrenar LightGBM, ver train_lightgbm_ranker.py)."""
+    valores = [v for v in d.values() if v is not None]
+    if not valores:
+        return {k: 0.5 for k in d}
+    vmin, vmax = min(valores), max(valores)
+    if vmax == vmin:
+        return {k: 0.5 for k in d}
+    return {k: (v - vmin) / (vmax - vmin) if v is not None else 0.5 for k, v in d.items()}
 
 
 def cargar_ocupacion_por_destino(db_path: str) -> dict:
@@ -240,7 +265,6 @@ def cargar_temporada_baja_por_destino(db_path: str) -> dict:
         valores[destino] = cv
 
     if valores:
-        # Invertir: menor CV (mas repartido) -> mayor score temporada_baja
         vmin, vmax = min(valores.values()), max(valores.values())
         if vmax > vmin:
             valores = {d: 1 - (v - vmin) / (vmax - vmin) for d, v in valores.items()}
@@ -249,19 +273,43 @@ def cargar_temporada_baja_por_destino(db_path: str) -> dict:
     return valores
 
 
+def cargar_modelo_lightgbm():
+    """Carga el modelo LightGBM entrenado (train_lightgbm_ranker.py).
+    Devuelve (model, feature_names) o (None, None) si no existe todavia."""
+    model_path = Path("data/lightgbm/lightgbm_ranker.pkl")
+    names_path = Path("data/lightgbm/feature_names.pkl")
+    if not model_path.exists() or not names_path.exists():
+        return None, None
+    with open(model_path, "rb") as f:
+        model = pickle.load(f)
+    with open(names_path, "rb") as f:
+        feature_names = pickle.load(f)
+    return model, feature_names
+
+
 def recomendar(
     texto_consulta: str,
     db_path: str = "data/tui_recomendador.db",
     top_k_candidatos: int = 30,
     k_final: int = 10,
 ) -> dict[str, list[dict]]:
-    """Ejecuta el flujo completo y devuelve los 3 rankings (tradicional/moderado/intensivo)."""
+    """Ejecuta el flujo completo y devuelve los 3 rankings (tradicional/moderado/intensivo).
+
+    Afinidad: se calcula en dos etapas.
+      1) Recuperacion semantica (embeddings + coseno) sobre el texto de la
+         consulta -> acota candidatos relevantes al contenido pedido.
+      2) Re-puntuacion con LightGBM Ranker (entrenado sobre 149941
+         reservas reales + 11 features, ver DECISION en train_lightgbm_ranker.py)
+         si el modelo esta disponible -- reemplaza el score de coseno
+         crudo por una afinidad aprendida de comportamiento real. Si el
+         modelo no esta entrenado todavia, cae de vuelta al coseno solo.
+    """
 
     print(f"\n1) Vectorizando consulta: '{texto_consulta}'")
     query_pipeline = QueryPipeline()
     query_vector = query_pipeline.process_query(texto_consulta)
 
-    print("2) Buscando candidatos por afinidad (similitud coseno)...")
+    print("2) Buscando candidatos por afinidad semantica (similitud coseno)...")
     recommender = TuiRecommender()
     candidatos_afinidad = recommender.search(query_vector, top_k=top_k_candidatos)
 
@@ -276,14 +324,24 @@ def recomendar(
     impacto_local_por_destino = cargar_impacto_local_por_destino(db_path)
     tdrs_calc = TDRSCalculator()
 
+    modelo_lgbm, feature_names_lgbm = cargar_modelo_lightgbm()
+    if modelo_lgbm is not None:
+        print("   -> Modelo LightGBM Ranker encontrado, re-puntuando afinidad "
+              "con datos de comportamiento real...")
+        precios = normalizar_dict({eid: m["price_eur"] for eid, m in metadata.items()})
+        duraciones = normalizar_dict({eid: m["duration_hrs"] for eid, m in metadata.items()})
+        ratings = normalizar_dict({eid: m["rating"] for eid, m in metadata.items()})
+        reviews = normalizar_dict({eid: m["review_count"] for eid, m in metadata.items()})
+    else:
+        print("   -> Modelo LightGBM no encontrado (correr train_lightgbm_ranker.py "
+              "primero); usando afinidad por coseno solamente.")
+
     candidatos = []
     for c in candidatos_afinidad:
         id_paq = c["id_paquete"]
         meta = metadata.get(id_paq, {"destino_nombre": "desconocido", "category": ""})
         destino = meta["destino_nombre"]
-        # Afinidad viene como similitud coseno (puede ser negativa); se
-        # recorta a [0,1] porque TDRSCalculator exige ese rango.
-        afinidad_norm = max(0.0, min(1.0, (c["score_similitud"] + 1) / 2))
+
         ocupacion_real = ocupacion_por_destino.get(destino, 0.5)
         sensibilidad_real = sensibilidad_por_destino.get(destino, 0.3)
         accesibilidad_real = accesibilidad_por_destino.get(destino, 0.5)
@@ -291,6 +349,32 @@ def recomendar(
         diversificacion_real = diversificacion_por_destino.get(destino, 0.5)
         temporada_baja_real = temporada_baja_por_destino.get(destino, 0.5)
         impacto_local_real = impacto_local_por_destino.get(destino, 0.5)
+
+        if modelo_lgbm is not None:
+            # Mismo orden de features que en el entrenamiento (ver
+            # train_lightgbm_ranker.py): precio, duracion, rating,
+            # review_count, ocupacion, sensibilidad, accesibilidad,
+            # capacidad, diversificacion, temporada_baja, impacto_local.
+            features = [[
+                precios.get(id_paq, 0.5),
+                duraciones.get(id_paq, 0.5),
+                ratings.get(id_paq, 0.5),
+                reviews.get(id_paq, 0.5),
+                ocupacion_real,
+                sensibilidad_real,
+                accesibilidad_real,
+                capacidad_real,
+                diversificacion_real,
+                temporada_baja_real,
+                impacto_local_real,
+            ]]
+            score_lgbm = float(modelo_lgbm.predict(features)[0])
+            # El score de LightGBM no esta acotado a [0,1]; se re-escala
+            # con una sigmoide para poder usarlo como 'afinidad' dentro
+            # del TDRS (que exige rango [0,1]).
+            afinidad_norm = 1 / (1 + np.exp(-score_lgbm))
+        else:
+            afinidad_norm = max(0.0, min(1.0, (c["score_similitud"] + 1) / 2))
 
         tdrs = tdrs_calc.calculate(
             afinidad=afinidad_norm,
