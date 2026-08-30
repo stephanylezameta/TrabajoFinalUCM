@@ -84,7 +84,7 @@ class TuiRecommender:
         # Construir la estructura de resultados ordenada
         results = [
             {
-                "id_paquete": int(self.paquete_ids[i]),
+                "id_paquete": str(self.paquete_ids[i]),
                 "score_similitud": float(similarities[i])
             }
             for i in top_indices
@@ -98,8 +98,11 @@ if __name__ == "__main__":
         recommender = TuiRecommender()
         
         print("\n Ejecutando prueba de búsqueda con vector sintético...")
-        # Simulamos una consulta con 391 dimensiones aleatorias
-        dummy_query = np.random.rand(391).astype(np.float32)
+        # Dimensión tomada dinámicamente del catálogo cargado (antes
+        # hardcodeada en 391 = MiniLM 384+7; ahora depende del modelo
+        # activo, ej. e5-large = 1024+7 = 1031, ver DECISION-021).
+        dim = recommender.hybrid_matrix.shape[1]
+        dummy_query = np.random.rand(dim).astype(np.float32)
         
         resultados = recommender.search(dummy_query, top_k=3)
         
