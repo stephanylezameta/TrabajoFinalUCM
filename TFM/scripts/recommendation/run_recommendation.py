@@ -101,16 +101,26 @@ def cargar_accesibilidad_por_destino(db_path: str) -> dict:
 
 
 def cargar_capacidad_por_destino(db_path: str) -> dict:
-    """Capacidad (ingenieria de variable): numero de experiencias distintas
-    ofertadas por destino en el catalogo, normalizado [0,1]. Proxy de
-    infraestructura/oferta turistica instalada -- a mas experiencias
-    catalogadas, mayor capacidad asumida del destino."""
+    """Capacidad: poblacion_estimada del destino (destinos_caracteristicas),
+    normalizado [0,1]. Reemplaza el conteo de experiencias del catalogo
+    (constante en 150 para todos los destinos por diseno del dataset
+    sintetico -- sin variacion, no discriminaba). Poblacion si tiene
+    variacion real entre destinos (150K a 3.28M) y es un proxy razonable
+    de infraestructura/capacidad de absorcion turistica.
+
+    NOTA: dato semi-curado (extraido por el equipo, no de censo oficial
+    verificado por destino), igual que sensibilidad_ambiental. Documentar
+    como limitacion en la memoria."""
     conn = sqlite3.connect(db_path)
-    rows = conn.execute(
-        "SELECT destination, COUNT(*) FROM experiencias GROUP BY destination"
-    ).fetchall()
-    conn.close()
-    valores = {d: v for d, v in rows}
+    try:
+        rows = conn.execute(
+            "SELECT destino_nombre, poblacion_estimada FROM destinos_caracteristicas"
+        ).fetchall()
+    except Exception:
+        rows = []
+    finally:
+        conn.close()
+    valores = {d: v for d, v in rows if v}
     if valores:
         vmin, vmax = min(valores.values()), max(valores.values())
         if vmax > vmin:
@@ -118,18 +128,47 @@ def cargar_capacidad_por_destino(db_path: str) -> dict:
         else:
             valores = {d: 0.5 for d in valores}
     return valores
+
 
 def cargar_diversificacion_por_destino(db_path: str) -> dict:
-    """Diversificacion (ingenieria de variable): numero de categorias
-    distintas de experiencias por destino / maximo observado, normalizado
-    [0,1]. Proxy de variedad de oferta (no solo playa, tambien cultura,
-    aventura, etc.)."""
+    """Diversificacion: entropia de Shannon de los paises de origen de los
+    clientes que reservaron cada destino (customer_bookings.country),
+    normalizada [0,1]. Reemplaza el conteo de categorias del catalogo
+    (constante en 10 para todos los destinos, sin variacion). Esta version
+    mide diversidad real de la DEMANDA (cuantos paises distintos visitan
+    el destino), con variacion genuina segun el dataset (149.941 reservas
+    reales, no sinteticas-uniformes)."""
+    import math
+    from collections import Counter
+
     conn = sqlite3.connect(db_path)
-    rows = conn.execute(
-        "SELECT destination, COUNT(DISTINCT category) FROM experiencias GROUP BY destination"
-    ).fetchall()
-    conn.close()
-    valores = {d: v for d, v in rows}
+    try:
+        rows = conn.execute("""
+            SELECT e.destination, b.country
+            FROM customer_bookings b
+            JOIN experiencias e ON b.experience_id = e.experience_id
+            WHERE b.country IS NOT NULL
+        """).fetchall()
+    except Exception:
+        rows = []
+    finally:
+        conn.close()
+
+    por_destino_paises = defaultdict(list)
+    for destino, pais in rows:
+        por_destino_paises[destino].append(pais)
+
+    valores = {}
+    for destino, paises in por_destino_paises.items():
+        total = len(paises)
+        if total < 2:
+            continue
+        conteos = Counter(paises)
+        entropia = -sum(
+            (c / total) * math.log2(c / total) for c in conteos.values()
+        )
+        valores[destino] = entropia
+
     if valores:
         vmin, vmax = min(valores.values()), max(valores.values())
         if vmax > vmin:
@@ -138,6 +177,32 @@ def cargar_diversificacion_por_destino(db_path: str) -> dict:
             valores = {d: 0.5 for d in valores}
     return valores
 
+
+def cargar_impacto_local_por_destino(db_path: str) -> dict:
+    """Impacto local: ingresos totales generados por destino
+    (SUM(price_paid_eur) en customer_bookings), normalizado [0,1]. Proxy
+    economico real -- antes este componente del TDRS quedaba en valor
+    neutro fijo (0.5) por falta de fuente conectada."""
+    conn = sqlite3.connect(db_path)
+    try:
+        rows = conn.execute("""
+            SELECT e.destination, SUM(b.price_paid_eur)
+            FROM customer_bookings b
+            JOIN experiencias e ON b.experience_id = e.experience_id
+            GROUP BY e.destination
+        """).fetchall()
+    except Exception:
+        rows = []
+    finally:
+        conn.close()
+    valores = {d: v for d, v in rows if v}
+    if valores:
+        vmin, vmax = min(valores.values()), max(valores.values())
+        if vmax > vmin:
+            valores = {d: (v - vmin) / (vmax - vmin) for d, v in valores.items()}
+        else:
+            valores = {d: 0.5 for d in valores}
+    return valores
 
 
 def cargar_temporada_baja_por_destino(db_path: str) -> dict:
@@ -208,6 +273,7 @@ def recomendar(
     capacidad_por_destino = cargar_capacidad_por_destino(db_path)
     diversificacion_por_destino = cargar_diversificacion_por_destino(db_path)
     temporada_baja_por_destino = cargar_temporada_baja_por_destino(db_path)
+    impacto_local_por_destino = cargar_impacto_local_por_destino(db_path)
     tdrs_calc = TDRSCalculator()
 
     candidatos = []
@@ -224,6 +290,7 @@ def recomendar(
         capacidad_real = capacidad_por_destino.get(destino, 0.5)
         diversificacion_real = diversificacion_por_destino.get(destino, 0.5)
         temporada_baja_real = temporada_baja_por_destino.get(destino, 0.5)
+        impacto_local_real = impacto_local_por_destino.get(destino, 0.5)
 
         tdrs = tdrs_calc.calculate(
             afinidad=afinidad_norm,
@@ -233,16 +300,8 @@ def recomendar(
             capacidad=capacidad_real,
             diversificacion=diversificacion_real,
             temporada_baja=temporada_baja_real,
-            # impacto_local: unico componente que sigue en valor neutro
-            # (0.5) -- sin fuente ni proxy razonable disponible en la
-            # base actual. Ver seccion "Pendientes" de la memoria tecnica.
+            impacto_local=impacto_local_real,
         )
-
-        if len(candidatos) < 3:  # debug temporal, primeros 3 candidatos
-            print(f"    DEBUG {destino}: afin={afinidad_norm:.3f} ocup={ocupacion_real:.3f} "
-                  f"sens={sensibilidad_real:.3f} acces={accesibilidad_real:.3f} "
-                  f"capac={capacidad_real:.3f} divers={diversificacion_real:.3f} "
-                  f"temp_baja={temporada_baja_real:.3f} -> tdrs={tdrs:.4f}")
 
         candidatos.append({
             "id_paquete": id_paq,
