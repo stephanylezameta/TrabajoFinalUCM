@@ -273,6 +273,87 @@ def cargar_temporada_baja_por_destino(db_path: str) -> dict:
     return valores
 
 
+def cargar_sentimiento_por_destino(db_path: str) -> dict:
+    """Sentimiento real agregado por destino (media del score de
+    resenas_sentimiento sobre las 37.956 reseñas reales analizadas con
+    XLM-RoBERTa). Hasta ahora solo se usaba mezclado dentro de un
+    atributo del vector hibrido (estrellas_hotel_norm, 50/50 con rating
+    sintetico); se expone aqui como señal propia e independiente para el
+    calculo de afinidad en tiempo real, en vez de quedar diluida entre
+    otras 6 variables del vector."""
+    conn = sqlite3.connect(db_path)
+    try:
+        rows = conn.execute("""
+            SELECT r.destino_nombre, AVG(s.sentiment_score)
+            FROM resenas r
+            JOIN resenas_sentimiento s ON r.id_resena = s.id_resena
+            GROUP BY r.destino_nombre
+        """).fetchall()
+    except Exception:
+        rows = []
+    finally:
+        conn.close()
+    return {d: v for d, v in rows if v is not None}
+
+
+def crear_tabla_log(db_path: str) -> None:
+    """Crea la tabla donde se registra cada recomendacion servida, para
+    poder reentrenar en el futuro un modelo de mezcla (coseno/LightGBM/
+    sentimiento) aprendido en vez de con pesos fijos -- hoy no existen
+    datos de la forma (consulta, item, ¿fue relevante?) porque
+    customer_bookings no tiene ninguna consulta de texto asociada. Cada
+    fila de este log es un candidato futuro para ese entrenamiento, una
+    vez que se pueda cruzar con reservas/feedback reales de los
+    usuarios que usaron el buscador."""
+    conn = sqlite3.connect(db_path)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS recomendaciones_log (
+            log_id TEXT PRIMARY KEY,
+            fecha TEXT NOT NULL,
+            texto_consulta TEXT NOT NULL,
+            escenario TEXT NOT NULL,
+            posicion INTEGER NOT NULL,
+            id_paquete TEXT NOT NULL,
+            destino_nombre TEXT NOT NULL,
+            afinidad_coseno REAL,
+            afinidad_lgbm REAL,
+            afinidad_sentimiento REAL,
+            afinidad_final REAL,
+            tdrs REAL,
+            score_final REAL
+        )
+    """)
+    conn.commit()
+    conn.close()
+
+
+def guardar_log_recomendaciones(db_path: str, texto_consulta: str, rankings: dict, detalle_afinidad: dict) -> None:
+    """Guarda cada resultado servido en recomendaciones_log."""
+    import uuid
+    import time as time_module
+
+    conn = sqlite3.connect(db_path)
+    fecha = time_module.strftime("%Y-%m-%d %H:%M:%S")
+    for escenario, resultados in rankings.items():
+        for posicion, r in enumerate(resultados, 1):
+            detalle = detalle_afinidad.get(r["id_paquete"], {})
+            conn.execute(
+                """INSERT INTO recomendaciones_log
+                   (log_id, fecha, texto_consulta, escenario, posicion, id_paquete,
+                    destino_nombre, afinidad_coseno, afinidad_lgbm, afinidad_sentimiento,
+                    afinidad_final, tdrs, score_final)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (
+                    str(uuid.uuid4()), fecha, texto_consulta, escenario, posicion,
+                    r["id_paquete"], r["destino_nombre"],
+                    detalle.get("coseno"), detalle.get("lgbm"), detalle.get("sentimiento"),
+                    r["afinidad"], r["tdrs"], r["score_final"],
+                ),
+            )
+    conn.commit()
+    conn.close()
+
+
 def cargar_modelo_lightgbm():
     """Carga el modelo LightGBM entrenado (train_lightgbm_ranker.py).
     Devuelve (model, feature_names) o (None, None) si no existe todavia."""
@@ -295,14 +376,9 @@ def recomendar(
 ) -> dict[str, list[dict]]:
     """Ejecuta el flujo completo y devuelve los 3 rankings (tradicional/moderado/intensivo).
 
-    Afinidad: se calcula en dos etapas.
-      1) Recuperacion semantica (embeddings + coseno) sobre el texto de la
-         consulta -> acota candidatos relevantes al contenido pedido.
-      2) Re-puntuacion con LightGBM Ranker (entrenado sobre 149941
-         reservas reales + 11 features, ver DECISION en train_lightgbm_ranker.py)
-         si el modelo esta disponible -- reemplaza el score de coseno
-         crudo por una afinidad aprendida de comportamiento real. Si el
-         modelo no esta entrenado todavia, cae de vuelta al coseno solo.
+    Afinidad: se calcula mezclando 3 señales (ver comentarios en el bucle
+    principal): coseno (sensible a la consulta), LightGBM (comportamiento
+    real, sin contexto de consulta) y sentimiento real (XLM-RoBERTa).
     """
 
     print(f"\n1) Vectorizando consulta: '{texto_consulta}'")
@@ -322,6 +398,7 @@ def recomendar(
     diversificacion_por_destino = cargar_diversificacion_por_destino(db_path)
     temporada_baja_por_destino = cargar_temporada_baja_por_destino(db_path)
     impacto_local_por_destino = cargar_impacto_local_por_destino(db_path)
+    sentimiento_por_destino = cargar_sentimiento_por_destino(db_path)
     tdrs_calc = TDRSCalculator()
 
     modelo_lgbm, feature_names_lgbm = cargar_modelo_lightgbm()
@@ -337,6 +414,7 @@ def recomendar(
               "primero); usando afinidad por coseno solamente.")
 
     candidatos = []
+    detalle_afinidad = {}
     for c in candidatos_afinidad:
         id_paq = c["id_paquete"]
         meta = metadata.get(id_paq, {"destino_nombre": "desconocido", "category": ""})
@@ -349,6 +427,9 @@ def recomendar(
         diversificacion_real = diversificacion_por_destino.get(destino, 0.5)
         temporada_baja_real = temporada_baja_por_destino.get(destino, 0.5)
         impacto_local_real = impacto_local_por_destino.get(destino, 0.5)
+        sentimiento_real = sentimiento_por_destino.get(destino, 0.5)
+
+        afinidad_coseno = max(0.0, min(1.0, (c["score_similitud"] + 1) / 2))
 
         if modelo_lgbm is not None:
             # 11 features, mismo orden que train_lightgbm_ranker.py: precio,
@@ -370,22 +451,29 @@ def recomendar(
             ]]
             score_lgbm = float(modelo_lgbm.predict(features)[0])
             afinidad_lgbm = 1 / (1 + np.exp(-score_lgbm))
-            afinidad_coseno = max(0.0, min(1.0, (c["score_similitud"] + 1) / 2))
-            # Mezcla, no reemplazo (fix 28/08): LightGBM se entreno con
-            # reservas historicas SIN ningun texto de consulta asociado,
-            # asi que su score no varia segun lo que pida el usuario --
-            # es una senal de calidad/popularidad general del destino, no
-            # de relevancia para esta busqueda especifica. Usarlo solo
-            # (como se hacia antes) descartaba la unica senal que si
-            # dependia de la consulta (coseno), haciendo que resultados
-            # muy distintos en texto ("playa" vs "cultura" vs "aventura")
-            # terminaran devolviendo casi los mismos destinos. Se mezclan
-            # ambas, dandole mas peso al coseno por ser la senal
-            # sensible a la consulta real del usuario.
-            W_COSENO, W_LGBM = 0.6, 0.4
-            afinidad_norm = W_COSENO * afinidad_coseno + W_LGBM * afinidad_lgbm
+            # Mezcla de 3 señales, no reemplazo (fix 28/08 + ampliado):
+            #  - coseno: unica sensible al texto de la consulta real del
+            #    usuario (fix critico del vector hibrido, ver commit).
+            #  - LightGBM: aprendido de 149.941 reservas reales, sin
+            #    contexto de consulta -- calidad/comportamiento general.
+            #  - sentimiento: promedio real de XLM-RoBERTa sobre 37.956
+            #    reseñas reales por destino. Antes solo se usaba diluido
+            #    dentro de un atributo del vector hibrido (50/50 con
+            #    rating sintetico); se expone aqui como señal propia,
+            #    independiente, en vez de perdida entre otras 6 variables.
+            W_COSENO, W_LGBM, W_SENTIMIENTO = 0.5, 0.3, 0.2
+            afinidad_norm = (
+                W_COSENO * afinidad_coseno
+                + W_LGBM * afinidad_lgbm
+                + W_SENTIMIENTO * sentimiento_real
+            )
         else:
-            afinidad_norm = max(0.0, min(1.0, (c["score_similitud"] + 1) / 2))
+            afinidad_lgbm = None
+            afinidad_norm = afinidad_coseno
+
+        detalle_afinidad[id_paq] = {
+            "coseno": afinidad_coseno, "lgbm": afinidad_lgbm, "sentimiento": sentimiento_real,
+        }
 
         tdrs = tdrs_calc.calculate(
             afinidad=afinidad_norm,
@@ -411,6 +499,13 @@ def recomendar(
     print("4) Aplicando re-ranking (3 escenarios)...")
     reranker = ReRankingEngine()
     rankings = reranker.rank_all_scenarios(candidatos, k=k_final)
+
+    print("5) Registrando resultados para futuro reentrenamiento...")
+    try:
+        crear_tabla_log(db_path)
+        guardar_log_recomendaciones(db_path, texto_consulta, rankings, detalle_afinidad)
+    except Exception as e:
+        print(f"   -> No se pudo guardar el log (no bloqueante): {e}")
 
     return rankings
 
