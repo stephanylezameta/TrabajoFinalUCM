@@ -15,8 +15,14 @@ class ReRankingEngine:
     
     SCENARIOS = {
         "tradicional": {"alpha": 1.0, "beta": 0.0, "gamma": 0.0, "delta": 0.0, "lambda_": 0.0},
-        "moderado": {"alpha": 0.5, "beta": 0.2, "gamma": 0.15, "delta": 0.10, "lambda_": 0.05},
-        "intensivo": {"alpha": 0.25, "beta": 0.30, "gamma": 0.20, "delta": 0.15, "lambda_": 0.10},
+        # Pesos ajustados (28/08) tras busqueda contra Gini/CR5 reales
+        # sobre 20 consultas de muestra, con piso de afinidad minima
+        # (90%/70% del tradicional) e intensivo forzado a ser mas
+        # agresivo en redistribucion que moderado (margen real, no solo
+        # igualdad en el limite). Reemplazan los valores originales del
+        # informe, nunca antes validados contra metricas de concentracion.
+        "moderado": {"alpha": 0.1453, "beta": 0.4913, "gamma": 0.2126, "delta": 0.1507, "lambda_": 0.0292},
+        "intensivo": {"alpha": 0.0287, "beta": 0.6490, "gamma": 0.2281, "delta": 0.0942, "lambda_": 0.0418},
     }
     
     def score_final(
