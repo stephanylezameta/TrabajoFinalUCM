@@ -55,5 +55,25 @@ class HybridVectorBuilder:
             self.weights["w6_valoraciones"] * structured_attrs.get("num_valoraciones_hotel_norm", 0.0),
             self.weights["w7_sostenibilidad"] * structured_attrs.get("indicador_sostenibilidad_tui", 0.0),
         ], dtype=np.float32)
-        
+
+        # Fix 28/08: el embedding semantico viene normalizado a norma
+        # unitaria (los 1024 valores en conjunto "pesan" 1.0 en total).
+        # Los 7 atributos numericos, sin escalar, con pesos de hasta 1.5,
+        # podian pesar MAS en la direccion final del vector que los 1024
+        # valores de texto juntos -- la similitud de coseno terminaba
+        # dominada por ocupacion/accesibilidad/etc (iguales para todos
+        # los items de un mismo destino), no por el contenido semantico
+        # real de cada item. Confirmado con diagnostico: el mismo grupo
+        # de items dominaba el top-10 sin importar el texto de la
+        # consulta. Se escala el bloque numerico para que su magnitud
+        # total sea una fraccion pequeña y controlada (15%) de la
+        # magnitud del bloque semantico, en vez de competir con el en
+        # igualdad de condiciones.
+        norma_semantica = np.linalg.norm(semantic_vector)
+        norma_numerica = np.linalg.norm(numeric_part)
+        PESO_RELATIVO_ATRIBUTOS = 0.15
+        if norma_numerica > 1e-8:
+            factor_escala = (norma_semantica * PESO_RELATIVO_ATRIBUTOS) / norma_numerica
+            numeric_part = numeric_part * factor_escala
+
         return np.concatenate([semantic_vector, numeric_part])

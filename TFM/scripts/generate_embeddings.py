@@ -171,7 +171,16 @@ def main():
     logger.info("Inicializando TextEmbedder (%s)...", args.modelo)
     embedder = TextEmbedder(model_name=args.modelo)
     es_e5 = "e5" in args.modelo.lower()
-    prefijo_e5 = "query: " if es_e5 else ""
+    # Fix 28/08: e5-large requiere prefijos asimetricos para funcionar
+    # bien -- "passage: " para el contenido que se indexa (catalogo,
+    # reseñas), "query: " SOLO para la consulta del usuario en tiempo
+    # real (ver pipeline_consultas.py). Antes se usaba "query: " para
+    # el catalogo tambien, lo que desalineaba el espacio vectorial y
+    # hacia que las busquedas devolvieran resultados casi iguales sin
+    # importar el contenido real de la consulta (confirmado con
+    # diagnostico: mismos items en el top-10 para consultas de playa,
+    # cultura y aventura por igual).
+    prefijo_e5 = "passage: " if es_e5 else ""
     # e5-large es mucho más pesado que MiniLM; reducimos el batch interno
     # para no saturar la memoria RAM en textos largos (hasta 2000 caracteres).
     batch_size = 8 if es_e5 else 64

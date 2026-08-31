@@ -351,16 +351,10 @@ def recomendar(
         impacto_local_real = impacto_local_por_destino.get(destino, 0.5)
 
         if modelo_lgbm is not None:
-            # Mismo orden de features que en el entrenamiento (ver
-            # train_lightgbm_ranker.py): precio, duracion, rating,
-            # review_count, ocupacion, sensibilidad, accesibilidad,
-            # capacidad, diversificacion, temporada_baja, impacto_local,
-            # match_categoria_cliente, diferencia_precio_habitual_cliente.
-            # Las 2 ultimas son de PERSONALIZACION (requieren un cliente
-            # identificado con historial); en una consulta de texto libre
-            # anonima como esta no hay cliente conocido, se usan valores
-            # neutros (0.0 = sin coincidencia de categoria, 0.5 = sin
-            # diferencia de precio respecto a un habito desconocido).
+            # 11 features, mismo orden que train_lightgbm_ranker.py: precio,
+            # duracion, rating, review_count, ocupacion, sensibilidad,
+            # accesibilidad, capacidad, diversificacion, temporada_baja,
+            # impacto_local.
             features = [[
                 precios.get(id_paq, 0.5),
                 duraciones.get(id_paq, 0.5),
@@ -375,10 +369,21 @@ def recomendar(
                 impacto_local_real,
             ]]
             score_lgbm = float(modelo_lgbm.predict(features)[0])
-            # El score de LightGBM no esta acotado a [0,1]; se re-escala
-            # con una sigmoide para poder usarlo como 'afinidad' dentro
-            # del TDRS (que exige rango [0,1]).
-            afinidad_norm = 1 / (1 + np.exp(-score_lgbm))
+            afinidad_lgbm = 1 / (1 + np.exp(-score_lgbm))
+            afinidad_coseno = max(0.0, min(1.0, (c["score_similitud"] + 1) / 2))
+            # Mezcla, no reemplazo (fix 28/08): LightGBM se entreno con
+            # reservas historicas SIN ningun texto de consulta asociado,
+            # asi que su score no varia segun lo que pida el usuario --
+            # es una senal de calidad/popularidad general del destino, no
+            # de relevancia para esta busqueda especifica. Usarlo solo
+            # (como se hacia antes) descartaba la unica senal que si
+            # dependia de la consulta (coseno), haciendo que resultados
+            # muy distintos en texto ("playa" vs "cultura" vs "aventura")
+            # terminaran devolviendo casi los mismos destinos. Se mezclan
+            # ambas, dandole mas peso al coseno por ser la senal
+            # sensible a la consulta real del usuario.
+            W_COSENO, W_LGBM = 0.6, 0.4
+            afinidad_norm = W_COSENO * afinidad_coseno + W_LGBM * afinidad_lgbm
         else:
             afinidad_norm = max(0.0, min(1.0, (c["score_similitud"] + 1) / 2))
 

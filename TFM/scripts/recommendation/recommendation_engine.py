@@ -55,6 +55,17 @@ class TuiRecommender:
             
         self.hybrid_matrix = np.load(vector_path)
         self.paquete_ids = np.load(ids_path, allow_pickle=True)
+        # Fix 28/08: centrado del catalogo (mean-centering). Diagnostico
+        # confirmo anisotropia -- los scores de similitud de todo el
+        # catalogo quedaban comprimidos en un rango muy angosto (0.87-0.89)
+        # y ciertos items puntuaban alto contra CUALQUIER consulta, sin
+        # importar su contenido semantico real. Restar el vector promedio
+        # del catalogo a cada vector (y tambien a cada consulta antes de
+        # comparar) es la tecnica estandar para esto -- descomprime el
+        # espacio y hace que las diferencias semanticas reales pesen mas
+        # que la direccion dominante compartida por todos los textos.
+        self.vector_promedio = self.hybrid_matrix.mean(axis=0)
+        self.hybrid_matrix_centrado = self.hybrid_matrix - self.vector_promedio
         print(f"✅ Motor de recomendación cargado: {len(self.paquete_ids)} paquetes disponibles en memoria.")
 
     def search(self, query_vector: np.ndarray, top_k: int = 5):
@@ -74,9 +85,14 @@ class TuiRecommender:
         # Asegurar formato de matriz bidimensional (1, N) para scikit-learn
         if query_vector.ndim == 1:
             query_vector = query_vector.reshape(1, -1)
-            
+
+        # Centrar la consulta con el mismo vector promedio del catalogo
+        # (ver load_data) antes de comparar -- consistente con el
+        # centrado aplicado al catalogo.
+        query_vector_centrado = query_vector - self.vector_promedio
+
         # Calcular similitudes de coseno frente a todos los paquetes del catálogo
-        similarities = cosine_similarity(query_vector, self.hybrid_matrix)[0]
+        similarities = cosine_similarity(query_vector_centrado, self.hybrid_matrix_centrado)[0]
         
         # Obtener los índices ordenados de mayor a menor similitud
         top_indices = np.argsort(similarities)[::-1][:top_k]

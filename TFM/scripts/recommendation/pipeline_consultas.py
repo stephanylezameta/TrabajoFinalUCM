@@ -56,7 +56,11 @@ class QueryPipeline:
             np.ndarray: Vector híbrido de la consulta listo para el recomendador.
         """
         # 1. Generar el embedding del texto de la consulta del usuario
-        text_emb = self.embedder.embed_text(text_query)
+        # e5-large requiere el prefijo "query: " en el texto de busqueda
+        # (asimetrico respecto al catalogo, que usa "passage: " -- ver
+        # generate_embeddings.py). Sin este prefijo, el espacio vectorial
+        # de la consulta no queda alineado con el del catalogo.
+        text_emb = self.embedder.embed_text(f"query: {text_query}")
         
         # 2. Fusionar el texto con un contexto base (reutilizamos el embedding de texto 
         # o un contexto neutro para mantener la simetría con los vectores de los paquetes)
