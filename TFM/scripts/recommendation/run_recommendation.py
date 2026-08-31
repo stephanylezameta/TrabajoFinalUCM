@@ -296,19 +296,83 @@ def cargar_sentimiento_por_destino(db_path: str) -> dict:
     return {d: v for d, v in rows if v is not None}
 
 
+def registrar_oportunidad(db_path: str, texto_consulta: str, destino: str, categoria_coincidente: str | None = None) -> None:
+    """Registra un destino con reseñas reales (fuera del catalogo de 39
+    experiencias vendibles) que coincide con una consulta real de usuario
+    -- panel interno de oportunidades de expansion para TUI, nunca
+    mostrado al usuario final."""
+    import uuid
+    import time as time_module
+
+    conn = sqlite3.connect(db_path)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS destinos_oportunidad (
+            oportunidad_id TEXT PRIMARY KEY,
+            fecha TEXT NOT NULL,
+            texto_consulta TEXT NOT NULL,
+            destino_nombre TEXT NOT NULL,
+            categoria_coincidente TEXT
+        )
+    """)
+    conn.execute(
+        """INSERT INTO destinos_oportunidad
+           (oportunidad_id, fecha, texto_consulta, destino_nombre, categoria_coincidente)
+           VALUES (?, ?, ?, ?, ?)""",
+        (str(uuid.uuid4()), time_module.strftime("%Y-%m-%d %H:%M:%S"),
+         texto_consulta, destino, categoria_coincidente),
+    )
+    conn.commit()
+    conn.close()
+
+
+def detectar_oportunidades(db_path: str, texto_consulta: str) -> None:
+    """Busca, entre los destinos con reseñas reales pero SIN experiencias
+    en el catalogo, coincidencias con la consulta. No bloqueante: si
+    falla, no interrumpe la recomendacion principal al usuario.
+
+    Version v1, deliberadamente basica: solo detecta si el usuario
+    menciona el NOMBRE del destino literalmente en su consulta (ej.
+    "quiero ir a Praga"). No hace matching semantico ni por categoria
+    todavia -- eso es poco util en la practica (la mayoria de usuarios
+    no van a nombrar un destino que no saben que existe como opcion).
+    La version util de verdad requiere un indice de embeddings sobre
+    las reseñas de los ~508 destinos con cobertura real (hoy solo esta
+    indexado el catalogo de 39), para poder comparar semanticamente
+    "quiero algo tranquilo con naturaleza" contra el contenido real de
+    las reseñas de esos destinos -- queda pendiente como siguiente paso,
+    no implementado en esta sesion por falta de esa infraestructura."""
+    try:
+        conn = sqlite3.connect(db_path)
+        destinos_catalogo = {
+            r[0] for r in conn.execute("SELECT DISTINCT destination FROM experiencias").fetchall()
+        }
+        destinos_con_resenas = conn.execute(
+            "SELECT DISTINCT destino_nombre FROM resenas"
+        ).fetchall()
+        conn.close()
+
+        for (destino,) in destinos_con_resenas:
+            if not destino or destino in destinos_catalogo:
+                continue
+            if destino.lower() in texto_consulta.lower():
+                registrar_oportunidad(db_path, texto_consulta, destino)
+    except Exception:
+        pass  # nunca debe romper el flujo principal de recomendacion
+
+
 def crear_tabla_log(db_path: str) -> None:
-    """Crea la tabla donde se registra cada recomendacion servida, para
-    poder reentrenar en el futuro un modelo de mezcla (coseno/LightGBM/
-    sentimiento) aprendido en vez de con pesos fijos -- hoy no existen
-    datos de la forma (consulta, item, ¿fue relevante?) porque
-    customer_bookings no tiene ninguna consulta de texto asociada. Cada
-    fila de este log es un candidato futuro para ese entrenamiento, una
-    vez que se pueda cruzar con reservas/feedback reales de los
-    usuarios que usaron el buscador."""
+    """Crea las tablas de log de recomendaciones y de feedback del
+    usuario, para poder reentrenar en el futuro un modelo de mezcla
+    (coseno/LightGBM/sentimiento) aprendido en vez de con pesos fijos --
+    hoy no existen datos de la forma (consulta, item, ¿fue relevante?)
+    porque customer_bookings no tiene ninguna consulta de texto asociada.
+    Cada fila de recomendaciones_log + su feedback asociado es un
+    ejemplo de entrenamiento futuro."""
     conn = sqlite3.connect(db_path)
     conn.execute("""
         CREATE TABLE IF NOT EXISTS recomendaciones_log (
             log_id TEXT PRIMARY KEY,
+            session_id TEXT,
             fecha TEXT NOT NULL,
             texto_consulta TEXT NOT NULL,
             escenario TEXT NOT NULL,
@@ -323,33 +387,81 @@ def crear_tabla_log(db_path: str) -> None:
             score_final REAL
         )
     """)
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS feedback_usuario (
+            feedback_id TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            log_id TEXT,
+            id_paquete TEXT NOT NULL,
+            senal TEXT NOT NULL,
+            fecha TEXT NOT NULL
+        )
+    """)
     conn.commit()
     conn.close()
 
 
-def guardar_log_recomendaciones(db_path: str, texto_consulta: str, rankings: dict, detalle_afinidad: dict) -> None:
-    """Guarda cada resultado servido en recomendaciones_log."""
+def guardar_log_recomendaciones(
+    db_path: str, texto_consulta: str, rankings: dict, detalle_afinidad: dict,
+    session_id: str | None = None,
+) -> dict[str, str]:
+    """Guarda cada resultado servido en recomendaciones_log. Devuelve un
+    dict {id_paquete: log_id} del escenario 'moderado' (el que se le
+    muestra al usuario por defecto), para que registrar_feedback() pueda
+    referenciar exactamente que fila del log genero cada reaccion."""
     import uuid
     import time as time_module
 
     conn = sqlite3.connect(db_path)
     fecha = time_module.strftime("%Y-%m-%d %H:%M:%S")
+    log_ids_moderado = {}
     for escenario, resultados in rankings.items():
         for posicion, r in enumerate(resultados, 1):
             detalle = detalle_afinidad.get(r["id_paquete"], {})
+            log_id = str(uuid.uuid4())
             conn.execute(
                 """INSERT INTO recomendaciones_log
-                   (log_id, fecha, texto_consulta, escenario, posicion, id_paquete,
-                    destino_nombre, afinidad_coseno, afinidad_lgbm, afinidad_sentimiento,
-                    afinidad_final, tdrs, score_final)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                   (log_id, session_id, fecha, texto_consulta, escenario, posicion,
+                    id_paquete, destino_nombre, afinidad_coseno, afinidad_lgbm,
+                    afinidad_sentimiento, afinidad_final, tdrs, score_final)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
-                    str(uuid.uuid4()), fecha, texto_consulta, escenario, posicion,
+                    log_id, session_id, fecha, texto_consulta, escenario, posicion,
                     r["id_paquete"], r["destino_nombre"],
                     detalle.get("coseno"), detalle.get("lgbm"), detalle.get("sentimiento"),
                     r["afinidad"], r["tdrs"], r["score_final"],
                 ),
             )
+            if escenario == "moderado":
+                log_ids_moderado[r["id_paquete"]] = log_id
+    conn.commit()
+    conn.close()
+    return log_ids_moderado
+
+
+def registrar_feedback(
+    db_path: str, session_id: str, id_paquete: str, senal: str, log_id: str | None = None,
+) -> None:
+    """Registra la reaccion del usuario a una recomendacion concreta
+    dentro de una sesion conversacional.
+
+    senal: uno de 'rechazado', 'interesado', 'reservado'. El agente lo
+    llama cada vez que detecta una reaccion clara en la conversacion
+    (ej. "no me gusta eso" -> 'rechazado'; "eso suena bien" -> 'interesado').
+    Esta tabla, cruzada con recomendaciones_log, es la fuente de datos
+    real (consulta + resultado + reaccion) que hoy no existe y que hace
+    falta para poder entrenar en el futuro los pesos de la mezcla de
+    señales en vez de dejarlos fijos."""
+    import uuid
+    import time as time_module
+
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        """INSERT INTO feedback_usuario (feedback_id, session_id, log_id, id_paquete, senal, fecha)
+           VALUES (?, ?, ?, ?, ?, ?)""",
+        (str(uuid.uuid4()), session_id, log_id, id_paquete, senal,
+         time_module.strftime("%Y-%m-%d %H:%M:%S")),
+    )
     conn.commit()
     conn.close()
 
@@ -373,13 +485,37 @@ def recomendar(
     db_path: str = "data/tui_recomendador.db",
     top_k_candidatos: int = 30,
     k_final: int = 10,
-) -> dict[str, list[dict]]:
-    """Ejecuta el flujo completo y devuelve los 3 rankings (tradicional/moderado/intensivo).
+    session_id: str | None = None,
+    excluir_ids: list[str] | None = None,
+    excluir_destinos: list[str] | None = None,
+    filtros: dict | None = None,
+) -> tuple[dict[str, list[dict]], str]:
+    """Ejecuta el flujo completo y devuelve (rankings, session_id).
 
-    Afinidad: se calcula mezclando 3 señales (ver comentarios en el bucle
-    principal): coseno (sensible a la consulta), LightGBM (comportamiento
-    real, sin contexto de consulta) y sentimiento real (XLM-RoBERTa).
+    Afinidad: mezcla de 3 señales -- coseno (sensible al texto de la
+    consulta), LightGBM (comportamiento real de 149.941 reservas) y
+    sentimiento real (XLM-RoBERTa sobre 37.956 reseñas). Ver detalle en
+    los comentarios del bucle principal.
+
+    Pensado para uso conversacional, no solo consulta unica:
+      session_id: identifica la conversacion en curso. Si se pasa, cada
+        resultado mostrado y cada llamada a registrar_feedback() quedan
+        asociados a la misma sesion, permitiendo reconstruir despues
+        toda la conversacion y su desenlace. Si no se pasa, se genera
+        uno nuevo automaticamente.
+      excluir_ids / excluir_destinos: lo que el usuario ya rechazo en
+        esta sesion (el agente los va acumulando turno a turno).
+      filtros: filtros explicitos, opcionales, combinables con el texto
+        libre -- para la variante "manual" del buscador (sin pasar por
+        el agente) o para cuando el agente ya extrajo preferencias
+        concretas de la conversacion. Claves soportadas hoy:
+          - presupuesto_max: float, precio_eur <= este valor
+          - categoria: str, coincidencia exacta con experiencias.category
+          - destino: str, coincidencia exacta con experiencias.destination
     """
+    excluir_ids = set(excluir_ids or [])
+    excluir_destinos = set(excluir_destinos or [])
+    filtros = filtros or {}
 
     print(f"\n1) Vectorizando consulta: '{texto_consulta}'")
     query_pipeline = QueryPipeline()
@@ -387,7 +523,9 @@ def recomendar(
 
     print("2) Buscando candidatos por afinidad semantica (similitud coseno)...")
     recommender = TuiRecommender()
-    candidatos_afinidad = recommender.search(query_vector, top_k=top_k_candidatos)
+    # Se pide un pool mas grande de lo habitual porque parte se va a
+    # descartar por exclusiones/filtros antes de llegar al TDRS.
+    candidatos_afinidad = recommender.search(query_vector, top_k=top_k_candidatos * 3)
 
     print("3) Calculando TDRS por candidato (redistribución/sostenibilidad)...")
     metadata = cargar_metadata_experiencias(db_path)
@@ -417,8 +555,21 @@ def recomendar(
     detalle_afinidad = {}
     for c in candidatos_afinidad:
         id_paq = c["id_paquete"]
-        meta = metadata.get(id_paq, {"destino_nombre": "desconocido", "category": ""})
+        meta = metadata.get(id_paq, {"destino_nombre": "desconocido", "category": "", "price_eur": None})
         destino = meta["destino_nombre"]
+
+        # --- Exclusiones y filtros (arquitectura conversacional/manual) ---
+        if id_paq in excluir_ids:
+            continue
+        if destino in excluir_destinos:
+            continue
+        if "presupuesto_max" in filtros and meta.get("price_eur") is not None:
+            if meta["price_eur"] > filtros["presupuesto_max"]:
+                continue
+        if "categoria" in filtros and meta.get("category") != filtros["categoria"]:
+            continue
+        if "destino" in filtros and destino != filtros["destino"]:
+            continue
 
         ocupacion_real = ocupacion_por_destino.get(destino, 0.5)
         sensibilidad_real = sensibilidad_por_destino.get(destino, 0.3)
@@ -451,9 +602,10 @@ def recomendar(
             ]]
             score_lgbm = float(modelo_lgbm.predict(features)[0])
             afinidad_lgbm = 1 / (1 + np.exp(-score_lgbm))
-            # Mezcla de 3 señales, no reemplazo (fix 28/08 + ampliado):
+            # Mezcla de 3 señales, no reemplazo (fix critico del vector
+            # hibrido + ampliado con sentimiento):
             #  - coseno: unica sensible al texto de la consulta real del
-            #    usuario (fix critico del vector hibrido, ver commit).
+            #    usuario.
             #  - LightGBM: aprendido de 149.941 reservas reales, sin
             #    contexto de consulta -- calidad/comportamiento general.
             #  - sentimiento: promedio real de XLM-RoBERTa sobre 37.956
@@ -501,13 +653,27 @@ def recomendar(
     rankings = reranker.rank_all_scenarios(candidatos, k=k_final)
 
     print("5) Registrando resultados para futuro reentrenamiento...")
+    log_ids = {}
+    if session_id is None:
+        import uuid as uuid_module
+        session_id = str(uuid_module.uuid4())
     try:
         crear_tabla_log(db_path)
-        guardar_log_recomendaciones(db_path, texto_consulta, rankings, detalle_afinidad)
+        log_ids = guardar_log_recomendaciones(
+            db_path, texto_consulta, rankings, detalle_afinidad, session_id=session_id,
+        )
     except Exception as e:
         print(f"   -> No se pudo guardar el log (no bloqueante): {e}")
 
-    return rankings
+    detectar_oportunidades(db_path, texto_consulta)
+
+    # log_ids solo se agrega al escenario "moderado" (el que se muestra
+    # por defecto al usuario) -- para que el agente pueda referenciar la
+    # fila exacta del log al llamar a registrar_feedback() despues.
+    for r in rankings.get("moderado", []):
+        r["log_id"] = log_ids.get(r["id_paquete"])
+
+    return rankings, session_id
 
 
 def main():
@@ -519,7 +685,7 @@ def main():
     parser.add_argument("--top-k", type=int, default=10)
     args = parser.parse_args()
 
-    rankings = recomendar(args.consulta, db_path=args.db, k_final=args.top_k)
+    rankings, session_id = recomendar(args.consulta, db_path=args.db, k_final=args.top_k)
 
     for escenario, resultados in rankings.items():
         print(f"\n{'='*60}")
