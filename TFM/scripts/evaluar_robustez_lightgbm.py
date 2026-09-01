@@ -13,12 +13,19 @@ Uso:
 """
 import argparse
 import random
+import sys
 import time
+from pathlib import Path
 
 import numpy as np
 import lightgbm as lgb
 
-import scripts.train_lightgbm_ranker as tlr
+# Mismo patron que usa train_lightgbm_ranker.py: agrega la carpeta
+# scripts/ (la propia, no la raiz del proyecto) al path, e importa el
+# modulo vecino directo, sin prefijo "scripts.".
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import train_lightgbm_ranker as tlr
 
 
 def correr_una_vez(db_path: str, seed: int) -> dict:
