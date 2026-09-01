@@ -507,6 +507,105 @@ def cargar_modelo_lightgbm():
     return model, feature_names
 
 
+def calcular_candidato(
+    id_paq: str,
+    destino: str,
+    score_similitud: float,
+    ocupacion_por_destino: dict, sensibilidad_por_destino: dict,
+    accesibilidad_por_destino: dict, capacidad_por_destino: dict,
+    diversificacion_por_destino: dict, temporada_baja_por_destino: dict,
+    impacto_local_por_destino: dict, sentimiento_por_destino: dict,
+    modelo_lgbm, precios: dict, duraciones: dict, ratings: dict, reviews: dict,
+    tdrs_calc: TDRSCalculator,
+) -> tuple[dict, dict]:
+    """Logica de scoring de UN candidato: mezcla de las 3 señales de
+    afinidad + calculo del TDRS + construccion del dict final.
+
+    Extraida (31/08) para que recomendar() y optimizar_pesos_reranking.py
+    usen la MISMA logica en vez de reimplementarla cada uno por su lado
+    -- asi se evita que un fix (como el de 'sostenibilidad' duplicando
+    'tdrs', encontrado y corregido hoy) tenga que aplicarse a mano en
+    mas de un lugar, y arriesgarse a que uno de los dos quede desactualizado.
+
+    Devuelve (candidato_dict, detalle_afinidad_dict)."""
+    ocupacion_real = ocupacion_por_destino.get(destino, 0.5)
+    sensibilidad_real = sensibilidad_por_destino.get(destino, 0.3)
+    accesibilidad_real = accesibilidad_por_destino.get(destino, 0.5)
+    capacidad_real = capacidad_por_destino.get(destino, 0.5)
+    diversificacion_real = diversificacion_por_destino.get(destino, 0.5)
+    temporada_baja_real = temporada_baja_por_destino.get(destino, 0.5)
+    impacto_local_real = impacto_local_por_destino.get(destino, 0.5)
+    sentimiento_real = sentimiento_por_destino.get(destino, 0.5)
+
+    afinidad_coseno = max(0.0, min(1.0, (score_similitud + 1) / 2))
+
+    if modelo_lgbm is not None:
+        # 11 features, mismo orden que train_lightgbm_ranker.py: precio,
+        # duracion, rating, review_count, ocupacion, sensibilidad,
+        # accesibilidad, capacidad, diversificacion, temporada_baja,
+        # impacto_local.
+        features = [[
+            precios.get(id_paq, 0.5),
+            duraciones.get(id_paq, 0.5),
+            ratings.get(id_paq, 0.5),
+            reviews.get(id_paq, 0.5),
+            ocupacion_real,
+            sensibilidad_real,
+            accesibilidad_real,
+            capacidad_real,
+            diversificacion_real,
+            temporada_baja_real,
+            impacto_local_real,
+        ]]
+        score_lgbm = float(modelo_lgbm.predict(features)[0])
+        afinidad_lgbm = 1 / (1 + np.exp(-score_lgbm))
+        # Mezcla de 3 señales, no reemplazo: coseno (unica sensible al
+        # texto de la consulta real del usuario), LightGBM (aprendido de
+        # 149.941 reservas reales, sin contexto de consulta) y
+        # sentimiento real (XLM-RoBERTa sobre 37.956 reseñas reales).
+        W_COSENO, W_LGBM, W_SENTIMIENTO = 0.5, 0.3, 0.2
+        afinidad_norm = (
+            W_COSENO * afinidad_coseno
+            + W_LGBM * afinidad_lgbm
+            + W_SENTIMIENTO * sentimiento_real
+        )
+    else:
+        afinidad_lgbm = None
+        afinidad_norm = afinidad_coseno
+
+    detalle = {
+        "coseno": afinidad_coseno, "lgbm": afinidad_lgbm, "sentimiento": sentimiento_real,
+    }
+
+    tdrs = tdrs_calc.calculate(
+        afinidad=afinidad_norm,
+        ocupacion=ocupacion_real,
+        sensibilidad_ambiental=sensibilidad_real,
+        accesibilidad=accesibilidad_real,
+        capacidad=capacidad_real,
+        diversificacion=diversificacion_real,
+        temporada_baja=temporada_baja_real,
+        impacto_local=impacto_local_real,
+    )
+
+    candidato = {
+        "id_paquete": id_paq,
+        "destino_nombre": destino,
+        "afinidad": afinidad_norm,
+        "tdrs": tdrs,
+        # 'sostenibilidad' mide sensibilidad ambiental invertida (menos
+        # sensible = mas sostenible visitarlo), un concepto DISTINTO de
+        # 'tdrs' (redistribucion) -- fix del 31/08, antes ambos eran el
+        # mismo valor (max(0.0, tdrs)), duplicando la influencia real del
+        # TDRS en el score final sin que los pesos del re-ranking lo
+        # reflejaran.
+        "sostenibilidad": 1.0 - sensibilidad_real,
+        "capacidad": capacidad_real,
+        "ocupacion": ocupacion_real,
+    }
+    return candidato, detalle
+
+
 def recomendar(
     texto_consulta: str,
     db_path: str = "data/tui_recomendador.db",
@@ -597,67 +696,16 @@ def recomendar(
         if "destino" in filtros and destino != filtros["destino"]:
             continue
 
-        ocupacion_real = ocupacion_por_destino.get(destino, 0.5)
-        sensibilidad_real = sensibilidad_por_destino.get(destino, 0.3)
-        accesibilidad_real = accesibilidad_por_destino.get(destino, 0.5)
-        capacidad_real = capacidad_por_destino.get(destino, 0.5)
-        diversificacion_real = diversificacion_por_destino.get(destino, 0.5)
-        temporada_baja_real = temporada_baja_por_destino.get(destino, 0.5)
-        impacto_local_real = impacto_local_por_destino.get(destino, 0.5)
-        sentimiento_real = sentimiento_por_destino.get(destino, 0.5)
-
-        afinidad_coseno = max(0.0, min(1.0, (c["score_similitud"] + 1) / 2))
-
-        if modelo_lgbm is not None:
-            features = [[
-                precios.get(id_paq, 0.5),
-                duraciones.get(id_paq, 0.5),
-                ratings.get(id_paq, 0.5),
-                reviews.get(id_paq, 0.5),
-                ocupacion_real,
-                sensibilidad_real,
-                accesibilidad_real,
-                capacidad_real,
-                diversificacion_real,
-                temporada_baja_real,
-                impacto_local_real,
-            ]]
-            score_lgbm = float(modelo_lgbm.predict(features)[0])
-            afinidad_lgbm = 1 / (1 + np.exp(-score_lgbm))
-            W_COSENO, W_LGBM, W_SENTIMIENTO = 0.5, 0.3, 0.2
-            afinidad_norm = (
-                W_COSENO * afinidad_coseno
-                + W_LGBM * afinidad_lgbm
-                + W_SENTIMIENTO * sentimiento_real
-            )
-        else:
-            afinidad_lgbm = None
-            afinidad_norm = afinidad_coseno
-
-        detalle_afinidad[id_paq] = {
-            "coseno": afinidad_coseno, "lgbm": afinidad_lgbm, "sentimiento": sentimiento_real,
-        }
-
-        tdrs = tdrs_calc.calculate(
-            afinidad=afinidad_norm,
-            ocupacion=ocupacion_real,
-            sensibilidad_ambiental=sensibilidad_real,
-            accesibilidad=accesibilidad_real,
-            capacidad=capacidad_real,
-            diversificacion=diversificacion_real,
-            temporada_baja=temporada_baja_real,
-            impacto_local=impacto_local_real,
+        candidato, detalle = calcular_candidato(
+            id_paq, destino, c["score_similitud"],
+            ocupacion_por_destino, sensibilidad_por_destino,
+            accesibilidad_por_destino, capacidad_por_destino,
+            diversificacion_por_destino, temporada_baja_por_destino,
+            impacto_local_por_destino, sentimiento_por_destino,
+            modelo_lgbm, precios, duraciones, ratings, reviews, tdrs_calc,
         )
-
-        candidatos.append({
-            "id_paquete": id_paq,
-            "destino_nombre": destino,
-            "afinidad": afinidad_norm,
-            "tdrs": tdrs,
-            "sostenibilidad": max(0.0, tdrs),
-            "capacidad": capacidad_real,
-            "ocupacion": ocupacion_real,
-        })
+        candidatos.append(candidato)
+        detalle_afinidad[id_paq] = detalle
 
     print("4) Aplicando re-ranking (3 escenarios)...")
     reranker = ReRankingEngine()

@@ -41,7 +41,9 @@ from scripts.recommendation.run_recommendation import (
     cargar_diversificacion_por_destino,
     cargar_temporada_baja_por_destino,
     cargar_impacto_local_por_destino,
+    cargar_sentimiento_por_destino,
     cargar_modelo_lightgbm,
+    calcular_candidato,
     normalizar_dict,
 )
 
@@ -105,6 +107,7 @@ def generar_candidatos_por_consulta(db_path: str) -> list[list[dict]]:
     diversificacion_por_destino = cargar_diversificacion_por_destino(db_path)
     temporada_baja_por_destino = cargar_temporada_baja_por_destino(db_path)
     impacto_local_por_destino = cargar_impacto_local_por_destino(db_path)
+    sentimiento_por_destino = cargar_sentimiento_por_destino(db_path)
     tdrs_calc = TDRSCalculator()  # pesos DEFAULT, no se tocan
 
     modelo_lgbm, _ = cargar_modelo_lightgbm()
@@ -125,39 +128,22 @@ def generar_candidatos_por_consulta(db_path: str) -> list[list[dict]]:
             meta = metadata.get(id_paq, {"destino_nombre": "desconocido"})
             destino = meta["destino_nombre"]
 
-            ocupacion_real = ocupacion_por_destino.get(destino, 0.5)
-            sensibilidad_real = sensibilidad_por_destino.get(destino, 0.3)
-            accesibilidad_real = accesibilidad_por_destino.get(destino, 0.5)
-            capacidad_real = capacidad_por_destino.get(destino, 0.5)
-            diversificacion_real = diversificacion_por_destino.get(destino, 0.5)
-            temporada_baja_real = temporada_baja_por_destino.get(destino, 0.5)
-            impacto_local_real = impacto_local_por_destino.get(destino, 0.5)
-
-            if modelo_lgbm is not None:
-                features = [[
-                    precios.get(id_paq, 0.5), duraciones.get(id_paq, 0.5),
-                    ratings.get(id_paq, 0.5), reviews.get(id_paq, 0.5),
-                    ocupacion_real, sensibilidad_real, accesibilidad_real,
-                    capacidad_real, diversificacion_real, temporada_baja_real,
-                    impacto_local_real,
-                ]]
-                score_lgbm = float(modelo_lgbm.predict(features)[0])
-                afinidad_norm = 1 / (1 + np.exp(-score_lgbm))
-            else:
-                afinidad_norm = max(0.0, min(1.0, (c["score_similitud"] + 1) / 2))
-
-            tdrs = tdrs_calc.calculate(
-                afinidad=afinidad_norm, ocupacion=ocupacion_real,
-                sensibilidad_ambiental=sensibilidad_real, accesibilidad=accesibilidad_real,
-                capacidad=capacidad_real, diversificacion=diversificacion_real,
-                temporada_baja=temporada_baja_real, impacto_local=impacto_local_real,
+            # Reutiliza EXACTAMENTE la misma logica de scoring que usa
+            # recomendar() en produccion (mezcla de 3 señales de afinidad
+            # + TDRS) -- antes este script tenia su propia copia,
+            # desactualizada respecto a produccion (usaba solo LightGBM
+            # o solo coseno, nunca la mezcla de 3 señales real), lo que
+            # invalidaba cualquier optimizacion de pesos hecha con esa
+            # version vieja. Unificado el 31/08.
+            candidato, _ = calcular_candidato(
+                id_paq, destino, c["score_similitud"],
+                ocupacion_por_destino, sensibilidad_por_destino,
+                accesibilidad_por_destino, capacidad_por_destino,
+                diversificacion_por_destino, temporada_baja_por_destino,
+                impacto_local_por_destino, sentimiento_por_destino,
+                modelo_lgbm, precios, duraciones, ratings, reviews, tdrs_calc,
             )
-            candidatos.append({
-                "id_paquete": id_paq, "destino_nombre": destino,
-                "afinidad": afinidad_norm, "tdrs": tdrs,
-                "sostenibilidad": max(0.0, tdrs), "capacidad": capacidad_real,
-                "ocupacion": ocupacion_real,
-            })
+            candidatos.append(candidato)
         todos_los_candidatos.append(candidatos)
 
     return todos_los_candidatos
@@ -256,19 +242,8 @@ def main():
 
     print("\n--- Buscando pesos optimizados: INTENSIVO (piso afinidad 70%, "
           "forzado a redistribuir mas que moderado) ---")
-    # Margen real (no solo >=/<=): intensivo debe tener alpha al menos
-    # 20% MENOR y beta al menos 15% MAYOR que moderado, para forzar una
-    # diferencia genuina en vez de permitir que la busqueda vuelva a
-    # encontrar exactamente el mismo punto de moderado (que cumplia el
-    # limite en el borde, con igualdad).
     alpha_mod = pesos_moderado["alpha"] if pesos_moderado else 1.0
     beta_mod = pesos_moderado["beta"] if pesos_moderado else 0.0
-    # n_intentos mas alto: el espacio de busqueda restringido (alpha_maximo/
-    # beta_minimo) es una region mucho mas angosta del espacio de pesos
-    # posibles -- con 60 intentos, muy pocas combinaciones aleatorias caen
-    # dentro de esa region, dando una muestra pobre. Con 300, hay mas
-    # cobertura real de esa zona restringida antes de concluir si conviene
-    # o no ser mas agresivo que moderado.
     pesos_intensivo, m_intensivo = buscar_pesos_optimos(
         candidatos_por_consulta, afinidad_minima_relativa=0.70,
         alpha_maximo=alpha_mod * 0.80, beta_minimo=beta_mod * 1.15,
