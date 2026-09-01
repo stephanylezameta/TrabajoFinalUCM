@@ -21,8 +21,16 @@ class ReRankingEngine:
         # agresivo en redistribucion que moderado (margen real, no solo
         # igualdad en el limite). Reemplazan los valores originales del
         # informe, nunca antes validados contra metricas de concentracion.
-        "moderado": {"alpha": 0.1453, "beta": 0.4913, "gamma": 0.2126, "delta": 0.1507, "lambda_": 0.0292},
-        "intensivo": {"alpha": 0.0287, "beta": 0.6490, "gamma": 0.2281, "delta": 0.0942, "lambda_": 0.0418},
+        # Pesos ajustados (31/08) tras corregir 'sostenibilidad' (antes
+        # duplicaba 'tdrs' sin que los pesos lo reflejaran) y unificar la
+        # afinidad usada en la optimizacion con la de produccion real
+        # (mezcla de 3 señales, no solo LightGBM). Con el fix del vector
+        # hibrido tambien aplicado, los candidatos de entrada son mucho
+        # mas diversos (36/31/30 destinos distintos en 20 consultas de
+        # prueba, vs 12 antes del fix), asi que el optimo real da mas
+        # peso a la afinidad de lo que daba la version anterior.
+        "moderado": {"alpha": 0.7396, "beta": 0.1586, "gamma": 0.0847, "delta": 0.0171, "lambda_": 0.1773},
+        "intensivo": {"alpha": 0.1934, "beta": 0.4104, "gamma": 0.1354, "delta": 0.2608, "lambda_": 0.2587},
     }
     
     def score_final(
