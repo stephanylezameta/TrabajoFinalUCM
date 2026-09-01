@@ -24,9 +24,38 @@ class TDRSCalculator:
         "w8_sensibilidad_ambiental": 0.05,
     }
     
-    def __init__(self, weights: dict[str, float] | None = None, umbral_ocupacion_maxima: float = 0.85):
+    def __init__(
+        self,
+        weights: dict[str, float] | None = None,
+        umbral_ocupacion_maxima: float = 0.85,
+        aplicar_umbral_ocupacion: bool = False,
+    ):
+        """
+        aplicar_umbral_ocupacion: por defecto False (desactivado).
+
+        Hallazgo (revision de arquitectura, 31/08): la regla RF-6.4
+        ("si ocupacion > 0.85, forzar a 1.0 = penalizacion maxima") fue
+        diseñada asumiendo que 'ocupacion' es un porcentaje real de
+        ocupacion hotelera (ej. 85% de habitaciones ocupadas = destino
+        saturado). En la practica, 'ocupacion' llega normalizada por
+        min-max SOLO entre los 19 de 39 destinos que tienen dato real
+        (ver cargar_ocupacion_por_destino en run_recommendation.py) --
+        eso significa que el destino con mayor ocupacion de esos 19
+        SIEMPRE da exactamente 1.0, sea cual sea su valor real (podria
+        ser 55% de ocupacion real y aun asi "ganar" el maximo relativo),
+        mientras que los 20 destinos sin dato (fallback neutro 0.5)
+        nunca pueden activar la regla, sin importar si estan realmente
+        mas saturados. Es decir: la regla hoy mide ranking relativo
+        dentro de una muestra parcial, no saturacion absoluta -- lo
+        contrario de para lo que fue diseñada. Se desactiva por defecto
+        hasta que la cobertura de ocupacion real sea mas completa y en
+        una escala verdaderamente absoluta (no normalizada por min-max
+        sobre un subconjunto). Reactivar pasando
+        aplicar_umbral_ocupacion=True una vez resuelto eso.
+        """
         self.weights = weights or self.DEFAULT_WEIGHTS
         self.umbral_ocupacion_maxima = umbral_ocupacion_maxima
+        self.aplicar_umbral_ocupacion = aplicar_umbral_ocupacion
         # Verificar que suma de |pesos| = 1.0
         suma = sum(abs(v) for v in self.weights.values())
         assert abs(suma - 1.0) < 0.01, f"Suma de |pesos| debe ser 1.0, es {suma}"
@@ -50,8 +79,12 @@ class TDRSCalculator:
         assert 0 <= afinidad <= 1, f"Afinidad fuera de rango: {afinidad}"
         assert 0 <= ocupacion <= 1, f"Ocupación fuera de rango: {ocupacion}"
         
-        # RF-6.4: si ocupacion > umbral, forzar a 1.0
-        if ocupacion > self.umbral_ocupacion_maxima:
+        # RF-6.4: si ocupacion > umbral, forzar a 1.0. Desactivado por
+        # defecto (ver docstring del __init__) -- reactivar cuando la
+        # cobertura de datos reales de ocupacion sea completa y este en
+        # una escala absoluta, no normalizada por min-max sobre una
+        # muestra parcial de destinos.
+        if self.aplicar_umbral_ocupacion and ocupacion > self.umbral_ocupacion_maxima:
             ocupacion = 1.0
         
         w = self.weights
