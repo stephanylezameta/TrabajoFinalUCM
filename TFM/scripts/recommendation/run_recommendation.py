@@ -325,23 +325,50 @@ def registrar_oportunidad(db_path: str, texto_consulta: str, destino: str, categ
     conn.close()
 
 
-def detectar_oportunidades(db_path: str, texto_consulta: str) -> None:
-    """Busca, entre los destinos con reseñas reales pero SIN experiencias
-    en el catalogo, coincidencias con la consulta. No bloqueante: si
-    falla, no interrumpe la recomendacion principal al usuario.
+def cargar_indice_oportunidades():
+    """Carga el indice semantico de destinos oportunidad (generado por
+    generar_indice_oportunidades.py). Devuelve (embeddings, nombres) o
+    (None, None) si el indice todavia no existe."""
+    ruta_emb = Path("data/oportunidades/oportunidades_embeddings.npy")
+    ruta_nombres = Path("data/oportunidades/oportunidades_nombres.npy")
+    if not ruta_emb.exists() or not ruta_nombres.exists():
+        return None, None
+    return np.load(ruta_emb), np.load(ruta_nombres, allow_pickle=True)
 
-    Version v1, deliberadamente basica: solo detecta si el usuario
-    menciona el NOMBRE del destino literalmente en su consulta (ej.
-    "quiero ir a Praga"). No hace matching semantico ni por categoria
-    todavia -- eso es poco util en la practica (la mayoria de usuarios
-    no van a nombrar un destino que no saben que existe como opcion).
-    La version util de verdad requiere un indice de embeddings sobre
-    las reseñas de los ~508 destinos con cobertura real (hoy solo esta
-    indexado el catalogo de 39), para poder comparar semanticamente
-    "quiero algo tranquilo con naturaleza" contra el contenido real de
-    las reseñas de esos destinos -- queda pendiente como siguiente paso,
-    no implementado en esta sesion por falta de esa infraestructura."""
+
+def detectar_oportunidades(db_path: str, texto_consulta: str, query_vector: np.ndarray | None = None, top_n: int = 3) -> None:
+    """Busca, entre los destinos con reseñas reales pero SIN experiencias
+    en el catalogo, los que semanticamente mejor calzan con la consulta
+    -- panel interno de oportunidades de expansion para TUI, nunca
+    mostrado al usuario final. No bloqueante: si falla, no interrumpe la
+    recomendacion principal al usuario.
+
+    Usa el indice semantico (data/oportunidades/, generado por
+    generar_indice_oportunidades.py sobre 435 destinos con reseñas
+    reales fuera del catalogo) si esta disponible. Si no existe todavia,
+    cae de vuelta a la version v1 (coincidencia literal del nombre del
+    destino en la consulta)."""
     try:
+        embeddings_indice, nombres_indice = cargar_indice_oportunidades()
+
+        if embeddings_indice is not None and query_vector is not None:
+            dim_indice = embeddings_indice.shape[1]
+            query_vector_semantico = np.asarray(query_vector).reshape(-1)[:dim_indice]
+            query_norm = query_vector_semantico / (np.linalg.norm(query_vector_semantico) + 1e-8)
+            emb_norm = embeddings_indice / (
+                np.linalg.norm(embeddings_indice, axis=1, keepdims=True) + 1e-8
+            )
+            similitudes = emb_norm @ query_norm
+            top_idx = np.argsort(-similitudes)[:top_n]
+            UMBRAL_MINIMO = 0.75
+            for idx in top_idx:
+                if similitudes[idx] >= UMBRAL_MINIMO:
+                    registrar_oportunidad(
+                        db_path, texto_consulta, str(nombres_indice[idx]),
+                        categoria_coincidente=f"similitud={similitudes[idx]:.3f}",
+                    )
+            return
+
         conn = sqlite3.connect(db_path)
         destinos_catalogo = {
             r[0] for r in conn.execute("SELECT DISTINCT destination FROM experiencias").fetchall()
@@ -501,8 +528,7 @@ def recomendar(
       session_id: identifica la conversacion en curso. Si se pasa, cada
         resultado mostrado y cada llamada a registrar_feedback() quedan
         asociados a la misma sesion, permitiendo reconstruir despues
-        toda la conversacion y su desenlace. Si no se pasa, se genera
-        uno nuevo automaticamente.
+        toda la conversacion y su desenlace.
       excluir_ids / excluir_destinos: lo que el usuario ya rechazo en
         esta sesion (el agente los va acumulando turno a turno).
       filtros: filtros explicitos, opcionales, combinables con el texto
@@ -583,10 +609,6 @@ def recomendar(
         afinidad_coseno = max(0.0, min(1.0, (c["score_similitud"] + 1) / 2))
 
         if modelo_lgbm is not None:
-            # 11 features, mismo orden que train_lightgbm_ranker.py: precio,
-            # duracion, rating, review_count, ocupacion, sensibilidad,
-            # accesibilidad, capacidad, diversificacion, temporada_baja,
-            # impacto_local.
             features = [[
                 precios.get(id_paq, 0.5),
                 duraciones.get(id_paq, 0.5),
@@ -602,17 +624,6 @@ def recomendar(
             ]]
             score_lgbm = float(modelo_lgbm.predict(features)[0])
             afinidad_lgbm = 1 / (1 + np.exp(-score_lgbm))
-            # Mezcla de 3 señales, no reemplazo (fix critico del vector
-            # hibrido + ampliado con sentimiento):
-            #  - coseno: unica sensible al texto de la consulta real del
-            #    usuario.
-            #  - LightGBM: aprendido de 149.941 reservas reales, sin
-            #    contexto de consulta -- calidad/comportamiento general.
-            #  - sentimiento: promedio real de XLM-RoBERTa sobre 37.956
-            #    reseñas reales por destino. Antes solo se usaba diluido
-            #    dentro de un atributo del vector hibrido (50/50 con
-            #    rating sintetico); se expone aqui como señal propia,
-            #    independiente, en vez de perdida entre otras 6 variables.
             W_COSENO, W_LGBM, W_SENTIMIENTO = 0.5, 0.3, 0.2
             afinidad_norm = (
                 W_COSENO * afinidad_coseno
@@ -665,11 +676,8 @@ def recomendar(
     except Exception as e:
         print(f"   -> No se pudo guardar el log (no bloqueante): {e}")
 
-    detectar_oportunidades(db_path, texto_consulta)
+    detectar_oportunidades(db_path, texto_consulta, query_vector=query_vector)
 
-    # log_ids solo se agrega al escenario "moderado" (el que se muestra
-    # por defecto al usuario) -- para que el agente pueda referenciar la
-    # fila exacta del log al llamar a registrar_feedback() despues.
     for r in rankings.get("moderado", []):
         r["log_id"] = log_ids.get(r["id_paquete"])
 
