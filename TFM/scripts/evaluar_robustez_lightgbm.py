@@ -40,16 +40,13 @@ def correr_una_vez(db_path: str, seed: int) -> dict:
 
     train_data = lgb.Dataset(X, label=y, group=groups)
     val_data = lgb.Dataset(X_val, label=y_val, group=groups_val, reference=train_data)
-    params = {
-        "objective": "lambdarank",
-        "metric": "ndcg",
-        "ndcg_eval_at": [10],
-        "learning_rate": 0.05,
-        "num_leaves": 31,
-        "min_data_in_leaf": 5,
-        "verbose": -1,
-        "seed": seed,
-    }
+    # Reutiliza los hiperparametros de produccion (PARAMS_LIGHTGBM_BASE
+    # en train_lightgbm_ranker.py), en vez de una copia propia -- antes
+    # este script tenia sus propios num_leaves/min_data_in_leaf
+    # hardcodeados, desactualizados respecto a produccion tras el ajuste
+    # del 31/08 (mismo tipo de duplicacion ya corregida una vez hoy con
+    # 'sostenibilidad').
+    params = {**tlr.PARAMS_LIGHTGBM_BASE, "seed": seed}
     model = lgb.train(
         params, train_data, num_boost_round=500,
         valid_sets=[val_data], valid_names=["validacion"],

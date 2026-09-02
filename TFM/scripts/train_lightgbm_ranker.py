@@ -46,6 +46,28 @@ from recommendation.run_recommendation import (  # noqa: E402
 RANDOM_SEED = 42
 N_NEGATIVOS_POR_CLIENTE = 20  # candidatos "no reservados" de comparacion
 
+# Hiperparametros de produccion (31/08), ajustados tras barrido de 45
+# combinaciones x 5 semillas: num_leaves=15 (arboles mas simples),
+# min_data_in_leaf=20 (hojas mas conservadoras) y feature_fraction=0.8
+# (cada arbol ve solo 80% de las variables) dieron, EN PROMEDIO sobre
+# varias semillas, mejor NDCG@10 y menor dominio de 'accesibilidad' que
+# los valores anteriores (num_leaves=31, min_data_in_leaf=5, sin
+# feature_fraction). Definido UNA sola vez aca y reutilizado por
+# evaluar_robustez_lightgbm.py y barrido_hiperparametros_lightgbm.py,
+# para que ningun script quede con una copia desactualizada (como paso
+# antes con 'sostenibilidad', duplicada y corregida en un solo lugar
+# mientras el otro archivo seguia con la version vieja)."""
+PARAMS_LIGHTGBM_BASE = {
+    "objective": "lambdarank",
+    "metric": "ndcg",
+    "ndcg_eval_at": [10],
+    "learning_rate": 0.05,
+    "num_leaves": 15,
+    "min_data_in_leaf": 20,
+    "feature_fraction": 0.8,
+    "verbose": -1,
+}
+
 
 def cargar_experiencias_completas(db_path: str) -> dict:
     """experience_id -> dict con atributos del item."""
@@ -332,16 +354,15 @@ def main():
     print("2) Entrenando LightGBM Ranker (lambdarank) con early stopping...")
     train_data = lgb.Dataset(X, label=y, group=groups)
     val_data = lgb.Dataset(X_val, label=y_val, group=groups_val, reference=train_data)
-    params = {
-        "objective": "lambdarank",
-        "metric": "ndcg",
-        "ndcg_eval_at": [10],
-        "learning_rate": 0.05,
-        "num_leaves": 31,
-        "min_data_in_leaf": 5,
-        "verbose": -1,
-        "seed": RANDOM_SEED,
-    }
+    # Hiperparametros ajustados (31/08) tras barrido de 45 combinaciones
+    # x 5 semillas: num_leaves=15 (arboles mas simples), min_data_in_leaf=20
+    # (hojas mas conservadoras) y feature_fraction=0.8 (cada arbol ve
+    # solo 80% de las variables) juntos dieron mejor NDCG@10 (0.478 vs
+    # 0.391 promedio) Y menor dominio de 'accesibilidad' (42.4% vs 66.3%)
+    # que los valores anteriores (num_leaves=31, min_data_in_leaf=5, sin
+    # feature_fraction) -- mejora en ambos frentes, no un trade-off.
+    # Hiperparametros de produccion, ver PARAMS_LIGHTGBM_BASE arriba.
+    params = {**PARAMS_LIGHTGBM_BASE, "seed": RANDOM_SEED}
     model = lgb.train(
         params, train_data,
         num_boost_round=500,
