@@ -1,0 +1,876 @@
+# MASTER BRIEF · TUI Data Intelligence — UI moderna + Chatbot operativo
+
+## 1. Objetivo
+
+Rediseñar la aplicación Streamlit para que tenga una apariencia moderna, profesional y coherente con la identidad visual de TUI, y convertir la primera pantalla en un centro de control conversacional mediante un chatbot que informe de forma proactiva sobre el estado del sistema, los datos, las actualizaciones y las alertas relevantes.
+
+La aplicación deberá priorizar tres principios:
+
+1. claridad visual,
+2. control operativo,
+3. acceso conversacional a la información.
+
+La interfaz debe sentirse como una aplicación interna de TUI Data / Digital Operations, no como una demo técnica de Streamlit.
+
+---
+
+## 2. Estructura general de navegación
+
+La navegación principal deberá contener:
+
+```text
+Inicio · Asistente
+Simulador TDRS
+Control Web
+Datos / modelo
+```
+
+La primera pantalla al abrir la aplicación será obligatoriamente:
+
+```text
+Inicio · Asistente
+```
+
+No deberá mostrarse primero ninguna tabla, simulador ni formulario técnico.
+
+---
+
+## 3. Identidad visual TUI
+
+### 3.1 Referencia visual
+
+La interfaz debe inspirarse en el lenguaje visual actual de TUI España y TUI Group:
+
+- predominio de blanco y azul claro,
+- azul oscuro para navegación, títulos y contraste,
+- rojo TUI como color de acción y señal visual,
+- tarjetas grandes y limpias,
+- bordes redondeados,
+- abundante espacio en blanco,
+- tipografía amable y de alta legibilidad,
+- interfaz orientada a viajes, disponibilidad, reservas y operación.
+
+La aplicación no debe copiar literalmente la web pública de TUI. Debe reinterpretar la marca para un producto interno de datos y analítica.
+
+### 3.2 Paleta base
+
+Usar como referencia:
+
+```text
+TUI Red            #D40E14
+TUI Dark Blue      #092A5E
+TUI Digital Blue   #176599
+TUI Blue           #70CBF4
+TUI Blue 50%       #C2E6FA
+TUI Blue 25%       #E2F3FE
+White              #FFFFFF
+Background neutral #F7F9FB
+Text dark          #1D2733
+Success            #16865C
+Warning            #D99000
+Error              #C73535
+```
+
+El rojo TUI se utilizará principalmente para:
+
+- CTA principal,
+- alertas críticas,
+- elementos activos,
+- acentos de marca.
+
+Evitar usar rojo en grandes superficies.
+
+### 3.3 Tipografía
+
+Preferencia visual:
+
+```text
+Nunito Sans
+```
+
+Fallback:
+
+```text
+Arial / sans-serif
+```
+
+Jerarquía:
+
+- H1 grande y limpio,
+- H2 compacto,
+- labels pequeños en mayúsculas para KPIs,
+- números de KPI grandes y de alto contraste,
+- texto auxiliar gris azulado.
+
+---
+
+## 4. Layout global
+
+### 4.1 Barra lateral
+
+La barra lateral deberá ser compacta y visualmente estable.
+
+Debe contener:
+
+- logo / marca TUI,
+- nombre del producto,
+- navegación,
+- estado general del sistema,
+- última actualización global.
+
+Ejemplo:
+
+```text
+TUI
+Data Intelligence
+
+● Sistema operativo
+Última actualización: 07:30
+
+Inicio · Asistente
+Simulador TDRS
+Control Web
+Datos / modelo
+```
+
+### 4.2 Cabecera de página
+
+Cada página tendrá:
+
+- título,
+- subtítulo breve,
+- indicador de estado cuando proceda,
+- fecha/hora de última actualización.
+
+No sobrecargar la cabecera.
+
+### 4.3 Tarjetas
+
+Estilo recomendado:
+
+- fondo blanco,
+- borde gris/azul muy suave,
+- border-radius 14–18 px,
+- sombra ligera,
+- padding amplio,
+- separación visual clara.
+
+---
+
+# 5. Ventana 1 — Inicio · Asistente
+
+## 5.1 Objetivo
+
+Esta será la primera página de la aplicación.
+
+Su función es actuar como:
+
+```text
+Chatbot
++
+Centro de alertas
++
+Resumen ejecutivo
++
+Acceso rápido a datos
+```
+
+Debe permitir entender en menos de 10 segundos si todo está funcionando correctamente.
+
+---
+
+## 5.2 Hero inicial
+
+Mostrar una cabecera amplia pero compacta.
+
+Ejemplo conceptual:
+
+```text
+Buenos días
+¿Qué necesitas revisar hoy?
+
+El sistema ha actualizado 4 de 5 fuentes correctamente.
+Hay 1 fuente que requiere atención.
+```
+
+No utilizar nombres personales ficticios.
+
+Debajo podrá aparecer un indicador:
+
+```text
+● Sistema estable
+```
+
+ó
+
+```text
+● 2 alertas requieren atención
+```
+
+---
+
+## 5.3 Resumen automático al entrar
+
+Al cargar la aplicación, el asistente deberá generar automáticamente un resumen operativo basado exclusivamente en los datos disponibles.
+
+Ejemplo:
+
+```text
+Resumen del sistema
+
+• Clima actualizado correctamente hace 2 h.
+• Conectividad contiene 211 destinos.
+• Seguridad y sanidad está dentro del intervalo previsto.
+• La fuente X supera su intervalo de actualización esperado.
+• SQLite responde correctamente.
+• No se han detectado errores de importación en la última ejecución.
+```
+
+Nunca inventar alertas.
+
+El resumen se calculará consultando el modelo de datos y las tablas de control.
+
+---
+
+## 5.4 Sistema de alertas
+
+Crear una zona visual de alertas antes o junto al chat.
+
+Niveles:
+
+```text
+CRITICAL
+WARNING
+INFO
+OK
+```
+
+### Ejemplos de CRITICAL
+
+- base de datos inaccesible,
+- error de integridad SQLite,
+- scraper fallido repetidamente,
+- dataset vacío,
+- fuente esencial sin actualizar durante un periodo crítico.
+
+### Ejemplos de WARNING
+
+- actualización retrasada,
+- reducción fuerte del número de filas,
+- aumento anómalo de nulos,
+- fuente próxima a vencer su intervalo,
+- diferencias relevantes de esquema.
+
+### Ejemplos de INFO
+
+- actualización completada,
+- nueva fuente disponible,
+- nuevo modelo/version del dataset,
+- cambios de volumen dentro de parámetros normales.
+
+### Ejemplos de OK
+
+- todas las fuentes dentro de intervalo,
+- integridad de base correcta,
+- último scraping completado.
+
+---
+
+## 5.5 KPIs de salud del sistema
+
+Mostrar una fila de tarjetas con:
+
+```text
+Fuentes activas
+Fuentes actualizadas
+Alertas abiertas
+Último scraping
+Filas totales
+Estado DB
+```
+
+Cuando sea útil añadir:
+
+```text
+Cobertura destinos
+Errores últimas 24 h
+Tiempo medio actualización
+```
+
+---
+
+## 5.6 Chatbot
+
+El chatbot debe ocupar la zona principal de la página.
+
+Debe utilizar una interfaz similar a aplicaciones de chat modernas:
+
+- historial de mensajes,
+- mensajes del usuario,
+- mensajes del asistente,
+- campo de texto fijo en la parte inferior,
+- acciones sugeridas.
+
+En Streamlit utilizar preferentemente:
+
+```python
+st.chat_message()
+st.chat_input()
+```
+
+---
+
+## 5.7 Preguntas que debe resolver
+
+El asistente deberá poder responder inicialmente a preguntas como:
+
+```text
+¿Está todo actualizado?
+¿Qué fuentes tienen problemas?
+¿Cuándo se actualizó el clima?
+¿Cuántos destinos tenemos?
+¿Qué base de datos está usando la aplicación?
+¿Qué modelo se utilizó para este dataset?
+¿Qué scraping toca ejecutar hoy?
+¿Qué fuentes están fuera de intervalo?
+¿Cuántos registros hay en conectividad?
+¿Ha cambiado el número de filas respecto a la última actualización?
+¿Cuál fue el último error?
+¿Qué tablas contiene SQLite?
+¿Cuál es el estado del tracking?
+¿Cómo está funcionando la web?
+```
+
+---
+
+## 5.8 Respuestas basadas en herramientas
+
+El chatbot no deberá responder utilizando valores escritos manualmente en el prompt.
+
+Debe consultar funciones internas.
+
+Arquitectura:
+
+```text
+Chat UI
+   ↓
+assistant_service
+   ↓
+data_control_service / analytics_service / repositories
+   ↓
+SQLite
+```
+
+Funciones recomendadas:
+
+```python
+get_system_status()
+get_active_alerts()
+get_data_sources_status()
+get_database_health()
+get_source_status(source_id)
+get_overdue_sources()
+get_recent_updates()
+get_table_stats()
+get_dashboard_metrics()
+```
+
+---
+
+## 5.9 Acciones rápidas
+
+Sobre el input del chat o debajo del mensaje de bienvenida mostrar botones tipo pill:
+
+```text
+Revisar alertas
+Estado de fuentes
+Últimas actualizaciones
+Control Web
+Datos del modelo
+```
+
+Al pulsarlos deberán ejecutar la consulta correspondiente sin obligar a escribir.
+
+---
+
+## 5.10 Respuestas enriquecidas
+
+Cuando proceda, el chatbot puede responder con:
+
+- texto,
+- KPIs,
+- tablas pequeñas,
+- gráficas simples,
+- enlaces internos a otras páginas,
+- badges de estado.
+
+Evitar respuestas enormes.
+
+Priorizar:
+
+```text
+Qué ocurre
+Por qué importa
+Qué fuente está afectada
+Qué acción se recomienda
+```
+
+---
+
+# 6. Motor de alertas
+
+Crear un servicio específico:
+
+```text
+services/
+└── alert_service.py
+```
+
+Funciones sugeridas:
+
+```python
+get_alerts()
+evaluate_source_freshness()
+evaluate_row_count_changes()
+evaluate_database_integrity()
+evaluate_scraping_errors()
+evaluate_null_anomalies()
+```
+
+---
+
+## 6.1 Reglas mínimas
+
+### Fuente fuera de intervalo
+
+Si:
+
+```text
+now - last_successful_update > configured_interval
+```
+
+crear WARNING.
+
+Si supera dos veces el intervalo esperado:
+
+```text
+CRITICAL
+```
+
+### Dataset vacío
+
+```text
+row_count == 0
+```
+
+→ CRITICAL.
+
+### Error en última actualización
+
+```text
+last_status == error
+```
+
+→ WARNING o CRITICAL según criticidad de la fuente.
+
+### Integridad DB
+
+Ejecutar:
+
+```sql
+PRAGMA integrity_check;
+```
+
+Resultado diferente de:
+
+```text
+ok
+```
+
+→ CRITICAL.
+
+---
+
+# 7. Historial de scraping / actualización
+
+Ampliar el modelo con una tabla específica.
+
+```text
+update_runs
+```
+
+Campos recomendados:
+
+```text
+run_id
+source_id
+started_at
+finished_at
+status
+rows_before
+rows_after
+rows_inserted
+rows_updated
+rows_deleted
+error_message
+duration_seconds
+trigger
+metadata
+```
+
+Estados:
+
+```text
+running
+success
+warning
+error
+```
+
+Trigger:
+
+```text
+manual
+scheduled
+startup
+external
+```
+
+---
+
+# 8. Datos / modelo
+
+Mantener esta ventana como centro técnico de control.
+
+Debe complementar al chatbot, no duplicarlo.
+
+Contenido:
+
+```text
+Resumen de fuentes
+Estado de scraping
+Bases de datos
+Tablas
+Intervalos
+Modelo/version dataset
+Últimas ejecuciones
+Historial
+Errores
+Volumen de datos
+Integridad
+```
+
+---
+
+## 8.1 Tabla principal de fuentes
+
+Columnas:
+
+```text
+Fuente
+Tipo
+Estado
+Filas
+Intervalo
+Última actualización
+Próxima actualización
+Modelo / versión
+Método de ingesta
+Último error
+```
+
+Métodos posibles:
+
+```text
+scraper
+API
+CSV import
+HTML import
+manual
+```
+
+---
+
+## 8.2 Historial visual
+
+Mostrar las últimas ejecuciones con:
+
+```text
+Fecha
+Fuente
+Estado
+Duración
+Filas antes
+Filas después
+Variación
+Error
+```
+
+Añadir filtros por:
+
+- fuente,
+- estado,
+- fecha.
+
+---
+
+# 9. Control Web
+
+Mantener la página actual pero adaptar su diseño a la nueva identidad visual.
+
+Mostrar:
+
+```text
+Sesiones
+Impresiones
+Clics
+CTR
+Búsquedas
+Detalle
+Checkout
+Reservas
+Conversión
+Ingresos
+Cancelaciones
+```
+
+Cuando falten datos:
+
+```text
+Pendiente de instrumentar
+```
+
+Nunca inventar métricas.
+
+---
+
+# 10. Simulador TDRS
+
+Mantener la funcionalidad actual.
+
+Actualizar únicamente el diseño para alinearlo con el resto de la aplicación.
+
+Mantener:
+
+```text
+Popular
+Equilibrado
+Explorador
+Personalizado
+```
+
+Mantener los pesos configurables y las restricciones existentes.
+
+---
+
+# 11. Servicios nuevos recomendados
+
+Estructura:
+
+```text
+services/
+├── analytics_service.py
+├── data_control_service.py
+├── alert_service.py
+├── assistant_service.py
+├── td​​rs_service.py
+└── tracking_service.py
+```
+
+`assistant_service.py` será responsable de traducir preguntas del usuario a consultas contra los servicios internos.
+
+No deberá consultar SQLite directamente desde la UI.
+
+---
+
+# 12. Estado general del sistema
+
+Crear una función agregada:
+
+```python
+get_system_status()
+```
+
+Salida conceptual:
+
+```python
+{
+    "status": "warning",
+    "active_sources": 5,
+    "healthy_sources": 4,
+    "overdue_sources": 1,
+    "critical_alerts": 0,
+    "warnings": 1,
+    "last_update": "...",
+    "database_integrity": "ok"
+}
+```
+
+La Home utilizará este resultado para construir su mensaje inicial.
+
+---
+
+# 13. Diseño conceptual de Inicio
+
+```text
+┌───────────────────────────────────────────────────────────────┐
+│ TUI Data Intelligence                      ● Sistema estable  │
+│ Buenos días                                                   │
+│ ¿Qué necesitas revisar hoy?                                  │
+└───────────────────────────────────────────────────────────────┘
+
+┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐
+│ Fuentes   │ │ Al día    │ │ Alertas   │ │ Últ. sync │
+│    5      │ │    4      │ │    1      │ │  07:30    │
+└───────────┘ └───────────┘ └───────────┘ └───────────┘
+
+┌────────────────────────────────────┐ ┌───────────────────────┐
+│ ASISTENTE                          │ │ ALERTAS               │
+│                                    │ │                       │
+│ Hola. He revisado el sistema.      │ │ ⚠ Clima...            │
+│ Hay una fuente que requiere        │ │ ✓ SQLite OK           │
+│ atención.                          │ │ ✓ Seguridad actualizada│
+│                                    │ │                       │
+│ [Revisar alertas] [Estado fuentes] │ │                       │
+│                                    │ │                       │
+│ ────────────────────────────────── │ │                       │
+│ Pregunta sobre tus datos...        │ │                       │
+└────────────────────────────────────┘ └───────────────────────┘
+```
+
+Desktop:
+
+```text
+chat 65%
+alertas 35%
+```
+
+Mobile:
+
+```text
+chat
+↓
+alertas
+```
+
+---
+
+# 14. UX
+
+- La primera información visible debe ser accionable.
+- No mostrar grandes DataFrames en Inicio.
+- Evitar exceso de expanders.
+- No utilizar emojis como elemento visual principal.
+- Utilizar iconografía discreta cuando sea posible.
+- No saturar de colores.
+- Utilizar rojo principalmente como marca y alerta.
+- Mostrar siempre la fecha/hora asociada a datos sensibles a actualización.
+- Una alerta debe explicar su causa.
+- Una alerta debe indicar la fuente afectada.
+- Una alerta debería proponer una acción cuando sea posible.
+
+---
+
+# 15. Chatbot — primera versión
+
+La primera versión no necesita utilizar necesariamente un LLM externo.
+
+Puede implementarse mediante intents y consultas deterministas para garantizar respuestas fiables.
+
+Ejemplo:
+
+```python
+if "actualiz" in prompt:
+    return get_data_sources_status()
+
+if "alert" in prompt:
+    return get_active_alerts()
+
+if "base" in prompt or "sqlite" in prompt:
+    return get_database_health()
+```
+
+Posteriormente se podrá sustituir o complementar con un modelo de lenguaje.
+
+---
+
+# 16. Futuro uso de LLM
+
+Preparar el servicio para permitir posteriormente:
+
+```text
+Pregunta usuario
+      ↓
+LLM / router
+      ↓
+Tool calling
+      ↓
+Servicios internos
+      ↓
+Respuesta basada en datos
+```
+
+El modelo nunca deberá ser la fuente de verdad sobre el estado del sistema.
+
+La fuente de verdad será siempre:
+
+```text
+SQLite / APIs / scrapers / servicios
+```
+
+---
+
+# 17. Criterios de aceptación
+
+La implementación se considerará correcta cuando:
+
+1. Inicio · Asistente sea la primera página.
+2. La interfaz tenga identidad visual coherente con TUI.
+3. El asistente genere un resumen automáticamente al entrar.
+4. Las alertas procedan de datos reales del sistema.
+5. El chatbot pueda consultar estado de fuentes, DB y actualizaciones.
+6. Las fuentes fuera de intervalo se detecten automáticamente.
+7. El panel muestre última actualización y próxima actualización prevista.
+8. Los errores de importación/scraping sean visibles.
+9. Los históricos de actualización estén persistidos.
+10. La interfaz no consulte SQL directamente.
+11. El simulador TDRS continúe funcionando.
+12. Control Web continúe calculando solo métricas disponibles.
+13. Datos / modelo continúe siendo el centro técnico de inspección.
+14. Reiniciar Streamlit no elimine el historial ni las alertas persistentes.
+
+---
+
+# 18. Prioridad de implementación
+
+```text
+1. Rediseñar theme/layout global
+2. Añadir update_runs
+3. Crear alert_service
+4. Crear get_system_status
+5. Crear Inicio · Asistente
+6. Añadir mensaje automático al entrar
+7. Añadir chat determinista
+8. Añadir acciones rápidas
+9. Integrar alertas con datos reales
+10. Rediseñar Datos / modelo
+11. Aplicar estilo nuevo a Control Web
+12. Aplicar estilo nuevo al Simulador TDRS
+13. Tests
+```
+
+---
+
+# 19. Regla principal
+
+La Home no debe ser un dashboard tradicional con un chat añadido.
+
+Debe sentirse como un **asistente operativo que entiende el estado de la plataforma** y utiliza los dashboards como herramientas de profundización.
+
+El usuario debe poder entrar y preguntar:
+
+```text
+¿Qué está pasando hoy?
+```
+
+Y recibir una respuesta fiable basada en los datos y controles reales de la aplicación.
