@@ -1,0 +1,952 @@
+# MASTER BRIEF · TUI Data Intelligence — Feedback UI / UX V3
+
+## 0. Propósito del documento
+
+Este Master Brief consolida los cambios solicitados sobre la versión actual de la aplicación TUI Data Intelligence a partir de las anotaciones realizadas en los cuatro PDFs de revisión.
+
+El objetivo es usar este documento como instrucción maestra para la siguiente iteración del proyecto, manteniendo la arquitectura funcional existente y modificando principalmente:
+
+- jerarquía visual,
+- colocación de KPIs,
+- experiencia del asistente,
+- presentación del Simulador TDRS,
+- personalización de escenarios,
+- visualización geoespacial del Control Web,
+- y organización del panel Datos / modelo.
+
+Regla de interpretación:
+
+- Cuando una zona está marcada con una **X**, debe eliminarse.
+- Cuando una zona está **rodeada o señalada**, debe modificarse según la nota asociada.
+- Si una zona solo aparece destacada sin una instrucción textual clara, **no eliminarla ni modificar su función de forma arbitraria**.
+- No inventar información ni KPIs.
+- Mantener como fuente de verdad los datos persistidos en SQLite y los CSV disponibles.
+
+---
+
+# 1. Principios generales de diseño
+
+## 1.1 Identidad visual
+
+Mantener la línea visual existente:
+
+- logo TUI actual,
+- rojo TUI como color de acción,
+- azul claro como color dominante en bordes, tarjetas y detalles,
+- blanco / gris muy claro como fondo principal,
+- bordes redondeados,
+- sombras suaves,
+- animaciones discretas,
+- diseño moderno y limpio.
+
+Evitar:
+
+- exceso de degradados,
+- elementos que ocupen demasiado alto sin aportar información,
+- tarjetas KPI demasiado altas,
+- bloques decorativos que resten espacio útil al contenido.
+
+---
+
+## 1.2 Distribución general
+
+Mantener la estructura:
+
+```text
+┌────────────────────────┬─────────────────────────────────────┐
+│                        │                                     │
+│ Sidebar izquierda      │      Área principal                 │
+│                        │                                     │
+│ Logo                   │      Contenido de la vista          │
+│ Navegación             │                                     │
+│ Filtros contextuales   │                                     │
+│ Estado                 │                                     │
+│                        │                                     │
+└────────────────────────┴─────────────────────────────────────┘
+```
+
+La barra lateral continúa siendo el punto principal de navegación.
+
+Vistas:
+
+1. Inicio · Asistente
+2. Simulador TDRS
+3. Control Web
+4. Datos / modelo
+
+---
+
+# 2. Vista 1 — Inicio · Asistente
+
+## 2.1 Objetivo
+
+La página inicial debe estar orientada al asistente operativo.
+
+El chat debe ser el elemento principal de la vista.
+
+La información de estado y los KPIs deben acompañar al asistente, pero no ocupar la parte superior de la página de forma que reduzcan el espacio de conversación.
+
+---
+
+## 2.2 Alertas y estado
+
+Mantener un bloque de:
+
+```text
+ALERTAS Y ESTADO
+```
+
+Debe mostrar:
+
+- estado general del sistema,
+- alertas operativas,
+- errores de fuentes,
+- fuentes fuera de intervalo,
+- problemas de SQLite,
+- incidencias de actualización.
+
+Ejemplo:
+
+```text
+Sistema sin alertas operativas
+Todas las fuentes activas están dentro de los controles disponibles
+y SQLite responde correctamente.
+```
+
+No inventar alertas.
+
+Las alertas deben proceder de:
+
+```text
+data_sources
+update_runs
+SQLite
+servicios de control
+```
+
+---
+
+## 2.3 Chat
+
+El chat debe ocupar la mayor parte del ancho útil del área principal.
+
+Distribución recomendada:
+
+```text
+┌─────────────────────────────────────────┐
+│ Alertas y estado                        │
+└─────────────────────────────────────────┘
+
+┌─────────────────────────────────────────┐
+│                                         │
+│        ASISTENTE OPERATIVO              │
+│                                         │
+│        conversación                     │
+│                                         │
+│        conversación                     │
+│                                         │
+│        input                             │
+│                                         │
+└─────────────────────────────────────────┘
+
+┌─────────────────────────────────────────┐
+│ KPIs                                    │
+└─────────────────────────────────────────┘
+```
+
+El chat debe:
+
+- ocupar todo el ancho disponible,
+- tener más espacio vertical,
+- evitar columnas estrechas,
+- mantener el input visible al final de la conversación.
+
+---
+
+## 2.4 KPIs
+
+### Cambio obligatorio
+
+Los KPIs deben dejar de estar en la parte superior de la vista.
+
+Deben colocarse:
+
+```text
+DEBAJO DEL CHAT
+```
+
+y fuera del propio contenedor del chat.
+
+Orden:
+
+```text
+Alertas
+   ↓
+Chat
+   ↓
+KPIs
+```
+
+KPIs actuales:
+
+- Fuentes activas
+- Fuentes al día
+- Alertas abiertas
+- Último scraping / actualización
+- Filas totales
+- Estado DB
+
+Pueden mantenerse estos KPIs siempre que existan datos reales.
+
+---
+
+## 2.5 Tamaño de KPIs
+
+En esta vista los KPIs pueden seguir siendo relevantes visualmente, pero no deben desplazar el chat.
+
+Utilizar tarjetas horizontales y compactas.
+
+Ejemplo:
+
+```text
+┌────────────┐ ┌────────────┐ ┌────────────┐
+│ Fuentes    │ │ Fuentes OK │ │ Alertas    │
+│     5      │ │     5      │ │     0      │
+└────────────┘ └────────────┘ └────────────┘
+```
+
+---
+
+# 3. Vista 2 — Simulador TDRS
+
+## 3.1 Objetivo
+
+El Simulador TDRS debe seguir utilizando datos reales de los CSV disponibles.
+
+El ranking debe estar construido con señales derivadas de:
+
+- clima,
+- conectividad,
+- popularidad / pasajeros,
+- capacidad sanitaria,
+- seguridad.
+
+inventar valores cuando una variable no tenga cobertura con el metodo KNN.
+
+---
+
+# 3.2 Reducir altura de todos los KPIs
+
+### Cambio obligatorio
+
+Las tarjetas KPI actuales ocupan demasiado espacio vertical.
+
+Reducir su altura.
+
+Objetivo:
+
+```text
+ANTES
+
+┌───────────────┐
+│               │
+│    KPI        │
+│    48 %       │
+│               │
+└───────────────┘
+
+
+DESPUÉS
+
+┌───────────────┐
+│ KPI      48 % │
+└───────────────┘
+```
+
+Los KPIs deben ser:
+
+- más bajos,
+- más compactos,
+- legibles,
+- alineados horizontalmente,
+- sin perder jerarquía.
+
+KPIs actualmente relevantes:
+
+- Elegibles
+- Cobertura media
+- Días soleados Top 5
+- Visitantes Top 5
+- Camas Top 5
+- Homicidios Top 5
+
+---
+
+# 3.3 Selector de escenario
+
+Actualmente:
+
+```text
+Popular
+Equilibrado
+Explorador
+Personalizado
+```
+
+### Cambio obligatorio
+
+Personalizar visualmente la selección de escenarios.
+
+Cada escenario debe disponer de:
+
+- icono,
+- nombre,
+- pequeña característica / descripción.
+
+Ejemplo conceptual:
+
+```text
+🔥 Popular
+Prioriza destinos con mayor volumen / popularidad
+
+⚖ Equilibrado
+Combina popularidad, clima, seguridad y capacidad
+
+🧭 Explorador
+Da más peso a destinos menos saturados o alternativos
+
+```
+
+Los iconos pueden sustituirse por iconografía compatible con Streamlit o símbolos Unicode.
+
+No utilizar iconos sin relación con el escenario.
+
+---
+
+# 3.4 Filtros laterales
+
+Mantener los filtros en el sidebar izquierdo.
+
+Estructura:
+
+```text
+Vista
+   ↓
+Simulador TDRS
+   ↓
+Escenario
+   ↓
+Filtros / pesos
+   ↓
+Restricciones
+```
+
+Pesos del modelo:
+
+- % días soleados / año
+- % precipitación — menor es mejor
+- Más visitado
+- Capacidad sanitaria
+- Seguridad
+
+No introducir variables que no puedan derivarse de los datasets.
+
+---
+
+# 3.5 Restricciones
+
+Mantener únicamente restricciones que tengan sentido comercial y datos disponibles.
+
+Las restricciones principales siguen siendo:
+
+```text
+Precio máximo (€)
+Máx. días hospedados (365 dias max)
+```
+
+La duración solo debe utilizarse cuando el catálogo disponga de duración real.
+
+Si no existe duración:
+
+```text
+no inventar valor
+no excluir automáticamente
+```
+
+---
+
+# 3.6 Top 3
+
+Mantener una diferenciación clara de las tres primeras posiciones.
+
+Las primeras posiciones pueden utilizar:
+
+```text
+🥇 Posición 1
+🥈 Posición 2
+🥉 Posición 3
+```
+
+Cada tarjeta debe mostrar como mínimo:
+
+- destino,
+- score,
+- cobertura de datos,
+- pasajeros/año cuando exista,
+- precio cuando exista.
+
+---
+
+# 3.7 Resto del ranking
+
+El resto del ranking debe mostrarse en una tabla limpia y elegante.
+
+Distinguir visualmente:
+
+```text
+TOP 3
+──────────
+RESTO DEL RANKING
+```
+
+La tabla debe priorizar variables interpretables.
+
+Ejemplo:
+
+```text
+Posición
+Destino
+Score
+Cobertura
+Días soleados %
+Precipitación %
+Pasajeros/año
+Camas/1000
+Homicidios/100k
+Precio €
+Días hospedados
+```
+
+Cuando no exista información:
+
+```text
+—
+```
+
+en lugar de inventar valores.
+
+---
+
+# 4. Vista 3 — Control Web
+
+## 4.1 KPIs
+
+Mantener los KPIs comerciales principales:
+
+- Sesiones
+- Clics
+- Reservas
+- Ingresos
+- Cancelaciones
+- ROI
+
+No volver a introducir métricas eliminadas salvo que se solicite posteriormente.
+
+---
+
+# 4.2 Sustituir gráfico de embudo
+
+### Cambio obligatorio
+
+Eliminar el gráfico actual de barras / embudo utilizado en la parte inferior izquierda.
+
+Debe sustituirse por:
+
+```text
+MAPA GEOESPACIAL
+```
+
+El objetivo del mapa es mostrar:
+
+- destinos más comprados,
+- destinos más clicados,
+- destinos con más reservas,
+- o una combinación seleccionable de estas métricas.
+
+---
+
+# 4.3 Mapa geoespacial
+
+El mapa debe usar datos reales.
+
+Fuente posible:
+
+```text
+events
+bookings
+products
+destinations
+```
+
+Métrica por defecto recomendada:
+
+```text
+clics por destino
+```
+
+y, cuando existan reservas:
+
+```text
+reservas por destino
+```
+
+El mapa debe poder representar:
+
+```text
+Destino
+Latitud
+Longitud
+Clics
+Reservas
+Ingresos
+```
+
+Si todavía no existen latitud / longitud:
+
+- crear una tabla de geolocalización de destinos,
+- o incorporar coordenadas únicamente cuando se puedan obtener de una fuente fiable,
+- no inventar coordenadas.
+
+---
+
+# 4.4 Visualización recomendada
+
+Ejemplo:
+
+```text
+              EUROPA
+
+          ● Madrid
+         23 clics
+          4 reservas
+
+                ● Mallorca
+                 15 clics
+
+ ● Algarve
+  12 clics
+```
+
+Los puntos pueden variar en tamaño según:
+
+```text
+clics
+reservas
+ingresos
+```
+
+Selector opcional:
+
+```text
+Visualizar por:
+○ Clics
+○ Reservas
+○ Ingresos
+```
+
+---
+
+# 4.5 Estado de instrumentación
+
+Mantener:
+
+```text
+Estado de instrumentación
+```
+
+para explicar qué métricas todavía no pueden calcularse.
+
+Ejemplo:
+
+```text
+KPI          Estado                       Necesita
+CTR          pendiente                    product_impression
+Conversión   disponible                   sessions + bookings
+ROI          pendiente                    cost_eur
+Latencia     pendiente                    response_time_ms
+```
+
+---
+
+# 4.6 Rendimiento por destino
+
+Mantener la tabla:
+
+```text
+Rendimiento por destino
+```
+
+pero alinearla con el mapa.
+
+Columnas recomendadas:
+
+```text
+destination
+impressions
+clicks
+detail_views
+bookings
+revenue
+```
+
+---
+
+# 5. Vista 4 — Datos / modelo
+
+## 5.1 Objetivo
+
+Seguir funcionando como centro técnico de control del sistema.
+
+Debe permitir comprobar:
+
+- SQLite,
+- tablas,
+- fuentes,
+- actualización,
+- scraping,
+- modelos del dataset,
+- histórico,
+- errores.
+
+---
+
+# 5.2 Alertas de datos
+
+Mantener:
+
+```text
+Alertas de datos
+```
+
+en la parte superior del contenido técnico.
+
+Debe aparecer antes de las tablas de fuentes.
+
+Ejemplo:
+
+```text
+Alertas de datos
+
+Sin alertas
+No se detectan incidencias con las reglas operativas actuales.
+```
+
+---
+
+# 5.3 KPIs
+
+Mantener los KPIs técnicos:
+
+- SQLite
+- Tablas
+- Fuentes activas
+- Fuentes al día
+- Alertas
+- Tamaño DB
+
+Los KPIs:
+
+- deben ser compactos,
+- no deben ocupar altura innecesaria,
+- deben funcionar como resumen operativo.
+
+---
+
+# 5.4 Elementos resaltados sin instrucción textual
+
+En la revisión aparecen destacados:
+
+```text
+SQLite
+Tablas
+```
+
+pero no existe una instrucción textual explícita indicando eliminarlos.
+
+Por lo tanto:
+
+```text
+NO eliminarlos automáticamente.
+```
+
+Se mantienen hasta recibir una instrucción específica.
+
+---
+
+# 5.5 Tabs
+
+Mantener:
+
+```text
+Fuentes
+Historial de actualizaciones
+Bases y tablas
+Configuración
+```
+
+---
+
+# 6. Reglas de datos
+
+## 6.1 No inventar información
+
+Regla obligatoria:
+
+```text
+dato ausente ≠ dato estimado
+```
+
+Si una variable no está disponible:
+
+```text
+mostrar —
+```
+
+o:
+
+```text
+Pendiente de instrumentar
+```
+
+según corresponda.
+
+---
+
+## 6.2 Trazabilidad
+
+Toda métrica debe poder trazarse hasta:
+
+```text
+CSV
+SQLite
+evento
+booking
+fuente externa documentada
+```
+
+---
+
+## 6.3 KPIs calculados
+
+No persistir manualmente KPIs que puedan derivarse de:
+
+```text
+events
+sessions
+bookings
+products
+data_sources
+update_runs
+```
+
+---
+
+# 7. Arquitectura técnica
+
+Mantener:
+
+```text
+Streamlit
+   ↓
+Services
+   ↓
+Repositories
+   ↓
+SQLite
+```
+
+Streamlit no debe contener SQL repartido por la interfaz.
+
+---
+
+# 8. Archivos esperados
+
+La siguiente implementación deberá conservar:
+
+```text
+streamlit_app.py
+
+database/
+├── connection.py
+├── models.py
+├── repositories.py
+└── init_db.py
+
+services/
+├── analytics_service.py
+├── assistant_service.py
+├── alert_service.py
+├── data_control_service.py
+├── tdrs_service.py
+├── tracking_service.py
+└── ...
+
+data/
+├── app.db
+└── raw/
+
+tests/
+```
+
+Podrán añadirse:
+
+```text
+services/geospatial_service.py
+data/destination_coordinates.csv
+components/
+```
+
+si son necesarios para implementar correctamente el mapa.
+
+---
+
+# 9. Orden recomendado de implementación
+
+```text
+1. Mantener arquitectura y modelo existente
+        ↓
+2. Reorganizar Inicio
+        ↓
+3. Mover KPIs de Inicio debajo del chat
+        ↓
+4. Ampliar chat
+        ↓
+5. Compactar KPIs del TDRS
+        ↓
+6. Rediseñar selector de escenarios con iconos
+        ↓
+7. Mantener pesos TDRS basados en CSV
+        ↓
+8. Mantener precio + días como restricciones
+        ↓
+9. Revisar Top 3 + ranking
+        ↓
+10. Sustituir embudo por mapa geoespacial
+        ↓
+11. Conectar mapa con tracking real
+        ↓
+12. Mantener instrumentación y rendimiento por destino
+        ↓
+13. Validar Datos / modelo
+        ↓
+14. Ejecutar tests
+```
+
+---
+
+# 10. Criterios de aceptación
+
+## Inicio
+
+La vista será correcta cuando:
+
+- Alertas aparezcan claramente.
+- El chat sea el contenido principal.
+- El chat utilice casi todo el ancho disponible.
+- Los KPIs estén debajo del chat.
+- Los KPIs no estén dentro del chat.
+
+---
+
+## Simulador TDRS
+
+Será correcto cuando:
+
+- los KPIs sean más bajos,
+- cada escenario tenga icono / identidad propia,
+- los filtros continúen en el sidebar,
+- las variables procedan de los CSV,
+- las restricciones sean precio y días hospedados,
+- el top 3 esté diferenciado,
+- el resto del ranking sea legible,
+- no se inventen valores ausentes.
+
+---
+
+## Control Web
+
+Será correcto cuando:
+
+- se mantengan Sesiones, Clics, Reservas, Ingresos, Cancelaciones y ROI,
+- el gráfico de embudo actual haya desaparecido,
+- exista un mapa geoespacial,
+- el mapa muestre destinos con mayor interacción comercial,
+- el mapa utilice datos reales,
+- siga existiendo Estado de instrumentación,
+- siga existiendo Rendimiento por destino.
+
+---
+
+## Datos / modelo
+
+Será correcto cuando:
+
+- Alertas de datos aparezca arriba,
+- SQLite y Tablas sigan visibles,
+- los KPIs técnicos sean compactos,
+- las tabs técnicas sigan funcionando,
+- la información proceda realmente de SQLite y data_sources.
+
+---
+
+# 11. Resultado final esperado
+
+La aplicación debe sentirse como un dashboard profesional de operaciones y recomendación turística, no como una sucesión de componentes Streamlit.
+
+Jerarquía final:
+
+```text
+TUI DATA INTELLIGENCE
+
+Sidebar
+   ├── Inicio · Asistente
+   ├── Simulador TDRS
+   ├── Control Web
+   └── Datos / modelo
+
+Inicio
+   ├── Alertas
+   ├── Chat amplio
+   └── KPIs
+
+TDRS
+   ├── Escenario visual
+   ├── Filtros laterales
+   ├── KPIs compactos
+   ├── Top 3
+   └── Ranking
+
+Control Web
+   ├── KPIs comerciales
+   ├── Mapa geoespacial
+   ├── Estado de instrumentación
+   └── Rendimiento por destino
+
+Datos / modelo
+   ├── Alertas
+   ├── KPIs técnicos
+   ├── Fuentes
+   ├── Histórico
+   ├── Bases
+   └── Configuración
+```
+
+---
+
+# 12. Nota de implementación
+
+Este documento recoge únicamente cambios respaldados por las anotaciones visibles de la revisión.
+
+Cuando un elemento esté destacado sin una nota concreta, debe conservarse.
+
+No introducir cambios funcionales adicionales sin una instrucción explícita.
