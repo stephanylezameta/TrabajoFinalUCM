@@ -132,6 +132,23 @@ CREATE TABLE IF NOT EXISTS country_indicators (
     source TEXT
 );
 
+-- Sentimiento agregado por destino. Procede del pipeline del TFM, donde un
+-- transformer multilingüe clasificó ~38.000 reseñas reales. Aquí se guarda ya
+-- agregado, junto al volumen que lo sostiene: una media sin su n no es auditable.
+CREATE TABLE IF NOT EXISTS destination_sentiment (
+    destination_name TEXT PRIMARY KEY,
+    reviews_analyzed INTEGER,
+    sentiment_score REAL,
+    confidence REAL,
+    reviews_positive INTEGER,
+    reviews_neutral INTEGER,
+    reviews_negative INTEGER,
+    negative_pct REAL,
+    model TEXT,
+    source TEXT,
+    updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS imports (
     import_id TEXT PRIMARY KEY,
     imported_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,

@@ -13,6 +13,7 @@ from services.import_service import (
     import_climate_csv,
     import_connectivity_csv,
     import_country_indicators_csv,
+    import_sentiment_csv,
 )
 from services.reference_service import (
     import_destinations_from_proposal_html,
@@ -92,6 +93,24 @@ DEFAULT_SOURCES: list[dict[str, Any]] = [
         "automation_mode": "Manual",
         "notes": "Cadencia mensual configurada como objetivo operativo inicial.",
     },
+    {
+        "source_id": "sentiment",
+        "display_name": "Sentimiento de reseñas",
+        "source_file": "sentimiento_por_destino.csv",
+        "target_table": "destination_sentiment",
+        "source_type": "CSV",
+        "provider": "Pipeline TFM · reseñas analizadas",
+        "update_method": "CSV import",
+        "refresh_interval_hours": 720,
+        "dataset_model": "cardiffnlp/twitter-xlm-roberta-base-sentiment · agregado por destino",
+        "scraper_script": "scripts/export_sentiment.py (desde tui_recomendador.db)",
+        "automation_mode": "Manual",
+        "notes": (
+            "Media de sentimiento por destino sobre reseñas ya clasificadas por el "
+            "pipeline, con un mínimo de 25 reseñas por destino. Regenerable con "
+            "scripts/export_sentiment.py; la base de origen no se versiona por tamaño."
+        ),
+    },
 ]
 
 TABLE_ROLES = {
@@ -103,6 +122,7 @@ TABLE_ROLES = {
     "climate_observations": "Series mensuales de clima por destino",
     "connectivity_stats": "Conectividad aérea y pasajeros",
     "country_indicators": "Indicadores de seguridad/sanidad por país",
+    "destination_sentiment": "Sentimiento agregado de reseñas por destino",
     "imports": "Histórico de importaciones",
     "data_sources": "Registro operativo de fuentes y cadencias",
     "update_runs": "Histórico operativo de actualizaciones/scraping",
@@ -189,9 +209,20 @@ def seed_data_sources() -> None:
                     )
 
 
-def _row_count(table: str) -> int:
-    with db_session() as conn:
-        return int(conn.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0])
+def _count_on(conn, table: str) -> int:
+    return int(conn.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0])
+
+
+def _row_count(table: str, conn=None) -> int:
+    """Cuenta filas de una tabla.
+
+    Acepta una conexión ya abierta para poder reutilizarla. Sin ella abre y
+    cierra la suya, que es el comportamiento histórico.
+    """
+    if conn is not None:
+        return _count_on(conn, table)
+    with db_session() as own:
+        return _count_on(own, table)
 
 
 def update_source_config(
@@ -320,6 +351,8 @@ def refresh_source(source_id: str, raw_dir: Path = RAW_DIR, trigger: str = "manu
             count = import_connectivity_csv(path)
         elif source_id == "country_indicators":
             count = import_country_indicators_csv(path)
+        elif source_id == "sentiment":
+            count = import_sentiment_csv(path)
         else:
             raise NotImplementedError(f"No hay importador asociado a {source_id}")
         current_rows = _row_count(source["target_table"])
@@ -444,79 +477,104 @@ def get_table_stats() -> list[dict[str, Any]]:
     return get_database_tables()
 
 
-def _coverage_for_source(source_id: str) -> str | None:
-    with db_session() as conn:
-        if source_id == "climate":
-            row = conn.execute("SELECT MIN(year_month),MAX(year_month) FROM climate_observations").fetchone()
-            return f"{row[0]} → {row[1]}" if row and row[0] else None
-        if source_id == "connectivity":
-            return "Snapshot 2025"
-        if source_id == "country_indicators":
-            return f"{_row_count('country_indicators')} países/áreas"
-        if source_id == "products_html":
-            return f"{_row_count('products')} ofertas"
-        if source_id == "destinations_tdrs":
-            return f"{_row_count('destinations')} destinos"
+def _coverage_on(conn, source_id: str) -> str | None:
+    if source_id == "climate":
+        row = conn.execute("SELECT MIN(year_month),MAX(year_month) FROM climate_observations").fetchone()
+        return f"{row[0]} → {row[1]}" if row and row[0] else None
+    if source_id == "connectivity":
+        return "Snapshot 2025"
+    if source_id == "sentiment":
+        row = conn.execute(
+            "SELECT COUNT(*),SUM(reviews_analyzed) FROM destination_sentiment"
+        ).fetchone()
+        return f"{row[0]} destinos · {int(row[1] or 0):,} reseñas" if row and row[0] else None
+    if source_id == "country_indicators":
+        return f"{_count_on(conn, 'country_indicators')} países/áreas"
+    if source_id == "products_html":
+        return f"{_count_on(conn, 'products')} ofertas"
+    if source_id == "destinations_tdrs":
+        return f"{_count_on(conn, 'destinations')} destinos"
     return None
 
 
+def _coverage_for_source(source_id: str, conn=None) -> str | None:
+    if conn is not None:
+        return _coverage_on(conn, source_id)
+    with db_session() as own:
+        return _coverage_on(own, source_id)
+
+
 def get_source_health() -> list[dict[str, Any]]:
+    """Estado derivado de cada fuente declarada.
+
+    Resuelve todo sobre una única conexión. Antes abría una por cada recuento y
+    por cada cálculo de cobertura, y como ``get_alerts`` la invoca varias veces,
+    ese coste se multiplicaba en cada rerun de Streamlit.
+    """
     seed_data_sources()
     now = _utcnow()
     with db_session() as conn:
         sources = [dict(r) for r in conn.execute("SELECT * FROM data_sources ORDER BY display_name")]
-    out = []
-    for source in sources:
-        last = _parse_sqlite_ts(source.get("last_success_at"))
-        interval = int(source.get("refresh_interval_hours") or 0)
-        next_due = last + timedelta(hours=interval) if last and interval else None
-        source_path = RAW_DIR / source["source_file"] if source.get("source_file") else None
-        file_ok = bool(source_path and source_path.exists())
-        overdue_hours = max((now - next_due).total_seconds() / 3600, 0) if next_due and now > next_due else 0.0
-        age_hours = max((now - last).total_seconds() / 3600, 0) if last else None
-        overdue_ratio = (age_hours / interval) if age_hours is not None and interval else None
-        if not source.get("enabled"):
-            health = "Desactivada"
-        elif source.get("last_status") == "error":
-            health = "ERROR"
-        elif not file_ok:
-            health = "Falta fuente"
-        elif last is None:
-            health = "Sin ejecutar"
-        elif next_due and now > next_due:
-            health = "Atrasada"
-        else:
-            health = "OK"
+        return [_source_health_row(conn, source, now) for source in sources]
+
+
+def _source_health_row(conn, source: dict[str, Any], now: datetime) -> dict[str, Any]:
+    """Calcula el estado de una fuente sobre una conexión ya abierta."""
+    last = _parse_sqlite_ts(source.get("last_success_at"))
+    interval = int(source.get("refresh_interval_hours") or 0)
+    next_due = last + timedelta(hours=interval) if last and interval else None
+    source_path = RAW_DIR / source["source_file"] if source.get("source_file") else None
+    file_ok = bool(source_path and source_path.exists())
+    overdue_hours = max((now - next_due).total_seconds() / 3600, 0) if next_due and now > next_due else 0.0
+    age_hours = max((now - last).total_seconds() / 3600, 0) if last else None
+    overdue_ratio = (age_hours / interval) if age_hours is not None and interval else None
+
+    if not source.get("enabled"):
+        health = "Desactivada"
+    elif source.get("last_status") == "error":
+        health = "ERROR"
+    elif not file_ok:
+        health = "Falta fuente"
+    elif last is None:
+        health = "Sin ejecutar"
+    elif next_due and now > next_due:
+        health = "Atrasada"
+    else:
+        health = "OK"
+
+    try:
+        current_rows = _count_on(conn, source["target_table"])
+    except Exception:  # noqa: BLE001 - una tabla ausente no debe tumbar el panel
         current_rows = 0
-        try:
-            current_rows = _row_count(source["target_table"])
-        except Exception:
-            pass
-        out.append({
-            "source_id": source["source_id"],
-            "Estado": health,
-            "Dataset": source["display_name"],
-            "Tabla destino": source["target_table"],
-            "Fuente": source.get("provider"),
-            "Fichero / endpoint actual": source.get("source_file"),
-            "Tipo": source.get("source_type"),
-            "Método actual": source.get("update_method"),
-            "Automatización": source.get("automation_mode"),
-            "Intervalo objetivo": format_interval(interval),
-            "interval_hours": interval,
-            "Última actualización": source.get("last_success_at"),
-            "Próxima esperada": _iso(next_due),
-            "Horas de retraso": round(overdue_hours, 1),
-            "Ratio intervalo": round(overdue_ratio, 2) if overdue_ratio is not None else None,
-            "Filas actuales": current_rows,
-            "Cobertura": _coverage_for_source(source["source_id"]),
-            "Modelo del dataset": source.get("dataset_model"),
-            "Scraper / conector": source.get("scraper_script"),
-            "Último error": source.get("last_error"),
-            "Notas": source.get("notes"),
-            "enabled": bool(source.get("enabled")),
-        })
-    return out
+    try:
+        coverage = _coverage_on(conn, source["source_id"])
+    except Exception:  # noqa: BLE001
+        coverage = None
+
+    return {
+        "source_id": source["source_id"],
+        "Estado": health,
+        "Dataset": source["display_name"],
+        "Tabla destino": source["target_table"],
+        "Fuente": source.get("provider"),
+        "Fichero / endpoint actual": source.get("source_file"),
+        "Tipo": source.get("source_type"),
+        "Método actual": source.get("update_method"),
+        "Automatización": source.get("automation_mode"),
+        "Intervalo objetivo": format_interval(interval),
+        "interval_hours": interval,
+        "Última actualización": source.get("last_success_at"),
+        "Próxima esperada": _iso(next_due),
+        "Horas de retraso": round(overdue_hours, 1),
+        "Ratio intervalo": round(overdue_ratio, 2) if overdue_ratio is not None else None,
+        "Filas actuales": current_rows,
+        "Cobertura": coverage,
+        "Modelo del dataset": source.get("dataset_model"),
+        "Scraper / conector": source.get("scraper_script"),
+        "Último error": source.get("last_error"),
+        "Notas": source.get("notes"),
+        "enabled": bool(source.get("enabled")),
+    }
 
 
 def get_data_sources_status() -> list[dict[str, Any]]:

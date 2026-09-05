@@ -37,7 +37,45 @@ def _request_json(api_url: str, params: dict[str, object]) -> dict:
         return json.loads(response.read().decode("utf-8"))
 
 
+# Los artículos de municipios usan como miniatura principal la bandera o el
+# escudo del infobox. Sirven para identificar, no para ilustrar: como fotografía
+# de un destino quedan mal y además suelen ser verticales.
+_REJECTED_PATTERNS = (
+    "bandera", "flag", "escudo", "coat_of_arms", "coat of arms", "crest",
+    "seal_of", "shield", "blason", "blazon", "wappen",
+    "mapa", "_map", "map_of", "location", "locator", "ubicacion", "ubicación",
+    "logo", "icon", "signature", "firma", "spain_location", "localizacion",
+)
+
+# Un escudo o una bandera son claramente más altos que anchos, o cuadrados.
+# Una fotografía de paisaje o de conjunto urbano es panorámica.
+_MIN_ASPECT_RATIO = 1.15
+
+
+def _is_decorative_symbol(url: str) -> bool:
+    lowered = url.lower()
+    return any(pattern in lowered for pattern in _REJECTED_PATTERNS)
+
+
+def _is_landscape(thumbnail: dict) -> bool:
+    width = thumbnail.get("width")
+    height = thumbnail.get("height")
+    if not width or not height:
+        # Sin dimensiones no se puede juzgar: se acepta y decide el nombre.
+        return True
+    try:
+        return (float(width) / float(height)) >= _MIN_ASPECT_RATIO
+    except (TypeError, ValueError, ZeroDivisionError):
+        return True
+
+
 def _image_from_pages(payload: dict, destination: str) -> dict | None:
+    """Primera miniatura que parezca una fotografía del destino.
+
+    Descarta banderas, escudos y mapas de localización, tanto por el nombre del
+    fichero como por su proporción. Es preferible no mostrar imagen y caer en el
+    fondo sólido que ilustrar un destino con su escudo municipal.
+    """
     pages = (payload.get("query") or {}).get("pages") or []
     if isinstance(pages, dict):
         pages = list(pages.values())
@@ -48,6 +86,8 @@ def _image_from_pages(payload: dict, destination: str) -> dict | None:
         thumbnail = page.get("thumbnail") or {}
         source = thumbnail.get("source")
         if not source:
+            continue
+        if _is_decorative_symbol(source) or not _is_landscape(thumbnail):
             continue
         title = str(page.get("title") or destination)
         return {
@@ -89,7 +129,9 @@ def _search_lookup(api_url: str, destination: str) -> dict | None:
             "generator": "search",
             "gsrsearch": destination,
             "gsrnamespace": 0,
-            "gsrlimit": 5,
+            # Se piden más candidatos que antes porque ahora se descartan
+            # banderas y escudos: con 5 resultados a menudo no quedaba ninguno.
+            "gsrlimit": 12,
             "prop": "pageimages|info",
             "inprop": "url",
             "piprop": "thumbnail|name",

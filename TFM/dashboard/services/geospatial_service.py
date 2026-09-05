@@ -100,6 +100,49 @@ def get_geospatial_metrics() -> list[dict[str, Any]]:
     return sorted(aggregated.values(), key=lambda r: (-r["clicks"], -r["bookings"], r["destination"]))
 
 
+def get_unmapped_destinations() -> list[dict[str, Any]]:
+    """Destinos con interacción registrada que no tienen coordenada asignada.
+
+    ``get_geospatial_metrics`` los descarta para no inventar una posición, pero
+    descartarlos en silencio deja el mapa incompleto sin que nadie se entere.
+    Esta función expone la omisión para que la interfaz pueda declararla, en
+    coherencia con la regla de trazabilidad del proyecto.
+    """
+    coord_map = {
+        normalize_text(row["destination"]): row.to_dict()
+        for _, row in _load_coordinates().iterrows()
+    }
+    unmapped: dict[str, dict[str, Any]] = {}
+    for row in get_destination_metrics():
+        destination = row.get("destination") or ""
+        if not destination or destination == "Sin destino":
+            continue
+        if _match_coordinate_key(destination, coord_map):
+            continue
+        entry = unmapped.setdefault(destination, {
+            "destination": destination,
+            "clicks": 0,
+            "bookings": 0,
+            "revenue_eur": 0.0,
+        })
+        entry["clicks"] += int(row.get("clicks") or 0)
+        entry["bookings"] += int(row.get("bookings") or 0)
+        entry["revenue_eur"] += float(row.get("revenue_eur") or 0.0)
+    return sorted(unmapped.values(), key=lambda r: (-r["clicks"], r["destination"]))
+
+
+def coordinate_coverage() -> dict[str, Any]:
+    """Resumen de cobertura del fichero de coordenadas."""
+    coords = _load_coordinates()
+    unmapped = get_unmapped_destinations()
+    return {
+        "coordinates_available": int(len(coords)),
+        "unmapped_destinations": len(unmapped),
+        "unmapped_names": [row["destination"] for row in unmapped],
+        "source_path": str(COORDINATES_PATH),
+    }
+
+
 def metric_value(row: dict[str, Any], metric: str) -> float:
     if metric == "Reservas":
         return float(row.get("bookings") or 0)

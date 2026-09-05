@@ -35,7 +35,7 @@ Sin esa configuración la app arranca igual: la vista queda en modo informativo.
 pytest -q
 ```
 
-110 tests. No tocan `data/app.db` ni hacen llamadas de red: `conftest.py`
+135 tests. No tocan `data/app.db` ni hacen llamadas de red: `conftest.py`
 construye una base temporal desde los CSV de `data/raw/` y la destruye al acabar.
 
 ## Publicar con URL pública
@@ -73,8 +73,16 @@ interfaz, como demuestra [`demo_modelo.ipynb`](demo_modelo.ipynb).
 
 ### Simulador TDRS
 
-Modelo propio *TDRS CSV v3.1 · KNN*. Cinco factores: días soleados, baja
-precipitación, popularidad, capacidad sanitaria y seguridad.
+Modelo propio *TDRS CSV v3.2 · KNN*. Seis factores: días soleados, baja
+precipitación, popularidad, capacidad sanitaria, seguridad y **satisfacción de
+viajeros**.
+
+La satisfacción es la única señal que mide experiencia vivida y no condiciones
+objetivas del destino. Procede del sentimiento de 36.063 reseñas reales
+clasificadas por un transformer multilingüe en el pipeline del TFM, agregadas a
+una fila por destino. Cubre 11 de los 16 destinos del catálogo; el resto lo estima
+el KNN y queda marcado. En la tabla se muestra el valor real, así que un destino
+sin reseñas aparece como `—` aunque internamente tenga una estimación.
 
 - Selector con tres escenarios: **Popular**, **Equilibrado**, **Explorador**.
   `Personalizado` existe en el modelo pero no se expone.
@@ -100,6 +108,11 @@ Es **independiente del TDRS**, no lo sustituye: el TDRS cubre el catálogo
 internacional de TUI y calcula en local. Devuelve siempre tres destinos con su
 explicabilidad: desglose del score en cinco dimensiones, motivos, fortalezas,
 concesiones y cobertura por fuente.
+
+La vista muestra una recomendación **sin pedirla**: al abrirla consulta la API con
+preferencias por defecto y presenta el destino recomendado en un bloque destacado
+con fotografía. El formulario queda plegado, para refinar y no para empezar. Solo
+se llama una vez por sesión y la respuesta se cachea.
 
 Contrato completo en
 [`docs/integraciones/api_recomendaciones.md`](../docs/integraciones/api_recomendaciones.md).
@@ -143,6 +156,18 @@ conectividad aérea y pasajeros, e indicadores de seguridad y sanidad del Banco
 Mundial (con celdas vacías, que es lo que justifica el KNN). Dos HTML aportan el
 listado de destinos y el catálogo de ofertas.
 
+`data/raw/sentimiento_por_destino.csv` es el sentimiento agregado por destino.
+Lo genera `scripts/export_sentiment.py` desde `../data/tui_recomendador.db`, la
+base del pipeline del TFM. Esa base pesa 64 MB y **no se versiona**: solo viaja el
+CSV agregado, que es lo que necesita el modelo. Para regenerarlo:
+
+```powershell
+python scripts\export_sentiment.py
+```
+
+Si la base del pipeline no está disponible, el CSV ya exportado sigue siendo
+válido y la app funciona igual.
+
 `data/app.db` se genera; no está versionada. `scripts/build_model.py` la
 reconstruye y es idempotente.
 
@@ -166,8 +191,15 @@ que la misma configuración sirve en local y en Streamlit Cloud.
 
 ## Limitaciones conocidas
 
-- `data/destination_coordinates.csv` no está verificado contra un geocoder.
+- `data/destination_coordinates.csv` son centroides curados a mano. Los 16 valores
+  actuales se han verificado contra referencias conocidas y son correctos, pero la
+  procedencia no es auditable: para producción debería usarse un geocoder. Los
+  destinos que aparezcan sin coordenada no se dibujan, y la vista lo declara
+  explícitamente bajo el mapa.
 - `exclude_destinations` de la API externa no filtra por nombre de municipio.
 - El motor externo devuelve siempre tres destinos: no admite paginación.
 - En Streamlit Community Cloud el SQLite es efímero, así que el tracking generado
   por el uso público se pierde en cada reinicio del contenedor.
+- Sin pool de conexiones: cada `db_session()` abre una nueva. Un render cuesta
+  ~20 conexiones sobre SQLite local, que es asumible; con una base remota habría
+  que introducir un pool.

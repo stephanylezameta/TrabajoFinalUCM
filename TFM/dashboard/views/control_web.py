@@ -15,7 +15,11 @@ from services.analytics_service import (
     get_destination_metrics,
     instrumentation_status,
 )
-from services.geospatial_service import get_geospatial_metrics, metric_value
+from services.geospatial_service import (
+    get_geospatial_metrics,
+    get_unmapped_destinations,
+    metric_value,
+)
 
 WORLD_GEOJSON = Path(__file__).resolve().parents[1] / "data" / "world_lowres.geojson"
 
@@ -92,6 +96,8 @@ def render_geospatial_map(rows: list[dict], metric: str) -> None:
 
 def render_control_web() -> None:
     render_system_alerts("Alertas de sistema")
+    # Se calcula una sola vez y se reparte: el estado de instrumentación se
+    # deriva de estas mismas métricas.
     m = get_dashboard_metrics()
     render_metric_rows([
         ("Sesiones", m["sessions"]),
@@ -121,10 +127,20 @@ def render_control_web() -> None:
                 st.rerun()
         geo_rows = get_geospatial_metrics()
         render_geospatial_map(geo_rows, metric)
+        # Un destino sin coordenada no se dibuja. Se declara en lugar de
+        # desaparecer del mapa sin dejar rastro.
+        unmapped = get_unmapped_destinations()
+        if unmapped:
+            names = ", ".join(row["destination"] for row in unmapped[:6])
+            extra = f" y {len(unmapped) - 6} más" if len(unmapped) > 6 else ""
+            st.caption(
+                f"{len(unmapped)} destino(s) con interacción quedan fuera del mapa por "
+                f"no tener coordenada en `data/destination_coordinates.csv`: {names}{extra}."
+            )
     with right:
         st.markdown("### Estado de instrumentación")
         st.dataframe(
-            pd.DataFrame(instrumentation_status()),
+            pd.DataFrame(instrumentation_status(m)),
             width="stretch", hide_index=True, height=300,
         )
 

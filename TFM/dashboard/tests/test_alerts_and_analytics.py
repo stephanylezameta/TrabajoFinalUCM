@@ -93,12 +93,13 @@ def test_get_alerts_deduplicates_overlapping_rules(monkeypatch):
         "level": "WARNING", "title": "Misma causa", "message": "m",
         "source_id": "climate", "action": None,
     }
-    monkeypatch.setattr(alert_service, "evaluate_database_integrity", lambda: [dict(duplicate)])
-    monkeypatch.setattr(alert_service, "evaluate_empty_datasets", lambda: [dict(duplicate)])
-    monkeypatch.setattr(alert_service, "evaluate_scraping_errors", lambda: [])
-    monkeypatch.setattr(alert_service, "evaluate_source_freshness", lambda: [])
-    monkeypatch.setattr(alert_service, "evaluate_row_count_changes", lambda: [])
-    monkeypatch.setattr(alert_service, "evaluate_null_anomalies", lambda: [])
+    # Las reglas reciben las fuentes ya calculadas, de ahí el *args.
+    monkeypatch.setattr(alert_service, "evaluate_database_integrity", lambda *a: [dict(duplicate)])
+    monkeypatch.setattr(alert_service, "evaluate_empty_datasets", lambda *a: [dict(duplicate)])
+    monkeypatch.setattr(alert_service, "evaluate_scraping_errors", lambda *a: [])
+    monkeypatch.setattr(alert_service, "evaluate_source_freshness", lambda *a: [])
+    monkeypatch.setattr(alert_service, "evaluate_row_count_changes", lambda *a: [])
+    monkeypatch.setattr(alert_service, "evaluate_null_anomalies", lambda *a: [])
     alerts = get_alerts()
     assert len(alerts) == 1
 
@@ -116,12 +117,77 @@ def test_system_status_contract():
 def test_system_status_escalates_with_critical(monkeypatch):
     monkeypatch.setattr(
         alert_service, "get_alerts",
-        lambda include_ok=True: [{
+        lambda include_ok=True, sources=None: [{
             "level": "CRITICAL", "title": "t", "message": "m",
             "source_id": None, "action": None,
         }],
     )
     assert get_system_status()["status"] == "critical"
+
+
+# --------------------------------------------------------------------------
+# Coste de acceso a la base
+# --------------------------------------------------------------------------
+
+
+def test_get_alerts_reads_source_health_once(monkeypatch):
+    """Regresión: cuatro reglas necesitan las fuentes y no deben pedirlas cada una.
+
+    Cada `get_source_health()` recorre la base entera. Cuando cada regla hacía
+    su propia llamada, el sidebar abría más de 80 conexiones por rerun.
+    """
+    calls = {"n": 0}
+    real = alert_service.get_source_health
+
+    def counting():
+        calls["n"] += 1
+        return real()
+
+    monkeypatch.setattr(alert_service, "get_source_health", counting)
+    get_alerts()
+    assert calls["n"] == 1, f"get_source_health() se llamó {calls['n']} veces"
+
+
+def test_get_system_status_reuses_source_health(monkeypatch):
+    """`get_system_status` calcula las fuentes una vez y se las pasa a get_alerts."""
+    calls = {"n": 0}
+    real = alert_service.get_source_health
+
+    def counting():
+        calls["n"] += 1
+        return real()
+
+    monkeypatch.setattr(alert_service, "get_source_health", counting)
+    get_system_status()
+    assert calls["n"] == 1, f"get_source_health() se llamó {calls['n']} veces"
+
+
+def test_alert_rules_accept_prefetched_sources():
+    """Las reglas que dependen de las fuentes aceptan recibirlas ya calculadas."""
+    from services.data_control_service import get_source_health
+
+    sources = get_source_health()
+    for rule in (
+        evaluate_empty_datasets,
+        evaluate_scraping_errors,
+        evaluate_source_freshness,
+        evaluate_null_anomalies,
+    ):
+        alerts = rule(sources)
+        assert isinstance(alerts, list)
+        # El resultado debe coincidir con el de la variante que las busca sola.
+        assert [a["title"] for a in alerts] == [a["title"] for a in rule()]
+
+
+def test_dashboard_metrics_and_instrumentation_agree():
+    """`instrumentation_status` con métricas dadas debe coincidir con recalcularlas."""
+    metrics = get_dashboard_metrics()
+    assert instrumentation_status(metrics) == instrumentation_status()
+
+
+def test_funnel_accepts_prefetched_metrics():
+    metrics = get_dashboard_metrics()
+    assert get_funnel_metrics(metrics) == get_funnel_metrics()
 
 
 # --------------------------------------------------------------------------

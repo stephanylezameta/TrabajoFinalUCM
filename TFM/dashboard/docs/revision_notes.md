@@ -90,3 +90,195 @@ De 12 a 110. Nuevas suites:
 - `test_repositories.py` — persistencia, tracking y reservas.
 - `test_alerts_and_analytics.py` — reglas de alerta y KPIs derivados.
 - `test_app_smoke.py` — render de las cuatro vistas con `AppTest`.
+
+## V22 – Coste de acceso a datos y omisiones silenciosas
+
+Ronda de corrección guiada por medición, no por intuición. Se instrumentó
+`sqlite3.connect` para contar conexiones y tiempo por render antes de tocar nada.
+
+### El hallazgo
+
+`get_system_status()`, que se pinta en el sidebar de **todas** las vistas, abría
+**81 conexiones y tardaba 75 ms en cada interacción del usuario**. La causa era
+una multiplicación: `get_source_health()` abría 15 conexiones (una por cada
+recuento de filas y otra por cada cálculo de cobertura), y `get_alerts()` la
+invocaba cuatro veces, una por regla que necesitaba las fuentes, más la que hacía
+`get_system_status()` por su cuenta.
+
+`bootstrap()` no era el problema que parecía: 9 conexiones y 8 ms.
+
+### Medición antes y después
+
+| Operación | Antes | Después |
+| --- | --- | --- |
+| `get_system_status()` | 81 conn · 75 ms | 8 conn · 9 ms |
+| `get_source_health()` | 15 conn · 12 ms | 2 conn · 2 ms |
+| `get_dashboard_metrics()` | 11 conn · 9 ms | 1 conn · 0,8 ms |
+| `instrumentation_status()` | 11 conn · 10 ms | 1 conn · 0,8 ms |
+| Render Control Web | 114 conn · 119 ms | 21 conn · 24 ms |
+| Render Simulador TDRS | 91 conn · 108 ms | 18 conn · 26 ms |
+
+### Cambios
+
+- `get_source_health()` resuelve recuentos y coberturas sobre **una sola
+  conexión**. `_row_count` y `_coverage_for_source` aceptan una conexión abierta,
+  conservando su comportamiento anterior cuando no se les pasa.
+- Las cuatro reglas de alerta que dependen de las fuentes aceptan recibirlas ya
+  calculadas. `get_alerts(sources=...)` las obtiene una vez y las reparte, y
+  `get_system_status()` reutiliza las suyas.
+- `get_dashboard_metrics()` agrupa sus doce agregaciones en una conexión.
+- `instrumentation_status(metrics)` y `get_funnel_metrics(metrics)` aceptan
+  métricas ya calculadas; Control Web las calcula una vez y las comparte.
+- `bootstrap()` pasa a `@st.cache_resource`: es una operación de arranque, no de
+  render.
+
+### Omisión silenciosa en el mapa
+
+`get_geospatial_metrics()` descartaba con un `continue` cualquier destino sin
+coordenada. No inventaba una posición, que es correcto, pero lo hacía **sin
+dejar rastro**, en contra de la regla de trazabilidad del proyecto.
+
+- Nuevas `get_unmapped_destinations()` y `coordinate_coverage()`.
+- Control Web declara bajo el mapa qué destinos con interacción quedan fuera y
+  por qué.
+
+### Coordenadas
+
+Se verificaron las 16 coordenadas de `data/destination_coordinates.csv` contra
+valores conocidos: todas correctas. El aviso del README sobre sustituirlas por un
+geocoder sigue vigente por procedencia, no por exactitud. Se añaden tests que
+detectan los errores gruesos típicos de un fichero curado a mano: latitud y
+longitud intercambiadas, signo invertido, duplicados y procedencia sin declarar.
+
+### Tests
+
+De 110 a 120, incluidas dos regresiones que fijan la mejora contando cuántas
+veces se llama a `get_source_health()`.
+
+## V23 – Sexto factor: satisfacción real de viajeros
+
+El dashboard vivía sobre `app.db` (16 destinos, 3 ofertas) mientras el pipeline
+del TFM tenía en `tui_recomendador.db` 289.344 filas, entre ellas 37.956 reseñas
+ya clasificadas por un transformer multilingüe. Esa señal no se usaba en ninguna
+parte. Ahora es el sexto factor del TDRS.
+
+### Por qué esta señal y no otra
+
+Es la única del modelo que mide **experiencia vivida** en lugar de condiciones
+objetivas del destino. Las cinco anteriores (sol, precipitación, popularidad,
+camas de hospital, homicidios) describen cómo *es* un destino; esta describe cómo
+*salieron* quienes fueron.
+
+Y produce un resultado que el modelo antes no podía expresar: **Dubrovnik es el
+peor valorado de los 16 destinos** (0,45 de sentimiento medio, 34,6 % de reseñas
+negativas sobre 101 analizadas) siendo uno de los que el dashboard destacaba con
+fotografía. La tensión entre popularidad y satisfacción se puede ver, no solo
+enunciar.
+
+### Cómo llega el dato sin arrastrar 64 MB
+
+`tui_recomendador.db` está excluida por `.gitignore` y no puede viajar al
+despliegue. `scripts/export_sentiment.py` agrega sus reseñas a una fila por
+destino y las escribe en `data/raw/sentimiento_por_destino.csv`, que sí se
+versiona. El ETL existente lo importa como una fuente más, con su estado y su
+cadencia en el panel Datos/modelo.
+
+Se exportan los recuentos además de las medias: una media sin su `n` no es
+auditable. Umbral de 25 reseñas por destino, que no cuesta cobertura y descarta
+medias sin fundamento. Resultado: 392 destinos, 36.063 reseñas.
+
+### Cobertura y trazabilidad
+
+De los 16 destinos del catálogo, **11 tienen sentimiento real** (69 %). Los 5
+restantes (Carmona, Osuna, Ronda, Sevilla, Zadar) no tienen reseñas en el
+pipeline, así que el KNN los estima y quedan marcados en `knn_imputed_fields`.
+
+En la tabla del ranking se muestra el **valor real, no el imputado**: un destino
+sin reseñas aparece como `—` aunque internamente tenga una estimación con la que
+calcular el score. Es la regla de dato ausente ≠ dato estimado aplicada a la capa
+visible. El KPI «Satisfacción Top 5» va acompañado de «Con reseñas reales n/5»
+para que la media no se lea como si fuese toda observada.
+
+### Pesos por escenario
+
+| Escenario | Peso | Motivo |
+| --- | --- | --- |
+| Popular | 40 | Prioriza volumen; es donde se ve el conflicto con destinos saturados |
+| Equilibrado | 70 | En línea con el resto de señales |
+| Explorador | 95 | Busca calidad frente a masificación: es su señal más pertinente |
+
+El asistente conversacional entiende la nueva dimensión («destinos bien
+valorados», «las reseñas me dan igual») y la traduce al sexto peso, con la misma
+precaución que en popularidad: las expresiones negativas se comprueban antes que
+las positivas.
+
+### Cambios
+
+- Nueva tabla `destination_sentiment` y fuente `sentiment` en el panel de datos.
+- `import_sentiment_csv` en `import_service`.
+- `tdrs_service`: `CSV_FACTORS`, `PRESETS` y `RAW_FIELDS` pasan a seis señales;
+  el modelo se etiqueta como `TDRS CSV v3.2 · 6 señales · KNN`.
+- `scenario_metrics` reporta `avg_top5_sentiment` y `top5_sentiment_real`.
+- Nuevos `scripts/export_sentiment.py` e `scripts/inspect_db.py`.
+
+### Tests
+
+De 121 a 130. Entre ellos, uno que comprueba que el factor **influye de verdad**:
+con peso 0 y con peso 100 el orden del ranking difiere.
+
+## V24 – Diseño del recomendador y filtro de imágenes
+
+Consolidación: sin datos nuevos, solo el acabado de la vista que consume la API.
+
+### Fotografía en el recomendador
+
+La vista no tenía ninguna imagen, mientras el simulador sí las usaba en su Top 3.
+Era la incoherencia visual más evidente.
+
+- El bloque destacado lleva la fotografía **como fondo con degradado encima**, de
+  modo que da contexto sin competir con el texto ni desplazar información.
+- Las tarjetas de alternativas llevan fotografía superior, como el podio del
+  simulador.
+- Atribución visible en ambos casos.
+- El score se acompaña de una lectura cualitativa («afinidad muy alta», «alta»…):
+  un 0,86 a secas no dice nada a quien lo lee.
+- Se retiran los KPIs técnicos que había bajo el bloque destacado («Destinos
+  propuestos», «Score máximo», «Con cobertura completa»): repetían lo que el
+  propio bloque ya comunica.
+
+### El filtro que hizo falta
+
+Al verificar las fotos de los municipios que devuelve la API apareció un problema
+que habría empeorado el diseño en lugar de mejorarlo: **Wikipedia usa la bandera o
+el escudo del infobox como miniatura principal** de los artículos de municipios
+españoles. Níjar devolvía `Bandera_de_Nijar.svg`, Sevilla `Flag_of_Seville.svg`,
+Madrid su escudo. Una bandera municipal a pantalla completa como fondo destacado
+queda mal.
+
+`destination_image_service` ahora descarta esas miniaturas por dos vías
+independientes:
+
+1. **Nombre del fichero**: bandera, flag, escudo, coat_of_arms, mapa, location,
+   locator, logo y variantes.
+2. **Proporción**: un escudo o una bandera es vertical o cuadrada; una fotografía
+   de paisaje es panorámica. Se exige una relación de aspecto mínima de 1,15.
+
+Y se amplían los candidatos de búsqueda de 5 a 12, porque al descartar símbolos a
+menudo no quedaba ninguno.
+
+Efecto medido sobre 13 municipios reales de la API: la cobertura baja de 8/13 a
+5/13, pero **las que pasan son fotografías de verdad**. Níjar devuelve el Arrecife
+de las Sirenas, Mijas una vista aérea, Sevilla la ciudad. Se prefiere el fondo
+sólido a ilustrar un destino con su escudo.
+
+### Otros
+
+- Se recorta el docstring de `streamlit_app.py`, que describía la estructura de
+  carpetas y se quedaba obsoleto en cada refactor. Esa información vive en el
+  README.
+
+### Tests
+
+De 130 a 135, con seis casos nuevos que fijan el filtro: banderas, escudos,
+mapas, imágenes verticales, y la preferencia por la fotografía cuando conviven
+con un símbolo en el mismo conjunto de resultados.

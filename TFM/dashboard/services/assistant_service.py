@@ -26,15 +26,17 @@ MODEL_FIELDS = (
     "popularity",
     "hospital_beds",
     "safety",
+    "satisfaction",
 )
 
-PREFERENCE_FIELDS = ("popularity", "climate", "safety", "health")
+PREFERENCE_FIELDS = ("popularity", "climate", "safety", "health", "satisfaction")
 
 FIELD_LABELS = {
     "popularity": "popularidad",
     "climate": "buen tiempo",
     "safety": "seguridad",
     "health": "capacidad sanitaria",
+    "satisfaction": "satisfacción de otros viajeros",
 }
 
 SYSTEM_PROMPT = """Eres el asistente del Simulador TDRS de TUI.
@@ -47,6 +49,8 @@ Solo puedes ajustar estas señales del modelo:
 - popularity: importancia de destinos visitados/conocidos.
 - hospital_beds: importancia de capacidad sanitaria.
 - safety: importancia de seguridad.
+- satisfaction: importancia de que otros viajeros hayan quedado satisfechos,
+  medida con el sentimiento de reseñas reales.
 
 Pregunta una sola cosa cada vez cuando falte información. No inventes datos del
 usuario. Explica de forma simple qué has entendido. La IA no debe alterar el
@@ -60,14 +64,16 @@ Si tu integración devuelve JSON, usa este contrato:
     "popularity": 0-100 o null,
     "climate": 0-100 o null,
     "safety": 0-100 o null,
-    "health": 0-100 o null
+    "health": 0-100 o null,
+    "satisfaction": 0-100 o null
   },
   "weights": {
     "sunny_days_pct": 0-100,
     "low_precipitation_pct": 0-100,
     "popularity": 0-100,
     "hospital_beds": 0-100,
-    "safety": 0-100
+    "safety": 0-100,
+    "satisfaction": 0-100
   }
 }
 """
@@ -159,6 +165,7 @@ def extract_preferences(
         "climate": _explicit_score(text, ("clima", "buen tiempo", "sol")),
         "safety": _explicit_score(text, ("seguridad", "seguro")),
         "health": _explicit_score(text, ("sanidad", "salud", "hospitales", "capacidad sanitaria")),
+        "satisfaction": _explicit_score(text, ("satisfaccion", "valoraciones", "resenas", "opiniones")),
     }
     for field, value in explicit.items():
         if value is not None:
@@ -217,6 +224,22 @@ def extract_preferences(
     )):
         prefs["health"] = 35
 
+    # Satisfacción de otros viajeros. Igual que en popularidad, las expresiones
+    # negativas se comprueban antes para que "no me fio de las reseñas" no se
+    # interprete como que les da mucha importancia.
+    if _contains_any(text, (
+        "no me fio de las resenas", "resenas me dan igual", "me dan igual las opiniones",
+        "no miro las valoraciones", "no me importan las opiniones",
+    )):
+        prefs["satisfaction"] = 30
+    elif _contains_any(text, (
+        "bien valorado", "bien valorados", "buenas resenas", "buenas opiniones",
+        "buenas valoraciones", "gente contenta", "que la gente salga contenta",
+        "satisfaccion", "experiencia real", "opiniones reales", "sin decepciones",
+        "no masificado y bien valorado", "que merezca la pena",
+    )):
+        prefs["satisfaction"] = 90
+
     return prefs
 
 
@@ -241,6 +264,8 @@ def build_weights(
         result["hospital_beds"] = prefs["health"]
     if prefs["safety"] is not None:
         result["safety"] = prefs["safety"]
+    if prefs["satisfaction"] is not None:
+        result["satisfaction"] = prefs["satisfaction"]
     return result
 
 
@@ -265,6 +290,11 @@ def _summary_fragment(preferences: dict[str, Any]) -> str:
         chunks.append("seguridad alta" if prefs["safety"] >= 70 else "seguridad flexible")
     if prefs["health"] is not None:
         chunks.append("buena capacidad sanitaria" if prefs["health"] >= 70 else "sanidad con menor peso")
+    if prefs["satisfaction"] is not None:
+        chunks.append(
+            "destinos bien valorados" if prefs["satisfaction"] >= 70
+            else "valoraciones con menor peso"
+        )
     return ", ".join(chunks)
 
 
@@ -274,6 +304,10 @@ def _question_for(field: str) -> str:
         "climate": "¿Qué importancia tiene para ti encontrar buen tiempo y poca lluvia: baja, media, alta o muy alta?",
         "safety": "¿Qué importancia tiene la seguridad del destino: baja, media, alta o muy alta?",
         "health": "¿Y la capacidad sanitaria del destino: baja, media, alta o muy alta?",
+        "satisfaction": (
+            "¿Cuánto te importa que otros viajeros hayan salido contentos del "
+            "destino: baja, media, alta o muy alta?"
+        ),
     }
     return questions[field]
 

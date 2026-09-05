@@ -1,12 +1,6 @@
 from __future__ import annotations
 
-"""Punto de entrada de TUI Data Intelligence.
-
-Este módulo solo configura la página, arranca la base de datos y enruta a las
-vistas. Los estilos viven en ``components/styles.py``, los recursos gráficos en
-``components/assets.py``, los bloques compartidos en ``components/ui.py`` y cada
-vista en su propio módulo dentro de ``views/``.
-"""
+"""Punto de entrada de TUI Data Intelligence."""
 
 import os
 from html import escape
@@ -82,10 +76,17 @@ NAV_DATA = "Datos / modelo"
 NAV = [NAV_TDRS, NAV_RECO, NAV_CONTROL, NAV_DATA]
 
 
-def bootstrap() -> None:
+@st.cache_resource(show_spinner=False)
+def bootstrap() -> bool:
+    """Crea el esquema, siembra las fuentes e importa las tablas vacías.
+
+    Cacheado a nivel de proceso: es una operación de arranque, no de render. Sin
+    la caché se reejecutaba en cada interacción del usuario.
+    """
     init_db()
     seed_data_sources()
     bootstrap_missing_sources()
+    return True
 
 
 def render_sidebar_brand() -> None:

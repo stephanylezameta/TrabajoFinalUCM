@@ -205,6 +205,50 @@ def import_connectivity_csv(path: str | Path) -> int:
     return len(rows)
 
 
+def import_sentiment_csv(path: str | Path) -> int:
+    """Importa el sentimiento agregado por destino.
+
+    El CSV lo genera `scripts/export_sentiment.py` desde la base del pipeline.
+    Se conserva el recuento de reseñas y el modelo empleado para que la señal sea
+    trazable hasta su origen.
+    """
+    df, info = read_csv_auto(path)
+    required = {"destino", "sentimiento_medio"}
+    if not required.issubset(df.columns):
+        raise ValueError(
+            "El CSV de sentimiento no contiene destino/sentimiento_medio. "
+            "Regenéralo con scripts/export_sentiment.py."
+        )
+    sql = """
+    INSERT INTO destination_sentiment(
+        destination_name,reviews_analyzed,sentiment_score,confidence,
+        reviews_positive,reviews_neutral,reviews_negative,negative_pct,model,source,updated_at
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP)
+    ON CONFLICT(destination_name) DO UPDATE SET
+      reviews_analyzed=excluded.reviews_analyzed,sentiment_score=excluded.sentiment_score,
+      confidence=excluded.confidence,reviews_positive=excluded.reviews_positive,
+      reviews_neutral=excluded.reviews_neutral,reviews_negative=excluded.reviews_negative,
+      negative_pct=excluded.negative_pct,model=excluded.model,source=excluded.source,
+      updated_at=CURRENT_TIMESTAMP
+    """
+    rows = [(
+        str(r.get("destino")).strip(),
+        _json_value(r.get("resenas_analizadas")),
+        _json_value(r.get("sentimiento_medio")),
+        _json_value(r.get("confianza_media")),
+        _json_value(r.get("resenas_positivas")),
+        _json_value(r.get("resenas_neutras")),
+        _json_value(r.get("resenas_negativas")),
+        _json_value(r.get("pct_negativas")),
+        r.get("modelo_sentimiento"),
+        info["source_name"],
+    ) for _, r in df.iterrows() if str(r.get("destino") or "").strip()]
+    with db_session() as conn:
+        conn.executemany(sql, rows)
+    _record_import(info["source_name"], "sentiment", len(rows), info)
+    return len(rows)
+
+
 def import_country_indicators_csv(path: str | Path) -> int:
     df, info = read_csv_auto(path)
     if not {"iso", "pais"}.issubset(df.columns):

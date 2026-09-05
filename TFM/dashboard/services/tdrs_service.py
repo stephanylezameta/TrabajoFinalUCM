@@ -15,6 +15,10 @@ CSV_FACTORS = [
     ("popularity", "Más visitado", "connectivity"),
     ("hospital_beds", "Capacidad sanitaria", "country"),
     ("safety", "Seguridad", "country"),
+    # Sexto factor: satisfacción real, derivada del sentimiento de reseñas ya
+    # clasificadas por el pipeline. Es la única señal del modelo que mide
+    # experiencia vivida y no condiciones objetivas del destino.
+    ("satisfaction", "Satisfacción de viajeros", "sentiment"),
 ]
 FACTORS = CSV_FACTORS
 
@@ -25,6 +29,9 @@ PRESETS = {
         "popularity": 100,
         "hospital_beds": 35,
         "safety": 45,
+        # Popular prioriza volumen: la satisfacción pesa poco a propósito, y es
+        # justo el escenario donde se ve la tensión con destinos saturados.
+        "satisfaction": 40,
     },
     "Equilibrado": {
         "sunny_days_pct": 70,
@@ -32,6 +39,7 @@ PRESETS = {
         "popularity": 75,
         "hospital_beds": 65,
         "safety": 80,
+        "satisfaction": 70,
     },
     "Explorador": {
         "sunny_days_pct": 80,
@@ -39,6 +47,9 @@ PRESETS = {
         "popularity": 30,
         "hospital_beds": 75,
         "safety": 90,
+        # Explorador busca calidad del destino frente a masificación: la
+        # satisfacción real es su señal más pertinente.
+        "satisfaction": 95,
     },
     "Personalizado": {
         "sunny_days_pct": 60,
@@ -46,6 +57,7 @@ PRESETS = {
         "popularity": 60,
         "hospital_beds": 60,
         "safety": 60,
+        "satisfaction": 60,
     },
 }
 
@@ -72,6 +84,7 @@ RAW_FIELDS = [
     "annual_passengers",
     "hospital_beds",
     "homicide_rate",
+    "sentiment_score",
 ]
 
 
@@ -117,6 +130,7 @@ def get_destination_context() -> list[dict[str, Any]]:
         conn_rows = [dict(r) for r in conn.execute("SELECT * FROM connectivity_stats")]
         countries = [dict(r) for r in conn.execute("SELECT * FROM country_indicators")]
         products = [dict(r) for r in conn.execute("SELECT title,destination,duration_days,nights,price FROM products")]
+        sentiment_rows = [dict(r) for r in conn.execute("SELECT * FROM destination_sentiment")]
 
     climate: dict[str, list[dict[str, Any]]] = {}
     for r in climate_rows:
@@ -124,12 +138,14 @@ def get_destination_context() -> list[dict[str, Any]]:
 
     connectivity = {normalize_text(r["destination_name"]): r for r in conn_rows}
     country_map = {normalize_text(r["country_name"]): r for r in countries}
+    sentiment = {normalize_text(r["destination_name"]): r for r in sentiment_rows}
 
     out: list[dict[str, Any]] = []
     for d in dests:
         key = normalize_text(d["name"])
         d["climate"] = _annual_climate(climate.get(key, []))
         d["connectivity"] = connectivity.get(key)
+        d["sentiment"] = sentiment.get(key)
 
         country_key = normalize_text(d.get("country_name"))
         alias = COUNTRY_ALIASES.get(country_key, country_key)
@@ -153,12 +169,14 @@ def _raw_feature_row(d: dict[str, Any]) -> dict[str, float | None]:
     climate = d.get("climate") or {}
     conn = d.get("connectivity") or {}
     country = d.get("country_indicators") or {}
+    sentiment = d.get("sentiment") or {}
     return {
         "sunny_days_pct": climate.get("sunny_days_pct"),
         "precipitation_days_pct": climate.get("precipitation_days_pct"),
         "annual_passengers": conn.get("annual_passengers"),
         "hospital_beds": country.get("hospital_beds_per_1000"),
         "homicide_rate": country.get("homicide_rate_per_100k"),
+        "sentiment_score": sentiment.get("sentiment_score"),
     }
 
 
@@ -276,6 +294,7 @@ def csv_factor_values(d: dict[str, Any], ranges: dict[str, list[float]]) -> dict
         "popularity": _minmax(model.get("annual_passengers"), ranges["annual_passengers"], log_scale=True),
         "hospital_beds": _minmax(model.get("hospital_beds"), ranges["hospital_beds"]),
         "safety": _minmax(model.get("homicide_rate"), ranges["homicide_rate"], invert=True, log_scale=True),
+        "satisfaction": _minmax(model.get("sentiment_score"), ranges["sentiment_score"]),
     }
 
 
@@ -335,7 +354,7 @@ def compute_scores(
     return {
         "ranked": ranked,
         "excluded": excluded,
-        "factor_model": "TDRS CSV v3.1 · KNN",
+        "factor_model": "TDRS CSV v3.2 · 6 señales · KNN",
         "max_price": max_price,
         "max_stay_days": max_stay_days,
         "imputation_method": "KNN k=3 sobre señales CSV; los campos imputados se marcan en la salida",
@@ -373,4 +392,10 @@ def scenario_metrics(ranked: list[dict[str, Any]]) -> dict[str, Any] | None:
         "avg_top5_annual_passengers": _mean(model("annual_passengers")),
         "avg_top5_hospital_beds": _mean(model("hospital_beds")),
         "avg_top5_homicide_rate": _mean(model("homicide_rate")),
+        "avg_top5_sentiment": _mean(model("sentiment_score")),
+        # Cuántos del Top 5 tienen sentimiento real y no estimado por KNN.
+        "top5_sentiment_real": sum(
+            1 for r in top5
+            if (r.get("model_raw_values") or {}).get("sentiment_score") is not None
+        ),
     }

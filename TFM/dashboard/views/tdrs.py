@@ -32,6 +32,7 @@ MODEL_SLIDER_SUFFIX = {
     "popularity": "popular",
     "hospital_beds": "beds",
     "safety": "safety",
+    "satisfaction": "satisf",
 }
 
 
@@ -172,7 +173,8 @@ def render_tdrs_assistant(scenario: str) -> None:
                 f'precipitación <strong>{proposal["low_precipitation_pct"]}</strong> · '
                 f'popularidad <strong>{proposal["popularity"]}</strong> · '
                 f'sanidad <strong>{proposal["hospital_beds"]}</strong> · '
-                f'seguridad <strong>{proposal["safety"]}</strong>'
+                f'seguridad <strong>{proposal["safety"]}</strong> · '
+                f'satisfacción <strong>{proposal["satisfaction"]}</strong>'
                 '</div>',
                 unsafe_allow_html=True,
             )
@@ -215,6 +217,11 @@ def render_tdrs_sidebar_controls() -> dict:
             "popularity": st.slider("Más visitado", 0, 100, int(defaults["popularity"]), key=f"sb_{scenario}_popular"),
             "hospital_beds": st.slider("Capacidad sanitaria", 0, 100, int(defaults["hospital_beds"]), key=f"sb_{scenario}_beds"),
             "safety": st.slider("Seguridad", 0, 100, int(defaults["safety"]), key=f"sb_{scenario}_safety"),
+            "satisfaction": st.slider(
+                "Satisfacción de viajeros", 0, 100, int(defaults["satisfaction"]),
+                key=f"sb_{scenario}_satisf",
+                help="Sentimiento medio de reseñas reales analizadas por el pipeline.",
+            ),
         }
 
     with st.sidebar.expander("Restricciones", expanded=True):
@@ -276,12 +283,17 @@ def render_tdrs(controls: dict) -> None:
     rank_rows = []
     for pos, r in enumerate(res["ranked"], 1):
         model = r.get("model_values") or {}
+        raw = r.get("model_raw_values") or {}
         rank_rows.append({
             "Opción": pos,
             "Destino": r["name"],
             "Días soleados %": model.get("sunny_days_pct"),
             "Precipitación %": model.get("precipitation_days_pct"),
             "Pasajeros/año": model.get("annual_passengers"),
+            # Se muestra el valor REAL, no el imputado: un destino sin reseñas
+            # aparece como `—` aunque el KNN le haya estimado un valor para
+            # calcular el score. Es la regla de dato ausente ≠ dato estimado.
+            "Satisfacción": raw.get("sentiment_score"),
             "Precio €": r.get("reference_price_eur"),
         })
 
@@ -330,11 +342,18 @@ def render_tdrs(controls: dict) -> None:
         visitors_text = "—" if visitors is None else (
             f"{visitors/1_000_000:.1f} M/año" if visitors >= 1_000_000 else f"{visitors/1_000:.0f} k/año"
         )
+        # La satisfacción se acompaña de cuántos del Top 5 tienen reseñas reales,
+        # para que la media no se lea como si toda ella fuese dato observado.
+        real = metrics.get("top5_sentiment_real")
+        satisfaction = metrics.get("avg_top5_sentiment")
+        satisfaction_text = "—" if satisfaction is None else f"{satisfaction:.2f}"
         render_metric_rows([
             ("Elegibles", metrics["eligible"]),
             ("Días soleados Top 5", fmt(metrics.get("avg_top5_sunny_days_pct"), "%", 0)),
             ("Visitantes Top 5", visitors_text),
-        ], columns=3)
+            ("Satisfacción Top 5", satisfaction_text),
+            ("Con reseñas reales", f"{real}/5" if real is not None else "—"),
+        ], columns=5)
 
     remaining_rows = rank_rows[3:] if len(rank_rows) > 3 else rank_rows
     if remaining_rows:
@@ -344,12 +363,13 @@ def render_tdrs(controls: dict) -> None:
             "Días soleados %",
             "Precipitación %",
             "Pasajeros/año",
+            "Satisfacción",
             "Precio €",
         ]]
         # La tabla visible se limita a variables comerciales y de clima.
         # Score, cobertura, sanidad, seguridad y trazabilidad KNN siguen
         # disponibles internamente para el cálculo, pero no se muestran aquí.
-        for col in ["Días soleados %", "Precipitación %", "Pasajeros/año", "Precio €"]:
+        for col in ["Días soleados %", "Precipitación %", "Pasajeros/año", "Satisfacción", "Precio €"]:
             display[col] = display[col].map(
                 lambda v, col=col: "—" if pd.isna(v) else (
                     f"{v:,.0f}" if col in {"Pasajeros/año", "Precio €"} else f"{v:.2f}"

@@ -33,9 +33,9 @@ def evaluate_database_integrity() -> list[dict[str, Any]]:
     return []
 
 
-def evaluate_source_freshness() -> list[dict[str, Any]]:
+def evaluate_source_freshness(sources: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     alerts: list[dict[str, Any]] = []
-    for source in get_source_health():
+    for source in (sources if sources is not None else get_source_health()):
         if not source["enabled"]:
             continue
         sid = source["source_id"]
@@ -52,9 +52,9 @@ def evaluate_source_freshness() -> list[dict[str, Any]]:
     return alerts
 
 
-def evaluate_scraping_errors() -> list[dict[str, Any]]:
+def evaluate_scraping_errors(sources: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     alerts: list[dict[str, Any]] = []
-    sources = get_source_health()
+    sources = sources if sources is not None else get_source_health()
     for source in sources:
         if not source["enabled"] or source["Estado"] != "ERROR":
             continue
@@ -71,9 +71,9 @@ def evaluate_scraping_errors() -> list[dict[str, Any]]:
     return alerts
 
 
-def evaluate_empty_datasets() -> list[dict[str, Any]]:
+def evaluate_empty_datasets(sources: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     alerts: list[dict[str, Any]] = []
-    for source in get_source_health():
+    for source in (sources if sources is not None else get_source_health()):
         if source["enabled"] and int(source.get("Filas actuales") or 0) == 0:
             alerts.append(_alert("CRITICAL", f"Dataset vacío · {source['Dataset']}", f"La tabla {source['Tabla destino']} no contiene registros.", source["source_id"], "Reimportar la fuente"))
     return alerts
@@ -108,7 +108,7 @@ def evaluate_row_count_changes() -> list[dict[str, Any]]:
     return alerts
 
 
-def evaluate_null_anomalies() -> list[dict[str, Any]]:
+def evaluate_null_anomalies(sources: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
     # Solo campos estructuralmente imprescindibles; evita generar falsos positivos
     # por columnas opcionales del catálogo.
     checks = {
@@ -119,7 +119,8 @@ def evaluate_null_anomalies() -> list[dict[str, Any]]:
         "country_indicators": ("country_indicators", ["iso", "country_name"]),
     }
     alerts: list[dict[str, Any]] = []
-    sources = {s["source_id"]: s for s in get_source_health()}
+    rows = sources if sources is not None else get_source_health()
+    sources_by_id = {s["source_id"]: s for s in rows}
     with db_session() as conn:
         for sid, (table, fields) in checks.items():
             total = conn.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0]
@@ -129,19 +130,29 @@ def evaluate_null_anomalies() -> list[dict[str, Any]]:
                 nulls = conn.execute(f'SELECT COUNT(*) FROM "{table}" WHERE "{field}" IS NULL OR TRIM(CAST("{field}" AS TEXT))=""').fetchone()[0]
                 ratio = nulls / total
                 if ratio > 0.05:
-                    source = sources.get(sid, {})
+                    source = sources_by_id.get(sid, {})
                     alerts.append(_alert("WARNING", f"Nulos en campo clave · {source.get('Dataset', sid)}", f"{field}: {nulls}/{total} registros ({ratio:.1%}).", sid, "Revisar esquema y normalización"))
     return alerts
 
 
-def get_alerts(include_ok: bool = True) -> list[dict[str, Any]]:
+def get_alerts(
+    include_ok: bool = True,
+    sources: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Evalúa todas las reglas y devuelve las alertas deduplicadas y ordenadas.
+
+    ``sources`` permite reutilizar un ``get_source_health()`` ya calculado. Sin
+    él, cuatro de las seis reglas lo pedirían por separado y cada llamada
+    reabriría la base entera: era el coste dominante de cada rerun.
+    """
+    rows = sources if sources is not None else get_source_health()
     alerts: list[dict[str, Any]] = []
     alerts.extend(evaluate_database_integrity())
-    alerts.extend(evaluate_empty_datasets())
-    alerts.extend(evaluate_scraping_errors())
-    alerts.extend(evaluate_source_freshness())
+    alerts.extend(evaluate_empty_datasets(rows))
+    alerts.extend(evaluate_scraping_errors(rows))
+    alerts.extend(evaluate_source_freshness(rows))
     alerts.extend(evaluate_row_count_changes())
-    alerts.extend(evaluate_null_anomalies())
+    alerts.extend(evaluate_null_anomalies(rows))
 
     # Evita duplicados de la misma causa/fuente generados por reglas solapadas.
     deduped: list[dict[str, Any]] = []
@@ -164,7 +175,7 @@ def get_active_alerts() -> list[dict[str, Any]]:
 def get_system_status() -> dict[str, Any]:
     sources = get_source_health()
     active = [s for s in sources if s["enabled"]]
-    alerts = get_alerts(include_ok=False)
+    alerts = get_alerts(include_ok=False, sources=sources)
     critical = sum(1 for a in alerts if a["level"] == "CRITICAL")
     warnings = sum(1 for a in alerts if a["level"] == "WARNING")
     healthy = sum(1 for s in active if s["Estado"] == "OK")

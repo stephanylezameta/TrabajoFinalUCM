@@ -87,6 +87,42 @@ def test_recommender_view_degrades_without_endpoint():
     assert app.multiselect, "debería existir el selector de intereses"
 
 
+def test_recommender_shows_visible_recommendation(monkeypatch):
+    """Con la API configurada, la vista muestra una recomendación sin pedirla.
+
+    No debe hacer falta rellenar el formulario: el destino recomendado aparece
+    destacado en cuanto se abre la vista.
+    """
+    from services import recommendation_api_service as reco
+    from tests.test_recommendation_api import SAMPLE_RESPONSE
+
+    monkeypatch.setenv("TUI_RECO_API_BASE", "https://example.invalid/api/recommendations")
+    monkeypatch.setenv("TUI_RECO_API_KEY", "clave-de-prueba")
+    reco.reset_state()
+    monkeypatch.setattr(
+        reco, "fetch_recommendations",
+        lambda payload, use_cache=True: {
+            "ok": True, "error": None, "error_kind": None,
+            "recommendation_id": "abc-123",
+            "contract_version": "recommendation-response-v1",
+            "generated_at": "2026-09-05T12:00:00+00:00",
+            "engine": SAMPLE_RESPONSE["engine"],
+            "normalized_input": {},
+            "ranking": SAMPLE_RESPONSE["ranking"],
+            "warnings": [], "from_cache": False,
+        },
+    )
+
+    app = _run("Recomendador España")
+    assert not app.exception, [str(e) for e in app.exception]
+
+    # El nombre del destino recomendado aparece en el bloque destacado.
+    rendered = " ".join(block.value for block in app.markdown)
+    assert "hero-reco" in rendered, "falta el bloque de recomendación destacada"
+    assert "Níjar" in rendered, "el destino recomendado no se muestra"
+    reco.reset_state()
+
+
 def test_recommender_form_offers_documented_vocabulary():
     """El selector ofrece exactamente los siete intereses que acepta la API."""
     from services.recommendation_api_service import INTEREST_LABELS

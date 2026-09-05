@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from database.connection import db_session
 from database.repositories import AnalyticsRepository
 
 _repo = AnalyticsRepository()
@@ -10,17 +11,34 @@ def _safe_div(a, b):
 
 
 def get_dashboard_metrics() -> dict:
-    events = {r["event_type"]: r["n"] for r in _repo.rows("SELECT event_type, COUNT(*) n FROM events GROUP BY event_type")}
-    sessions = _repo.scalar("SELECT COUNT(*) FROM sessions")
-    users = _repo.scalar("SELECT COUNT(DISTINCT user_id) FROM sessions WHERE user_id IS NOT NULL")
-    bookings = _repo.scalar("SELECT COUNT(*) FROM bookings WHERE status='confirmed'")
-    cancellations = _repo.scalar("SELECT COUNT(*) FROM bookings WHERE status='cancelled'")
-    revenue = _repo.scalar("SELECT COALESCE(SUM(revenue_eur),0) FROM bookings WHERE status='confirmed'") or 0
-    cost = _repo.scalar("SELECT SUM(cost_eur) FROM bookings WHERE status='confirmed'")
-    margin = _repo.scalar("SELECT SUM(margin_eur) FROM bookings WHERE status='confirmed'")
-    passengers = _repo.scalar("SELECT COALESCE(SUM(passengers),0) FROM bookings WHERE status='confirmed'") or 0
-    room_nights = _repo.scalar("SELECT COALESCE(SUM(room_nights),0) FROM bookings WHERE status='confirmed'") or 0
-    avg_latency = _repo.scalar("SELECT AVG(response_time_ms) FROM events WHERE response_time_ms IS NOT NULL")
+    """KPIs comerciales derivados. Nunca se persisten.
+
+    Todas las agregaciones se resuelven sobre una única conexión: antes cada
+    escalar abría la suya, y esta función se invoca dos veces por render de
+    Control Web.
+    """
+    with db_session() as conn:
+        events = {
+            r["event_type"]: r["n"]
+            for r in (dict(x) for x in conn.execute(
+                "SELECT event_type, COUNT(*) n FROM events GROUP BY event_type"
+            ))
+        }
+
+        def scalar(sql: str):
+            return conn.execute(sql).fetchone()[0]
+
+        sessions = scalar("SELECT COUNT(*) FROM sessions")
+        users = scalar("SELECT COUNT(DISTINCT user_id) FROM sessions WHERE user_id IS NOT NULL")
+        bookings = scalar("SELECT COUNT(*) FROM bookings WHERE status='confirmed'")
+        cancellations = scalar("SELECT COUNT(*) FROM bookings WHERE status='cancelled'")
+        revenue = scalar("SELECT COALESCE(SUM(revenue_eur),0) FROM bookings WHERE status='confirmed'") or 0
+        cost = scalar("SELECT SUM(cost_eur) FROM bookings WHERE status='confirmed'")
+        margin = scalar("SELECT SUM(margin_eur) FROM bookings WHERE status='confirmed'")
+        passengers = scalar("SELECT COALESCE(SUM(passengers),0) FROM bookings WHERE status='confirmed'") or 0
+        room_nights = scalar("SELECT COALESCE(SUM(room_nights),0) FROM bookings WHERE status='confirmed'") or 0
+        avg_latency = scalar("SELECT AVG(response_time_ms) FROM events WHERE response_time_ms IS NOT NULL")
+
     impressions = events.get("product_impression", 0)
     clicks = events.get("product_click", 0)
     searches = events.get("search", 0)
@@ -41,8 +59,8 @@ def get_dashboard_metrics() -> dict:
     }
 
 
-def get_funnel_metrics() -> list[dict]:
-    m = get_dashboard_metrics()
+def get_funnel_metrics(metrics: dict | None = None) -> list[dict]:
+    m = metrics if metrics is not None else get_dashboard_metrics()
     return [
         {"step": "Sesiones", "value": m["sessions"]},
         {"step": "Búsquedas", "value": m["searches"]},
@@ -88,8 +106,13 @@ def get_destination_metrics() -> list[dict]:
     """)
 
 
-def instrumentation_status() -> list[dict]:
-    m = get_dashboard_metrics()
+def instrumentation_status(metrics: dict | None = None) -> list[dict]:
+    """Declara qué KPIs están disponibles y qué necesitan los que no lo están.
+
+    Acepta unas métricas ya calculadas para no repetir las agregaciones cuando
+    la vista acaba de pedirlas.
+    """
+    m = metrics if metrics is not None else get_dashboard_metrics()
     return [
         {"KPI": "CTR", "estado": "disponible" if m["impressions"] else "pendiente de instrumentar", "necesita": "product_impression + product_click"},
         {"KPI": "Conversión", "estado": "disponible" if m["sessions"] else "pendiente de instrumentar", "necesita": "sessions + bookings"},
