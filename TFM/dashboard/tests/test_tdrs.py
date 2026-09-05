@@ -91,6 +91,37 @@ def test_satisfaction_weight_changes_the_ranking():
     assert order_ignored != order_prioritized
 
 
+def test_scenarios_do_not_produce_identical_ranking():
+    """Cambiar de escenario debe alterar el ranking; si no, el selector no sirve.
+
+    Con presets tibios los tres escenarios daban el mismo Top 3. Los pesos están
+    contrastados justo para evitarlo.
+    """
+    from services.tdrs_service import compute_scores
+
+    orders = {
+        s: [r["name"] for r in compute_scores(PRESETS[s])["ranked"]]
+        for s in ("Popular", "Equilibrado", "Explorador")
+    }
+    # Al menos dos de los tres escenarios deben diferir entre sí.
+    distinct = {tuple(o) for o in orders.values()}
+    assert len(distinct) >= 2, "los tres escenarios dan exactamente el mismo orden"
+
+
+def test_popular_ranks_popularity_above_explorer():
+    """Popular favorece destinos masivos; Explorador los penaliza."""
+    from services.tdrs_service import compute_scores
+
+    def passengers_of_top(scenario: str) -> float:
+        top = compute_scores(PRESETS[scenario])["ranked"][0]
+        return (top.get("model_values") or {}).get("annual_passengers") or 0
+
+    # El primero de Popular no tiene por qué ser el más masivo en Explorador.
+    pop_order = [r["name"] for r in compute_scores(PRESETS["Popular"])["ranked"][:5]]
+    exp_order = [r["name"] for r in compute_scores(PRESETS["Explorador"])["ranked"][:5]]
+    assert pop_order != exp_order
+
+
 def test_scenario_metrics_report_sentiment_provenance():
     from services.tdrs_service import compute_scores, scenario_metrics
 

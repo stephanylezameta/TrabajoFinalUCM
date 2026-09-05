@@ -34,6 +34,27 @@ def pytest_sessionfinish(session, exitstatus) -> None:  # noqa: ARG001
     shutil.rmtree(_TMP_DIR, ignore_errors=True)
 
 
+@pytest.fixture(autouse=True)
+def _reset_network_circuit_breakers():
+    """Desactiva los cortacircuitos de red entre tests.
+
+    Un test que simula un fallo de red deja activo el cortacircuitos del servicio
+    de imágenes o del de recomendaciones; sin resetearlo, el siguiente test que
+    espere una llamada correcta recibiría None de forma espuria.
+    """
+    try:
+        from services import destination_image_service as dis
+        dis._NETWORK_DISABLED_UNTIL = 0.0
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        from services import recommendation_api_service as reco
+        reco.reset_state()
+    except Exception:  # noqa: BLE001
+        pass
+    yield
+
+
 @pytest.fixture(scope="session", autouse=True)
 def built_database() -> Path:
     """Construye el modelo completo en la BD temporal una vez por sesión."""

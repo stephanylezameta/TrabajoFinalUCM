@@ -282,3 +282,98 @@ sólido a ilustrar un destino con su escudo.
 De 130 a 135, con seis casos nuevos que fijan el filtro: banderas, escudos,
 mapas, imágenes verticales, y la preferencia por la fotografía cuando conviven
 con un símbolo en el mismo conjunto de resultados.
+
+## V25 – Escenarios que se notan, imágenes locales y limpieza del podio
+
+Tres ajustes pedidos tras usar la app.
+
+### El selector de escenario no cambiaba el podio
+
+Se midió: con los presets anteriores, el **Top 3 era idéntico** en Popular,
+Equilibrado y Explorador (Algarve, Menorca, Mallorca). No era un fallo de la
+lógica de pesos, sino de datos: con 16 destinos y unos pocos fuertes en todas las
+señales, ningún reajuste tibio los desbancaba.
+
+Los pesos de cada escenario se han **contrastado** para que la señal dominante de
+cada uno mande de verdad: Popular pone popularidad 100 y baja el resto; Explorador
+pone popularidad 10 y satisfacción 100. Medido después: el Top 3 ya difiere entre
+escenarios y el resto del ranking se mueve claramente. Este efecto crecerá cuando
+se amplíe el catálogo a 39 destinos.
+
+### Iconos de mineral fuera del podio
+
+Se retiran los iconos oro/plata/bronce de Icons8 del podio del simulador. Eran
+imágenes remotas que a veces no cargaban y dejaban un cuadro de color junto a
+«opción N». Ahora solo queda el texto «opción 1/2/3».
+
+### Fotografías servidas desde local
+
+`scripts/download_destination_images.py` descarga una foto por destino del
+catálogo a `assets/destinations/` y el dashboard las sirve desde ahí, sin llamar a
+Wikipedia en cada carga. Se obtienen vía la API de MediaWiki (no por URL directa
+de Commons, que responde 429 ante descargas en ráfaga), se reescalan a 1280 px y
+se recomprimen.
+
+Resultado: **10 de 16** destinos con foto local curada (~2,3 MB en total). Los 6
+restantes son municipios cuyo artículo solo ofrece bandera o escudo como
+miniatura, que el filtro descarta; esos caen en el fallback a Wikipedia en vivo o
+en su fondo sólido. `components/assets.py` gana `get_local_destination_image`, que
+las vistas del simulador y del recomendador consultan antes que la red.
+
+### Tests
+
+De 135 a 141. Nuevos: que los escenarios no produzcan el mismo ranking, que
+Popular y Explorador difieran, y la carga de imágenes locales por slug
+normalizado.
+
+## V26 – Catálogo de 39 destinos y tracking de impresiones
+
+### El problema de fondo: Algarve ganaba siempre
+
+Medido: con el catálogo de 16 destinos, Algarve salía 1º en los tres escenarios
+porque puntuaba alto en las seis señales a la vez (1.00 en sol, precipitación y
+satisfacción; 0.95 en popularidad). No había combinación de pesos que lo bajara,
+y no debía haberla: era un dato real. La causa no era el modelo sino el catálogo
+corto con un ganador claro.
+
+### La solución: ampliar a los 39 destinos del pipeline
+
+`scripts/export_catalog.py` exporta de `tui_recomendador.db` a CSV versionables:
+
+- `destinos_pipeline.csv` — 39 destinos con características (playa, UNESCO, isla,
+  accesibilidad, saturación) y precio de referencia derivado de la mediana de sus
+  experiencias reales.
+- `clima_pipeline.csv` — 1638 observaciones mensuales.
+- `conectividad_pipeline.csv` — 39 destinos.
+- `seguridad_pipeline.csv` — 16 países.
+
+La fuente `destinations_tdrs` deja de leer el mock `propuesta_7.html` y pasa a
+importar el CSV, con `import_destinations_csv`. Clima, conectividad y seguridad
+apuntan también a los CSV del pipeline.
+
+Resultado, medido tras el cambio:
+
+| Escenario | Top 3 |
+| --- | --- |
+| Popular | Alicante, Gran Canaria, Barcelona |
+| Equilibrado | Córdoba, Alicante, Barcelona |
+| Explorador | Córdoba, Alicante, Fuerteventura |
+
+Algarve ya no aparece en el Top 6: tiene competencia real. Los tres escenarios
+dan rankings distintos y el selector se nota de verdad.
+
+### Tracking de impresiones
+
+Los KPIs de clics y el mapa de Control Web estaban a cero porque la app nunca
+generaba eventos con destino: solo registraba `page_view`. Ahora el Simulador
+TDRS registra un `product_impression` por cada destino del podio al calcularse el
+ranking, con `dedupe_key` por escenario. Es interacción real y trazable (el
+usuario ve esos destinos recomendados) y alimenta el mapa y los KPIs, que antes
+quedaban vacíos.
+
+### Tests
+
+141 (se mantiene el número; se sustituyen los que asumían 16 destinos concretos).
+Se corrige un test del servicio de imágenes que heredaba el cortacircuitos de red
+de otro test: `conftest.py` gana un fixture que resetea los cortacircuitos entre
+tests.

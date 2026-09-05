@@ -205,6 +205,53 @@ def import_connectivity_csv(path: str | Path) -> int:
     return len(rows)
 
 
+def import_destinations_csv(path: str | Path) -> int:
+    """Importa el catálogo de destinos desde un CSV del pipeline.
+
+    Reemplaza al mock HTML de 16 destinos por los 39 reales del pipeline. Los
+    campos que el esquema de ``destinations`` no tiene columna propia (playa,
+    UNESCO, isla, nivel de saturación) se conservan en ``extra_data``.
+    """
+    from database.repositories import DestinationRepository
+    from utils.text import slugify
+
+    df, info = read_csv_auto(path)
+    if "n" not in df.columns:
+        raise ValueError("El CSV de destinos no contiene la columna 'n' (nombre).")
+
+    known = {
+        "n", "zona", "pais", "afinidad", "demanda", "ocupacion", "impacto",
+        "temporada", "accesibilidad", "sostenibilidad", "precio", "co2",
+    }
+    rows = []
+    for _, r in df.iterrows():
+        name = str(r.get("n") or "").strip()
+        if not name:
+            continue
+        extra = {c: _json_value(r[c]) for c in df.columns if c not in known}
+        rows.append({
+            "destination_id": slugify(name),
+            "name": name,
+            "zone": r.get("zona"),
+            "country_label": r.get("pais"),
+            "country_name": str(r.get("pais") or "").split(" - ", 1)[0].strip() or None,
+            "affinity": _json_value(r.get("afinidad")),
+            "demand": _json_value(r.get("demanda")),
+            "occupancy": _json_value(r.get("ocupacion")),
+            "local_impact": _json_value(r.get("impacto")),
+            "seasonality": _json_value(r.get("temporada")),
+            "accessibility": _json_value(r.get("accesibilidad")),
+            "sustainability": _json_value(r.get("sostenibilidad")),
+            "reference_price_eur": _json_value(r.get("precio")),
+            "co2_kg": _json_value(r.get("co2")),
+            "source": info["source_name"],
+            "extra_data": json.dumps(extra, ensure_ascii=False, default=str),
+        })
+    count = DestinationRepository().upsert_many(rows)
+    _record_import(info["source_name"], "destinations_csv", count, info)
+    return count
+
+
 def import_sentiment_csv(path: str | Path) -> int:
     """Importa el sentimiento agregado por destino.
 

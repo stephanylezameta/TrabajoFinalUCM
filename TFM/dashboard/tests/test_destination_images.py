@@ -17,6 +17,8 @@ def test_image_from_pages_prefers_search_order():
 
 def test_get_destination_image_falls_back_to_search(monkeypatch):
     svc.get_destination_image.cache_clear()
+    # Otro test pudo activar el cortacircuitos de red; se desactiva para este.
+    svc._NETWORK_DISABLED_UNTIL = 0.0
 
     calls = []
 

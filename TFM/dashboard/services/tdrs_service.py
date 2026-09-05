@@ -22,34 +22,38 @@ CSV_FACTORS = [
 ]
 FACTORS = CSV_FACTORS
 
+# Los pesos de cada escenario están deliberadamente contrastados. Con un
+# catálogo corto y unos pocos destinos fuertes en todas las señales, unos pesos
+# tibios daban el mismo Top 3 en los tres escenarios y el selector no se notaba.
+# Al extremar la señal dominante de cada escenario, el ranking sí cambia.
 PRESETS = {
     "Popular": {
-        "sunny_days_pct": 45,
-        "low_precipitation_pct": 35,
+        # Manda la popularidad; el resto pesa poco. Favorece destinos masivos
+        # aunque su satisfacción o su clima no destaquen.
+        "sunny_days_pct": 30,
+        "low_precipitation_pct": 25,
         "popularity": 100,
-        "hospital_beds": 35,
-        "safety": 45,
-        # Popular prioriza volumen: la satisfacción pesa poco a propósito, y es
-        # justo el escenario donde se ve la tensión con destinos saturados.
-        "satisfaction": 40,
+        "hospital_beds": 20,
+        "safety": 30,
+        "satisfaction": 25,
     },
     "Equilibrado": {
         "sunny_days_pct": 70,
         "low_precipitation_pct": 60,
-        "popularity": 75,
+        "popularity": 65,
         "hospital_beds": 65,
         "safety": 80,
-        "satisfaction": 70,
+        "satisfaction": 75,
     },
     "Explorador": {
-        "sunny_days_pct": 80,
-        "low_precipitation_pct": 70,
-        "popularity": 30,
-        "hospital_beds": 75,
-        "safety": 90,
-        # Explorador busca calidad del destino frente a masificación: la
-        # satisfacción real es su señal más pertinente.
-        "satisfaction": 95,
+        # Penaliza la popularidad y prima calidad del destino: clima, seguridad y
+        # sobre todo la satisfacción real de quienes ya fueron.
+        "sunny_days_pct": 85,
+        "low_precipitation_pct": 75,
+        "popularity": 10,
+        "hospital_beds": 70,
+        "safety": 95,
+        "satisfaction": 100,
     },
     "Personalizado": {
         "sunny_days_pct": 60,

@@ -15,6 +15,7 @@ from html import escape
 import pandas as pd
 import streamlit as st
 
+from components.assets import get_local_destination_image
 from services import recommendation_api_service as reco
 from services.destination_image_service import get_destination_image
 from services.tracking_service import register_event
@@ -299,6 +300,10 @@ def _photo(row: dict) -> dict | None:
     destination = (row.get("destination") or {}).get("name")
     if not destination:
         return None
+    # Foto local si existe (rápida), y si no, Wikipedia.
+    local = get_local_destination_image(destination)
+    if local:
+        return local
     province = (row.get("destination") or {}).get("province")
     # Añadir la provincia desambigua topónimos repetidos, frecuentes en España.
     return get_destination_image(destination) or (
@@ -545,26 +550,27 @@ def _autorun_if_needed() -> None:
 def render_recommender() -> None:
     st.markdown("### Recomendador de destinos de España")
     st.caption(
-        "Motor externo consumido por API. Es independiente del Simulador TDRS: "
-        "ranquea municipios españoles combinando catálogo turístico, "
-        "OpenStreetMap, señales de YouTube y clima histórico de AEMET. "
-        "Devuelve siempre tres destinos con su explicabilidad."
+        "Consulta en tiempo real un modelo de recomendación desplegado en la nube, "
+        "independiente del Simulador TDRS. El motor puntúa municipios españoles "
+        "cruzando catálogo turístico, puntos de interés de OpenStreetMap, señales "
+        "de popularidad de YouTube y clima histórico de AEMET, y devuelve tres "
+        "destinos con la explicación de por qué encajan con lo que buscas."
     )
 
     configured = reco.is_configured()
     if not configured:
-        st.caption("Endpoint sin configurar · la vista queda en modo informativo")
+        st.caption("Modelo sin conectar · la vista queda en modo informativo")
         _render_error({
             "error_kind": "not_configured",
-            "error": "La API de recomendaciones no está configurada.",
+            "error": "El modelo de recomendación no está conectado.",
         })
         with st.expander("Ver el contrato que se enviaría", expanded=False):
             _render_form()
         return
 
-    host = reco.endpoint_host()
-    if host:
-        st.caption(f"Endpoint activo · {host}")
+    # No se muestra la URL completa: expondría el host y la clave del servicio en
+    # una app pública. Basta con indicar que el modelo responde.
+    st.caption("🟢 Modelo conectado · recomendaciones en tiempo real")
 
     # La recomendación se muestra sin pedirla: es la respuesta principal de la
     # vista, no el resultado de rellenar un formulario.

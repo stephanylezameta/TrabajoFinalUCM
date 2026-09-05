@@ -35,7 +35,7 @@ Sin esa configuración la app arranca igual: la vista queda en modo informativo.
 pytest -q
 ```
 
-135 tests. No tocan `data/app.db` ni hacen llamadas de red: `conftest.py`
+141 tests. No tocan `data/app.db` ni hacen llamadas de red: `conftest.py`
 construye una base temporal desde los CSV de `data/raw/` y la destruye al acabar.
 
 ## Publicar con URL pública
@@ -85,7 +85,9 @@ el KNN y queda marcado. En la tabla se muestra el valor real, así que un destin
 sin reseñas aparece como `—` aunque internamente tenga una estimación.
 
 - Selector con tres escenarios: **Popular**, **Equilibrado**, **Explorador**.
-  `Personalizado` existe en el modelo pero no se expone.
+  `Personalizado` existe en el modelo pero no se expone. Los pesos de cada
+  escenario están contrastados a propósito para que el cambio de escenario altere
+  el ranking de forma visible.
 - Sidebar ordenado como **Asistente IA → Pesos del modelo → Restricciones**. Los
   pesos parten del escenario y siguen siendo editables.
 - Asistente conversacional que traduce lenguaje natural a los cinco pesos. Solo
@@ -95,6 +97,9 @@ sin reseñas aparece como `—` aunque internamente tenga una estimación.
 - Restricciones de precio máximo y días hospedados. **Solo excluyen si el dato
   existe**: un precio desconocido no descarta el destino.
 - Top 3 en tarjetas con fotografía y precio destacado; resto del ranking en tabla.
+  Las fotos se sirven desde `assets/destinations/` (descargadas con
+  `scripts/download_destination_images.py`); si un destino no la tiene, se busca en
+  Wikipedia en vivo.
 - Los faltantes se estiman con **KNN k=3 sin escribir en SQLite**. Cada campo
   imputado queda marcado en `knn_imputed_fields`, y se distingue `data_coverage`
   (real) de `model_coverage` (tras imputar).
@@ -151,10 +156,18 @@ Del brief, y visibles en el código:
 
 ## Fuentes de datos
 
-`data/raw/` contiene los datasets originales: clima mensual por destino,
-conectividad aérea y pasajeros, e indicadores de seguridad y sanidad del Banco
-Mundial (con celdas vacías, que es lo que justifica el KNN). Dos HTML aportan el
-listado de destinos y el catálogo de ofertas.
+`data/raw/` contiene los datasets del catálogo. Los `*_pipeline.csv` (destinos,
+clima, conectividad, seguridad) y `sentimiento_por_destino.csv` se exportan del
+pipeline del TFM con `scripts/export_catalog.py` y `scripts/export_sentiment.py`,
+y cubren **39 destinos reales**. La base del pipeline (`../data/tui_recomendador.db`,
+64 MB) no se versiona; solo viajan estos CSV agregados.
+
+Para regenerarlos:
+
+```powershell
+python scripts\export_catalog.py
+python scripts\export_sentiment.py
+```
 
 `data/raw/sentimiento_por_destino.csv` es el sentimiento agregado por destino.
 Lo genera `scripts/export_sentiment.py` desde `../data/tui_recomendador.db`, la

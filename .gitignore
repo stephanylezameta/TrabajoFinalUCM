@@ -7,13 +7,21 @@ env/
 venv/
 .pytest_cache/
 
-# Datos (no subir datos reales)
+# Datos del proyecto de investigación (no subir datos reales pesados)
+# Nota: estos patrones no llevan "/" inicial, así que git los aplica en
+# cualquier nivel. La app desplegable vive en TFM/dashboard/ y SÍ necesita sus
+# CSV de arranque, por eso se exceptúan explícitamente más abajo.
 data/raw/*
 data/processed/*
 data/embeddings/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 !data/embeddings/.gitkeep
+
+# El dashboard es una app publicable: sus datos de arranque deben versionarse.
+# La base generada (app.db) sigue excluida por el patrón *.db de más abajo.
+!TFM/dashboard/data/
+!TFM/dashboard/data/**
 
 # Base de datos local
 *.db

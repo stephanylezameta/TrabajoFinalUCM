@@ -13,10 +13,10 @@ from services.import_service import (
     import_climate_csv,
     import_connectivity_csv,
     import_country_indicators_csv,
+    import_destinations_csv,
     import_sentiment_csv,
 )
 from services.reference_service import (
-    import_destinations_from_proposal_html,
     import_products_from_experience_html,
 )
 
@@ -40,58 +40,61 @@ DEFAULT_SOURCES: list[dict[str, Any]] = [
     {
         "source_id": "destinations_tdrs",
         "display_name": "Factores de destinos TDRS",
-        "source_file": "propuesta_7.html",
+        "source_file": "destinos_pipeline.csv",
         "target_table": "destinations",
-        "source_type": "HTML",
-        "provider": "Propuesta 7 local",
-        "update_method": "HTML import",
+        "source_type": "CSV",
+        "provider": "Pipeline TFM · 39 destinos reales",
+        "update_method": "CSV import",
         "refresh_interval_hours": 168,
-        "dataset_model": "TDRS CSV v3.1 · 5 señales CSV + KNN k=3",
-        "scraper_script": "No aplica actualmente; fuente HTML local",
+        "dataset_model": "TDRS CSV v3.2 · 6 señales CSV + KNN k=3",
+        "scraper_script": "scripts/export_catalog.py (desde tui_recomendador.db)",
         "automation_mode": "Manual",
-        "notes": "El HTML mantiene el roster/base de destinos. El ranking TDRS CSV v2 utiliza clima, conectividad y seguridad/sanidad desde los CSV.",
+        "notes": (
+            "Catálogo de 39 destinos exportado del pipeline. Sustituye al mock de "
+            "16 de propuesta_7.html. Regenerable con scripts/export_catalog.py."
+        ),
     },
     {
         "source_id": "climate",
         "display_name": "Clima por destino",
-        "source_file": "clima_todos_los_destinos.csv",
+        "source_file": "clima_pipeline.csv",
         "target_table": "climate_observations",
         "source_type": "CSV",
-        "provider": "Dataset suministrado",
+        "provider": "Pipeline TFM",
         "update_method": "CSV import",
         "refresh_interval_hours": 24,
-        "dataset_model": "No documentado en el CSV",
-        "scraper_script": "Pendiente de conectar scraper/API de clima",
+        "dataset_model": "Series mensuales del pipeline",
+        "scraper_script": "scripts/export_catalog.py",
         "automation_mode": "Manual",
-        "notes": "Cadencia diaria configurada como objetivo operativo inicial.",
+        "notes": "Clima mensual de los 39 destinos, exportado del pipeline.",
     },
     {
         "source_id": "connectivity",
         "display_name": "Conectividad y pasajeros",
-        "source_file": "conectividad_y_pasajeros_2025.csv",
+        "source_file": "conectividad_pipeline.csv",
         "target_table": "connectivity_stats",
         "source_type": "CSV",
-        "provider": "Dataset suministrado",
+        "provider": "Pipeline TFM",
         "update_method": "CSV import",
         "refresh_interval_hours": 168,
-        "dataset_model": "No documentado en el CSV",
-        "scraper_script": "Pendiente de conectar scraper/API de conectividad",
+        "dataset_model": "Conectividad aérea del pipeline",
+        "scraper_script": "scripts/export_catalog.py",
         "automation_mode": "Manual",
-        "notes": "Cadencia semanal configurada como objetivo operativo inicial.",
+        "notes": "Conectividad de los 39 destinos, exportada del pipeline.",
     },
     {
         "source_id": "country_indicators",
         "display_name": "Seguridad y sanidad",
-        "source_file": "seguridad_y_sanidad_banco_mundial.csv",
+        "source_file": "seguridad_pipeline.csv",
         "target_table": "country_indicators",
         "source_type": "CSV",
-        "provider": "Banco Mundial (según nombre del fichero)",
+        "provider": "Pipeline TFM · Banco Mundial",
         "update_method": "CSV import",
         "refresh_interval_hours": 720,
-        "dataset_model": "No documentado en el CSV",
-        "scraper_script": "Pendiente de conectar API/fuente de indicadores",
+        "dataset_model": "Indicadores por país del pipeline",
+        "scraper_script": "scripts/export_catalog.py",
         "automation_mode": "Manual",
-        "notes": "Cadencia mensual configurada como objetivo operativo inicial.",
+        "notes": "Camas y homicidios por país, exportado del pipeline.",
     },
     {
         "source_id": "sentiment",
@@ -343,8 +346,7 @@ def refresh_source(source_id: str, raw_dir: Path = RAW_DIR, trigger: str = "manu
             count = import_products_from_experience_html(path)
             _record_html_import(path.name, "products_html", count, {"path": str(path), "method": source["update_method"]})
         elif source_id == "destinations_tdrs":
-            count = import_destinations_from_proposal_html(path)
-            _record_html_import(path.name, "destinations_html", count, {"path": str(path), "method": source["update_method"]})
+            count = import_destinations_csv(path)
         elif source_id == "climate":
             count = import_climate_csv(path)
         elif source_id == "connectivity":

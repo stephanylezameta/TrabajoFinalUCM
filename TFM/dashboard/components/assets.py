@@ -30,12 +30,54 @@ def get_logo_data_uri() -> str:
 
 LOGO_DATA_URI = get_logo_data_uri()
 
-# Ranking: se conservan los minerales de oro, plata y bronce solicitados.
-RANK_ICON_URLS = [
-    "https://img.icons8.com/color/1200/gold-ore.jpg",
-    "https://img.icons8.com/color/1200/silver-ore.jpg",
-    "https://img.icons8.com/color/1200/bronze-ore.jpg",
-]
+# Fotografías de destino descargadas a local por scripts/download_destination_images.py.
+# Servirlas desde el repo evita una llamada a Wikipedia por tarjeta en cada carga.
+DESTINATIONS_DIR = ASSETS_DIR / "destinations"
+
+
+@lru_cache(maxsize=1)
+def _local_destination_credits() -> dict[str, str]:
+    credits_path = DESTINATIONS_DIR / "credits.json"
+    if not credits_path.exists():
+        return {}
+    try:
+        import json
+
+        data = json.loads(credits_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    # clave normalizada -> crédito, para tolerar acentos y mayúsculas.
+    out: dict[str, str] = {}
+    for name, meta in data.items():
+        out[_normalize_key(name)] = meta.get("credit", "")
+    return out
+
+
+def _normalize_key(text: str) -> str:
+    import unicodedata
+
+    plain = unicodedata.normalize("NFKD", str(text).lower())
+    plain = "".join(c for c in plain if not unicodedata.combining(c))
+    return "".join(c if c.isalnum() else " " for c in plain).strip()
+
+
+@lru_cache(maxsize=64)
+def get_local_destination_image(destination: str) -> dict | None:
+    """Devuelve la foto local embebida de un destino, si existe en assets/."""
+    if not destination:
+        return None
+    slug = _normalize_key(destination).replace(" ", "-")
+    path = DESTINATIONS_DIR / f"{slug}.jpg"
+    if not path.exists():
+        return None
+    data = base64.b64encode(path.read_bytes()).decode("ascii")
+    credit = _local_destination_credits().get(_normalize_key(destination), "Wikimedia Commons")
+    return {
+        "url": f"data:image/jpeg;base64,{data}",
+        "alt": f"Imagen de {destination}",
+        "credit": credit,
+        "source": "local",
+    }
 
 # Escenarios: imágenes aportadas por el usuario y empaquetadas localmente.
 # Esto evita depender de URLs externas para los tres accesos principales.

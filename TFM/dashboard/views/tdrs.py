@@ -8,9 +8,8 @@ import pandas as pd
 import streamlit as st
 
 from components.assets import (
-    DESTINATION_IMAGES,
-    RANK_ICON_URLS,
     SCENARIO_ICON_URLS,
+    get_local_destination_image,
 )
 from components.ui import render_metric_rows
 from services.assistant_service import (
@@ -272,11 +271,26 @@ def render_tdrs(controls: dict) -> None:
 
     render_tdrs_scenario_selector()
 
+    scenario = controls["scenario"]
     res = compute_scores(
         weights,
         max_price=controls["max_price"],
         max_stay_days=controls["max_stay_days"],
     )
+
+    # Instrumentación: se registra la impresión de los tres destinos del podio.
+    # Es interacción real y trazable (el usuario los está viendo recomendados) y
+    # alimenta el mapa y los KPIs de Control Web, que sin esto quedaban a cero.
+    # El dedupe por escenario evita duplicar en cada rerun.
+    for pos, r in enumerate(res["ranked"][:3], 1):
+        register_event(
+            st.session_state.session_id,
+            "product_impression",
+            "Simulador TDRS",
+            destination=r["name"],
+            metadata={"scenario": scenario, "position": pos, "score": round(r["score"], 3)},
+            dedupe_key=f"tdrs_impression:{scenario}:{r['name']}",
+        )
 
     # Primero se prepara el ranking para mostrar las tres opciones principales
     # inmediatamente después del selector, sin alterar cálculos, datos ni controles.
@@ -305,10 +319,9 @@ def render_tdrs(controls: dict) -> None:
         visitors_text = "—" if visitors is None else f"{int(round(visitors)):,} pasajeros/año"
         price_text = "—" if row.get("Precio €") is None else f"{float(row['Precio €']):,.0f} €"
         destination = str(row["Destino"])
-        # Prioridad: fotografía curada localmente en el código. Si el destino no
-        # está en el catálogo, se busca automáticamente una imagen representativa
-        # en Wikipedia/Wikimedia y se cachea para los siguientes reruns.
-        image = DESTINATION_IMAGES.get(destination) or get_destination_image(destination)
+        # Prioridad: fotografía descargada a local (rápida y sin red). Si el
+        # destino no la tiene, se busca en Wikipedia y se cachea por proceso.
+        image = get_local_destination_image(destination) or get_destination_image(destination)
         if image:
             image_html = (
                 f'<img class="podium-image" src="{escape(image["url"], quote=True)}" '
@@ -321,7 +334,7 @@ def render_tdrs(controls: dict) -> None:
             f'{image_html}'
             f'<div class="podium-head">'
             f'<div class="podium-head-main">'
-            f'<div class="podium-rank"><img class="podium-rank-icon" src="{escape(RANK_ICON_URLS[idx], quote=True)}" alt="Posición {idx+1}"> opción {idx+1}</div>'
+            f'<div class="podium-rank">opción {idx+1}</div>'
             f'<div class="podium-name">{escape(destination)}</div>'
             f'</div>'
             f'<div class="podium-price">{escape(price_text)}</div>'
