@@ -1,0 +1,7 @@
+# Dependencias de ejecución. Versiones fijadas para que el despliegue en
+# Streamlit Community Cloud sea reproducible y no se rompa con una release nueva.
+# Son las versiones con las que se ha verificado la app y la suite de tests.
+streamlit==1.62.0
+pandas==3.0.5
+beautifulsoup4==4.15.0
+matplotlib==3.11.1

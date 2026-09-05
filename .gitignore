@@ -5,6 +5,7 @@ __pycache__/
 .venv/
 env/
 venv/
+.pytest_cache/
 
 # Datos (no subir datos reales)
 data/raw/*
@@ -20,6 +21,14 @@ data/embeddings/*
 
 # Variables de entorno
 .env
+
+# Secretos de Streamlit (contienen claves de API)
+.streamlit/secrets.toml
+**/.streamlit/secrets.toml
+
+# Credenciales en claro: API_AZURE.txt lleva la function key en el querystring
+API_AZURE.txt
+**/API_AZURE.txt
 
 # Logs
 *.log
