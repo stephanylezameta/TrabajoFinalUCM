@@ -303,65 +303,175 @@ def cargar_temporada_baja_por_destino(db_path: str) -> dict:
     return valores
 
 
-def cargar_clima_por_destino(db_path: str) -> dict:
-    """Confort climatico real por destino: fraccion de meses (sobre el
-    historico 2022-2025 disponible) con temperatura media entre 18 y
-    28 grados (rango comodo para turismo), normalizado [0,1]. Dato
-    real (Open-Meteo, ver extract_climate_data.py), con cobertura
-    completa (39/39 destinos, a diferencia de ocupacion que solo cubre
-    19/39) -- no se estaba usando en ningun lado hasta ahora (31/08)."""
+def cargar_clima_por_destino(db_path: str) -> tuple[dict, dict, dict]:
+    """3 señales climaticas reales SEPARADAS por destino (Open-Meteo,
+    extract_climate_data.py, cobertura completa 39/39 destinos), en vez
+    de un promedio compuesto en un solo numero.
+
+    Version 3 (01/09): la version anterior promediaba temperatura +
+    sequedad + horas de sol en un solo score, con peso igual para las
+    3 decidido a mano -- eso le quita a LightGBM (un modelo de arboles,
+    diseñado justo para aprender el peso relativo y las interacciones
+    entre variables por si solo) la posibilidad de descubrir, por
+    ejemplo, que las horas de sol importan mas que la sequedad. Agrupar
+    con pesos fijos tiene sentido en el TDRS (por explicabilidad, a
+    proposito), pero no en LightGBM, que no tiene esa restriccion.
+
+    Devuelve (temp_confort, dias_secos, horas_sol_norm), 3 dicts
+    independientes, cada uno normalizado [0,1] por separado."""
     conn = sqlite3.connect(db_path)
     try:
-        rows = conn.execute(
-            "SELECT destino_nombre, temp_media FROM clima_destinos WHERE temp_media IS NOT NULL"
-        ).fetchall()
+        rows = conn.execute("""
+            SELECT destino_nombre, temp_media, precipitacion_mm, horas_sol
+            FROM clima_destinos
+        """).fetchall()
     except Exception:
         rows = []
     finally:
         conn.close()
 
-    por_destino_meses = defaultdict(list)
-    for destino, temp in rows:
-        por_destino_meses[destino].append(temp)
+    por_destino = defaultdict(list)
+    for destino, temp, precip, sol in rows:
+        por_destino[destino].append((temp, precip, sol))
 
-    valores = {}
-    for destino, temps in por_destino_meses.items():
-        if not temps:
-            continue
-        confortables = sum(1 for t in temps if 18 <= t <= 28)
-        valores[destino] = confortables / len(temps)
-    return valores
+    temp_confort = {}
+    dias_secos = {}
+    horas_sol_promedio = {}
+    for destino, registros in por_destino.items():
+        temps = [t for t, p, s in registros if t is not None]
+        precs = [p for t, p, s in registros if p is not None]
+        soles = [s for t, p, s in registros if s is not None]
+        if temps:
+            temp_confort[destino] = sum(1 for t in temps if 18 <= t <= 28) / len(temps)
+        if precs:
+            dias_secos[destino] = sum(1 for p in precs if p <= 1.0) / len(precs)
+        if soles:
+            horas_sol_promedio[destino] = sum(soles) / len(soles)
+
+    horas_sol_norm = normalizar_dict(horas_sol_promedio)
+    return temp_confort, dias_secos, horas_sol_norm
 
 
-def cargar_seguridad_por_destino(db_path: str) -> dict:
-    """Seguridad real por destino: combina camas de hospital por 1000
-    habitantes (mas es mejor, capacidad sanitaria) y tasa de homicidios
-    por 100mil habitantes (menos es mejor, se invierte antes de
-    combinar). Dato real (integrar_csvs_nuevos.py, fuente tipo Banco
-    Mundial), no se estaba usando en ningun lado hasta ahora (31/08)."""
+def cargar_datos_humanos_por_destino(db_path: str) -> dict:
+    """Valores REALES interpretables por destino (no scores 0-1 para el
+    modelo, sino los numeros que un humano puede leer directo: % dias
+    soleados, % dias con lluvia, pasajeros/año, camas de hospital,
+    tasa de homicidios, sentimiento real, cobertura de reseñas).
+
+    Agregada (01/09) para el dashboard: los sliders y la tabla de
+    'Recomendador España' muestran valores humanos (ej. '84% dias
+    soleados', '920k pasajeros/año'), no los scores internos 0-1 que
+    usa LightGBM -- son cosas distintas por diseño, no un error de
+    escala. Reutiliza precipitacion_mm y horas_sol de clima_destinos,
+    que ya estaban en la tabla real (Open-Meteo) pero nunca se habian
+    usado (solo se usaba temp_media hasta ahora)."""
     conn = sqlite3.connect(db_path)
+    resultado = defaultdict(dict)
+
+    try:
+        rows = conn.execute("""
+            SELECT destino_nombre, temp_media, precipitacion_mm, horas_sol
+            FROM clima_destinos
+        """).fetchall()
+        por_destino_clima = defaultdict(list)
+        for destino, temp, precip, sol in rows:
+            por_destino_clima[destino].append((temp, precip, sol))
+        for destino, registros in por_destino_clima.items():
+            temps = [t for t, p, s in registros if t is not None]
+            precs = [p for t, p, s in registros if p is not None]
+            soles = [s for t, p, s in registros if s is not None]
+            total = len(registros)
+            if total:
+                dias_soleados_pct = round(
+                    100 * sum(1 for t in temps if t is not None and 18 <= t <= 28) / len(temps), 1
+                ) if temps else None
+                precipitacion_pct = round(
+                    100 * sum(1 for p in precs if p is not None and p > 1.0) / len(precs), 1
+                ) if precs else None
+                resultado[destino]["dias_soleados_pct"] = dias_soleados_pct
+                resultado[destino]["precipitacion_pct"] = precipitacion_pct
+                resultado[destino]["horas_sol_promedio_dia"] = (
+                    round(sum(soles) / len(soles) / 30, 1) if soles else None
+                )
+    except Exception:
+        pass
+
+    try:
+        rows = conn.execute(
+            "SELECT destino_nombre, pasajeros_anuales FROM conectividad_destinos"
+        ).fetchall()
+        for destino, pax in rows:
+            resultado[destino]["pasajeros_anuales"] = pax
+    except Exception:
+        pass
+
     try:
         rows = conn.execute(
             "SELECT destino_nombre, camas_hospital_1000hab, tasa_homicidios_100mil "
             "FROM seguridad_destinos"
         ).fetchall()
+        for destino, camas, homicidios in rows:
+            resultado[destino]["camas_hospital_1000hab"] = camas
+            resultado[destino]["tasa_homicidios_100mil"] = homicidios
+    except Exception:
+        pass
+
+    try:
+        rows = conn.execute("""
+            SELECT r.destino_nombre, AVG(s.sentiment_score), COUNT(*)
+            FROM resenas r
+            JOIN resenas_sentimiento s ON r.id_resena = s.id_resena
+            GROUP BY r.destino_nombre
+        """).fetchall()
+        for destino, sentimiento, n_resenas in rows:
+            resultado[destino]["sentimiento_real"] = round(sentimiento, 2) if sentimiento else None
+            resultado[destino]["n_resenas_reales"] = n_resenas
+    except Exception:
+        pass
+
+    conn.close()
+    return dict(resultado)
+
+
+def cargar_capacidad_sanitaria_por_destino(db_path: str) -> dict:
+    """Camas de hospital por 1000 habitantes, normalizado [0,1]. Dato
+    real (integrar_csvs_nuevos.py, fuente tipo Banco Mundial).
+
+    Version 2 (01/09): separada de 'tasa_homicidios' -- antes se
+    promediaban en un solo 'seguridad' con peso fijo 50/50 decidido a
+    mano, quitandole a LightGBM la posibilidad de aprender el peso
+    relativo real de cada una (mismo problema detectado en 'clima',
+    corregido con el mismo criterio: separar, no promediar, cuando el
+    modelo es flexible y puede aprender la combinacion por si solo)."""
+    conn = sqlite3.connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT destino_nombre, camas_hospital_1000hab FROM seguridad_destinos"
+        ).fetchall()
     except Exception:
         rows = []
     finally:
         conn.close()
+    return normalizar_dict({d: c for d, c in rows if c is not None})
 
-    camas = {d: c for d, c, h in rows if c is not None}
-    homicidios = {d: h for d, c, h in rows if h is not None}
-    camas_norm = normalizar_dict(camas)
-    homicidios_norm = normalizar_dict(homicidios)
 
-    valores = {}
-    destinos = set(camas_norm) | set(homicidios_norm)
-    for d in destinos:
-        c = camas_norm.get(d, 0.5)
-        h = homicidios_norm.get(d, 0.5)
-        valores[d] = (c + (1 - h)) / 2  # homicidios invertido: menos es mejor
-    return valores
+def cargar_seguridad_criminalidad_por_destino(db_path: str) -> dict:
+    """Inverso de la tasa de homicidios por 100mil habitantes,
+    normalizado [0,1] (mas alto = mas seguro). Dato real
+    (integrar_csvs_nuevos.py, fuente tipo Banco Mundial), separada de
+    'capacidad_sanitaria' por el mismo motivo (ver docstring de
+    cargar_capacidad_sanitaria_por_destino)."""
+    conn = sqlite3.connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT destino_nombre, tasa_homicidios_100mil FROM seguridad_destinos"
+        ).fetchall()
+    except Exception:
+        rows = []
+    finally:
+        conn.close()
+    homicidios_norm = normalizar_dict({d: h for d, h in rows if h is not None})
+    return {d: 1.0 - v for d, v in homicidios_norm.items()}
 
 
 def cargar_sentimiento_por_destino(db_path: str) -> dict:
@@ -606,7 +716,8 @@ def calcular_candidato(
     accesibilidad_por_destino: dict, capacidad_por_destino: dict,
     diversificacion_por_destino: dict, temporada_baja_por_destino: dict,
     impacto_local_por_destino: dict, sentimiento_por_destino: dict,
-    clima_por_destino: dict, seguridad_por_destino: dict,
+    temp_confort_por_destino: dict, dias_secos_por_destino: dict, horas_sol_por_destino: dict,
+    capacidad_sanitaria_por_destino: dict, seguridad_criminalidad_por_destino: dict,
     modelo_lgbm, precios: dict, duraciones: dict, ratings: dict, reviews: dict,
     tdrs_calc: TDRSCalculator,
 ) -> tuple[dict, dict]:
@@ -628,21 +739,26 @@ def calcular_candidato(
     temporada_baja_real = temporada_baja_por_destino.get(destino, 0.5)
     impacto_local_real = impacto_local_por_destino.get(destino, 0.5)
     sentimiento_real = sentimiento_por_destino.get(destino, 0.5)
-    clima_real = clima_por_destino.get(destino, 0.5)
-    seguridad_real = seguridad_por_destino.get(destino, 0.5)
+    temp_confort_real = temp_confort_por_destino.get(destino, 0.5)
+    dias_secos_real = dias_secos_por_destino.get(destino, 0.5)
+    horas_sol_real = horas_sol_por_destino.get(destino, 0.5)
+    capacidad_sanitaria_real = capacidad_sanitaria_por_destino.get(destino, 0.5)
+    seguridad_criminalidad_real = seguridad_criminalidad_por_destino.get(destino, 0.5)
 
     afinidad_coseno = max(0.0, min(1.0, (score_similitud + 1) / 2))
 
     if modelo_lgbm is not None:
-        # 15 features, mismo orden que train_lightgbm_ranker.py: precio,
+        # 18 features, mismo orden que train_lightgbm_ranker.py: precio,
         # duracion, rating, review_count, ocupacion, sensibilidad,
         # accesibilidad, capacidad, diversificacion, temporada_baja,
-        # impacto_local, clima, seguridad, match_categoria_cliente,
-        # diferencia_precio_habitual_cliente. Las ultimas 2 requieren un
-        # cliente identificado con historial; en una consulta de texto
-        # libre anonima como esta no hay cliente conocido, se usan
-        # valores neutros (0.0 = sin coincidencia de categoria, 0.5 =
-        # sin diferencia de precio respecto a un habito desconocido).
+        # impacto_local, temp_confort, dias_secos, horas_sol,
+        # capacidad_sanitaria, seguridad_criminalidad,
+        # match_categoria_cliente, diferencia_precio_habitual_cliente.
+        # Las ultimas 2 requieren un cliente identificado con historial;
+        # en una consulta de texto libre anonima como esta no hay
+        # cliente conocido, se usan valores neutros (0.0 = sin
+        # coincidencia de categoria, 0.5 = sin diferencia de precio
+        # respecto a un habito desconocido).
         features = [[
             precios.get(id_paq, 0.5),
             duraciones.get(id_paq, 0.5),
@@ -655,8 +771,11 @@ def calcular_candidato(
             diversificacion_real,
             temporada_baja_real,
             impacto_local_real,
-            clima_real,
-            seguridad_real,
+            temp_confort_real,
+            dias_secos_real,
+            horas_sol_real,
+            capacidad_sanitaria_real,
+            seguridad_criminalidad_real,
             0.0,
             0.5,
         ]]
@@ -765,8 +884,10 @@ def recomendar(
     temporada_baja_por_destino = cargar_temporada_baja_por_destino(db_path)
     impacto_local_por_destino = cargar_impacto_local_por_destino(db_path)
     sentimiento_por_destino = cargar_sentimiento_por_destino(db_path)
-    clima_por_destino = cargar_clima_por_destino(db_path)
-    seguridad_por_destino = cargar_seguridad_por_destino(db_path)
+    temp_confort_por_destino, dias_secos_por_destino, horas_sol_por_destino = cargar_clima_por_destino(db_path)
+    capacidad_sanitaria_por_destino = cargar_capacidad_sanitaria_por_destino(db_path)
+    seguridad_criminalidad_por_destino = cargar_seguridad_criminalidad_por_destino(db_path)
+    datos_humanos_por_destino = cargar_datos_humanos_por_destino(db_path)
     tdrs_calc = TDRSCalculator()
 
     modelo_lgbm, feature_names_lgbm = cargar_modelo_lightgbm()
@@ -807,9 +928,16 @@ def recomendar(
             accesibilidad_por_destino, capacidad_por_destino,
             diversificacion_por_destino, temporada_baja_por_destino,
             impacto_local_por_destino, sentimiento_por_destino,
-            clima_por_destino, seguridad_por_destino,
+            temp_confort_por_destino, dias_secos_por_destino, horas_sol_por_destino,
+            capacidad_sanitaria_por_destino, seguridad_criminalidad_por_destino,
             modelo_lgbm, precios, duraciones, ratings, reviews, tdrs_calc,
         )
+        # Datos humanos: valores reales para mostrar en el dashboard
+        # (% dias soleados, pasajeros/año, etc.), separados de los
+        # scores 0-1 que usa el modelo internamente -- no afecta el
+        # scoring, es solo para presentacion.
+        candidato["datos_humanos"] = datos_humanos_por_destino.get(destino, {})
+        candidato["precio_eur"] = meta.get("price_eur")
         candidatos.append(candidato)
         detalle_afinidad[id_paq] = detalle
 

@@ -36,7 +36,8 @@ from recommendation.run_recommendation import (  # noqa: E402
     cargar_accesibilidad_por_destino,
     cargar_capacidad_por_destino,
     cargar_clima_por_destino,
-    cargar_seguridad_por_destino,
+    cargar_capacidad_sanitaria_por_destino,
+    cargar_seguridad_criminalidad_por_destino,
 )
 # NOTA (fix de fuga de datos): diversificacion, temporada_baja e
 # impacto_local NO se reutilizan de run_recommendation.py porque esas
@@ -78,14 +79,17 @@ PARAMS_LIGHTGBM_BASE = {
 # run_recommendation.py (deben coincidir exactamente entre
 # entrenamiento e inferencia). Centralizado aca (31/08) para que
 # evaluar_robustez_lightgbm.py y barrido_hiperparametros_lightgbm.py no
-# queden con una copia propia desactualizada -- 'clima' y 'seguridad'
-# agregadas hoy, datos reales (Open-Meteo, indicadores tipo Banco
-# Mundial) que no se usaban en ningun lado hasta ahora.
+# queden con una copia propia desactualizada. Clima se separo en 3
+# señales y seguridad en 2 (01/09) -- todas datos reales (Open-Meteo,
+# indicadores tipo Banco Mundial) que antes se promediaban a mano con
+# peso fijo, quitandole a LightGBM la posibilidad de aprender el peso
+# relativo real de cada una por si solo.
 FEATURE_NAMES = [
     "precio", "duracion", "rating", "review_count", "ocupacion",
     "sensibilidad_ambiental", "accesibilidad", "capacidad",
     "diversificacion", "temporada_baja", "impacto_local",
-    "clima", "seguridad",
+    "temp_confort", "dias_secos", "horas_sol",
+    "capacidad_sanitaria", "seguridad_criminalidad",
     "match_categoria_cliente", "diferencia_precio_habitual_cliente",
 ]
 
@@ -198,8 +202,9 @@ def construir_dataset(db_path: str):
     sensibilidad = cargar_caracteristicas_destino(db_path)
     accesibilidad = cargar_accesibilidad_por_destino(db_path)
     capacidad = cargar_capacidad_por_destino(db_path)
-    clima = cargar_clima_por_destino(db_path)
-    seguridad = cargar_seguridad_por_destino(db_path)
+    temp_confort, dias_secos, horas_sol = cargar_clima_por_destino(db_path)
+    capacidad_sanitaria = cargar_capacidad_sanitaria_por_destino(db_path)
+    seguridad_criminalidad = cargar_seguridad_criminalidad_por_destino(db_path)
 
     precios = normalizar_dict({eid: e["price_eur"] for eid, e in experiencias.items()})
     duraciones = normalizar_dict({eid: e["duration_hrs"] for eid, e in experiencias.items()})
@@ -286,7 +291,7 @@ def construir_dataset(db_path: str):
     def features_item_personalizado(
         experience_id: str, categoria_preferida: str | None, precio_habitual: float,
     ) -> list[float]:
-        """13 features de siempre + 2 de personalizacion por cliente
+        """16 features de siempre (destino/item) + 2 de personalizacion por cliente
         (fix 31/08 v2, con codificacion leave-one-out CORRECTA esta vez):
         coincidencia con la categoria mas reservada por ESTE cliente, y
         distancia al precio que ESTE cliente suele pagar. El perfil del
@@ -313,8 +318,11 @@ def construir_dataset(db_path: str):
             diversificacion.get(destino, 0.5),
             temporada_baja.get(destino, 0.5),
             impacto_local.get(destino, 0.5),
-            clima.get(destino, 0.5),
-            seguridad.get(destino, 0.5),
+            temp_confort.get(destino, 0.5),
+            dias_secos.get(destino, 0.5),
+            horas_sol.get(destino, 0.5),
+            capacidad_sanitaria.get(destino, 0.5),
+            seguridad_criminalidad.get(destino, 0.5),
             match_categoria,
             diff_precio,
         ]
