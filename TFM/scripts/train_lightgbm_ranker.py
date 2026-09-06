@@ -22,7 +22,7 @@ import random
 import sqlite3
 import sys
 import time
-from collections import defaultdict
+from collections import defaultdict, Counter
 from pathlib import Path
 
 import numpy as np
@@ -35,6 +35,8 @@ from recommendation.run_recommendation import (  # noqa: E402
     cargar_caracteristicas_destino,
     cargar_accesibilidad_por_destino,
     cargar_capacidad_por_destino,
+    cargar_clima_por_destino,
+    cargar_seguridad_por_destino,
 )
 # NOTA (fix de fuga de datos): diversificacion, temporada_baja e
 # impacto_local NO se reutilizan de run_recommendation.py porque esas
@@ -42,6 +44,9 @@ from recommendation.run_recommendation import (  # noqa: E402
 # reserva que se aparta para test (leave-one-out) -- eso es fuga de datos
 # (el modelo veria, indirectamente, parte de lo que debe predecir).
 # Se recalculan aqui mismo usando SOLO las reservas de entrenamiento.
+# clima_por_destino y seguridad_por_destino SI se reutilizan directo:
+# vienen de clima_destinos/seguridad_destinos, tablas independientes de
+# customer_bookings, sin riesgo de fuga.
 
 RANDOM_SEED = 42
 N_NEGATIVOS_POR_CLIENTE = 20  # candidatos "no reservados" de comparacion
@@ -67,6 +72,22 @@ PARAMS_LIGHTGBM_BASE = {
     "feature_fraction": 0.8,
     "verbose": -1,
 }
+
+# Nombres de features, en el MISMO orden que se arma el vector en
+# features_item() mas abajo y en calcular_candidato() de
+# run_recommendation.py (deben coincidir exactamente entre
+# entrenamiento e inferencia). Centralizado aca (31/08) para que
+# evaluar_robustez_lightgbm.py y barrido_hiperparametros_lightgbm.py no
+# queden con una copia propia desactualizada -- 'clima' y 'seguridad'
+# agregadas hoy, datos reales (Open-Meteo, indicadores tipo Banco
+# Mundial) que no se usaban en ningun lado hasta ahora.
+FEATURE_NAMES = [
+    "precio", "duracion", "rating", "review_count", "ocupacion",
+    "sensibilidad_ambiental", "accesibilidad", "capacidad",
+    "diversificacion", "temporada_baja", "impacto_local",
+    "clima", "seguridad",
+    "match_categoria_cliente", "diferencia_precio_habitual_cliente",
+]
 
 
 def cargar_experiencias_completas(db_path: str) -> dict:
@@ -177,6 +198,8 @@ def construir_dataset(db_path: str):
     sensibilidad = cargar_caracteristicas_destino(db_path)
     accesibilidad = cargar_accesibilidad_por_destino(db_path)
     capacidad = cargar_capacidad_por_destino(db_path)
+    clima = cargar_clima_por_destino(db_path)
+    seguridad = cargar_seguridad_por_destino(db_path)
 
     precios = normalizar_dict({eid: e["price_eur"] for eid, e in experiencias.items()})
     duraciones = normalizar_dict({eid: e["duration_hrs"] for eid, e in experiencias.items()})
@@ -191,32 +214,6 @@ def construir_dataset(db_path: str):
     items_con_reservas = {r["experience_id"] for r in reservas}
     print(f"   -> {len(items_con_reservas)} de {len(todos_los_ids)} experiencias "
           f"tienen al menos una reserva real (pool de negativos)")
-
-    conteo_reservas_destino = defaultdict(int)
-    for r in reservas:
-        destino = experiencias.get(r["experience_id"], {}).get("destination")
-        if destino:
-            conteo_reservas_destino[destino] += 1
-
-    destinos_ordenados = sorted(conteo_reservas_destino.items(), key=lambda x: x[1])
-    n_destinos = len(destinos_ordenados)
-    tercil_por_destino = {}
-    for i, (destino, _) in enumerate(destinos_ordenados):
-        if i < n_destinos / 3:
-            tercil_por_destino[destino] = "bajo"
-        elif i < 2 * n_destinos / 3:
-            tercil_por_destino[destino] = "medio"
-        else:
-            tercil_por_destino[destino] = "alto"
-
-    items_por_tercil = defaultdict(list)
-    for eid in items_con_reservas:
-        destino = experiencias[eid]["destination"]
-        tercil = tercil_por_destino.get(destino, "medio")
-        items_por_tercil[tercil].append(eid)
-
-    print(f"   -> negativos difíciles: muestreados del mismo tercil de "
-          f"popularidad del destino que el positivo (bajo/medio/alto)")
 
     por_cliente_train = {}
     por_cliente_test = {}
@@ -240,10 +237,72 @@ def construir_dataset(db_path: str):
     print(f"   -> señales recalculadas sobre {sum(len(v) for v in por_cliente_train.values())} "
           f"reservas de entrenamiento (excluyendo la reserva de test de cada cliente)")
 
-    def features_item(experience_id: str) -> list[float]:
+    # Negativos "dificiles" por VECINDAD MULTI-EJE (31/08 v2), en vez de
+    # un solo eje (accesibilidad). Diagnostico: al controlar solo
+    # accesibilidad, el modelo migro a explotar 'impacto_local' (81.7%
+    # de precision con UN SOLO split del arbol, confirmado de forma
+    # aislada) -- cualquier variable agregada por destino que correlacione
+    # con "popularidad general" sirve de atajo si no esta controlada en
+    # el muestreo de negativos. La solucion real: controlar VARIAS
+    # variables de popularidad a la vez (accesibilidad + impacto_local),
+    # no solo una. Si tras esto una tercera variable vuelve a dominar,
+    # confirma que el problema es estructural (popularidad real
+    # correlaciona con reservas reales, es dificil de evitar del todo
+    # sin datos de preferencia personal), no un ajuste pendiente.
+    destinos_unicos = {experiencias[eid]["destination"] for eid in items_con_reservas}
+    rango_accesibilidad = {
+        d: i for i, d in enumerate(sorted(destinos_unicos, key=lambda d: accesibilidad.get(d, 0.5)))
+    }
+    rango_impacto = {
+        d: i for i, d in enumerate(sorted(destinos_unicos, key=lambda d: impacto_local.get(d, 0.5)))
+    }
+    VENTANA_VECINDAD = 8  # un poco mas ancha, al controlar 2 ejes a la vez
+
+    items_por_destino = defaultdict(list)
+    for eid in items_con_reservas:
+        items_por_destino[experiencias[eid]["destination"]].append(eid)
+
+    def vecinos_de(destino: str) -> list[str]:
+        """Items de destinos con accesibilidad E impacto_local parecidos
+        (interseccion de ambas vecindades, no solo una)."""
+        ra = rango_accesibilidad.get(destino)
+        ri = rango_impacto.get(destino)
+        if ra is None or ri is None:
+            return list(items_con_reservas)
+        vecinos_acc = set(sorted(destinos_unicos, key=lambda d: accesibilidad.get(d, 0.5))[
+            max(0, ra - VENTANA_VECINDAD): ra + VENTANA_VECINDAD + 1
+        ])
+        vecinos_imp = set(sorted(destinos_unicos, key=lambda d: impacto_local.get(d, 0.5))[
+            max(0, ri - VENTANA_VECINDAD): ri + VENTANA_VECINDAD + 1
+        ])
+        destinos_vecinos = vecinos_acc & vecinos_imp
+        if not destinos_vecinos:  # interseccion vacia, ampliar a la union
+            destinos_vecinos = vecinos_acc | vecinos_imp
+        return [eid for d in destinos_vecinos for eid in items_por_destino[d]]
+
+    print(f"   -> negativos difíciles: muestreados por interseccion de "
+          f"vecindad de accesibilidad E impacto_local (ventana +/-{VENTANA_VECINDAD})")
+
+    def features_item_personalizado(
+        experience_id: str, categoria_preferida: str | None, precio_habitual: float,
+    ) -> list[float]:
+        """13 features de siempre + 2 de personalizacion por cliente
+        (fix 31/08 v2, con codificacion leave-one-out CORRECTA esta vez):
+        coincidencia con la categoria mas reservada por ESTE cliente, y
+        distancia al precio que ESTE cliente suele pagar. El perfil del
+        cliente (categoria_preferida, precio_habitual) se calcula por
+        fuera de esta funcion, EXCLUYENDO la propia fila que se esta
+        featurizando cuando es un ejemplo positivo (evita la circularidad
+        detectada y revertida el 28/08: antes el perfil se calculaba con
+        TODAS las reservas del cliente, incluida la misma que se
+        intentaba predecir)."""
         destino = experiencias[experience_id]["destination"]
+        categoria_item = experiencias[experience_id]["category"]
+        precio_item = precios.get(experience_id, 0.5)
+        match_categoria = 1.0 if (categoria_preferida is not None and categoria_preferida == categoria_item) else 0.0
+        diff_precio = abs(precio_item - precio_habitual)
         return [
-            precios.get(experience_id, 0.5),
+            precio_item,
             duraciones.get(experience_id, 0.5),
             ratings.get(experience_id, 0.5),
             reviews.get(experience_id, 0.5),
@@ -254,7 +313,24 @@ def construir_dataset(db_path: str):
             diversificacion.get(destino, 0.5),
             temporada_baja.get(destino, 0.5),
             impacto_local.get(destino, 0.5),
+            clima.get(destino, 0.5),
+            seguridad.get(destino, 0.5),
+            match_categoria,
+            diff_precio,
         ]
+
+    def perfil_cliente(bookings: list[dict]) -> tuple[str | None, float]:
+        """Categoria preferida y precio habitual a partir de una lista de
+        reservas (ya sea el historial completo o con leave-one-out ya
+        aplicado por el llamador)."""
+        categorias = [
+            experiencias[r["experience_id"]]["category"]
+            for r in bookings if r["experience_id"] in experiencias
+        ]
+        precios_cliente = [precios.get(r["experience_id"], 0.5) for r in bookings]
+        categoria_pref = Counter(categorias).most_common(1)[0][0] if categorias else None
+        precio_prom = float(np.mean(precios_cliente)) if precios_cliente else 0.5
+        return categoria_pref, precio_prom
 
     print("Construyendo pares (cliente, item) con negativos muestreados...")
     X, y, groups = [], [], []
@@ -269,38 +345,62 @@ def construir_dataset(db_path: str):
         es_validacion = customer_id in ids_val
         X_dest, y_dest, groups_dest = (X_val, y_val, groups_val) if es_validacion else (X, y, groups)
 
+        # Perfil completo del cliente (para los negativos, no hay
+        # circularidad en usar todo su historial -- ver nota mas abajo).
+        categoria_pref_completo, precio_prom_completo = perfil_cliente(train_res)
+
+        # Negativos por reserva individual (fix 31/08 v3), no por
+        # cliente. Diagnostico: al muestrear negativos de la UNION de
+        # vecindades de todos los destinos de un cliente con varias
+        # reservas, la variacion de impacto_local/accesibilidad ENTRE
+        # esos destinos seguia disponible dentro del grupo aunque cada
+        # negativo individual estuviera bien emparejado -- LightGBM
+        # compara el grupo completo entre si, no pares aislados. Ahora
+        # cada reserva positiva trae SUS PROPIOS negativos, muestreados
+        # solo de la vecindad de SU destino especifico.
+        negativos_por_positivo = max(1, N_NEGATIVOS_POR_CLIENTE // max(1, len(train_res)))
+
         grupo_size = 0
-        for r in train_res:
-            X_dest.append(features_item(r["experience_id"]))
+        for idx, r in enumerate(train_res):
+            # Leave-one-out A NIVEL DE FILA: el perfil de este cliente se
+            # calcula con sus OTRAS reservas, excluyendo esta misma --
+            # asi "categoria preferida" no incluye la respuesta que se
+            # esta prediciendo.
+            resto = train_res[:idx] + train_res[idx + 1:]
+            categoria_pref_loo, precio_prom_loo = perfil_cliente(resto)
+            X_dest.append(features_item_personalizado(
+                r["experience_id"], categoria_pref_loo, precio_prom_loo,
+            ))
             y_dest.append(1)
             grupo_size += 1
 
-        terciles_cliente = {
-            tercil_por_destino.get(experiencias[eid]["destination"], "medio")
-            for eid in reservados_ids
-        }
-        pool_negativos = [
-            eid for t in terciles_cliente for eid in items_por_tercil[t]
-            if eid not in reservados_ids_completo
-        ]
-        if not pool_negativos:
-            pool_negativos = [eid for eid in items_con_reservas if eid not in reservados_ids_completo]
-        negativos = random.sample(
-            pool_negativos, min(N_NEGATIVOS_POR_CLIENTE, len(pool_negativos)),
-        )
-        for eid in negativos:
-            X_dest.append(features_item(eid))
-            y_dest.append(0)
-            grupo_size += 1
+            # Negativos de ESTE positivo especifico, no de la union.
+            destino_r = experiencias[r["experience_id"]]["destination"]
+            pool_negativos_fila = [
+                eid for eid in vecinos_de(destino_r) if eid not in reservados_ids_completo
+            ]
+            if not pool_negativos_fila:
+                pool_negativos_fila = [eid for eid in items_con_reservas if eid not in reservados_ids_completo]
+            negativos_fila = random.sample(
+                pool_negativos_fila, min(negativos_por_positivo, len(pool_negativos_fila)),
+            )
+            # Los negativos SI usan el perfil completo (todas las
+            # reservas de train): un negativo no "es" ninguna reserva
+            # real del cliente, no hay circularidad en incluir todo su
+            # historial para juzgar si el negativo encaja con su perfil.
+            for eid in negativos_fila:
+                X_dest.append(features_item_personalizado(
+                    eid, categoria_pref_completo, precio_prom_completo,
+                ))
+                y_dest.append(0)
+                grupo_size += 1
 
         if grupo_size > 0:
             groups_dest.append(grupo_size)
 
-        tercil_test = tercil_por_destino.get(
-            experiencias[test_res["experience_id"]]["destination"], "medio"
-        )
+        destino_test = experiencias[test_res["experience_id"]]["destination"]
         pool_test_neg = [
-            eid for eid in items_por_tercil[tercil_test]
+            eid for eid in vecinos_de(destino_test)
             if eid not in reservados_ids_completo
         ]
         if not pool_test_neg:
@@ -308,9 +408,15 @@ def construir_dataset(db_path: str):
         cand_negativos = random.sample(
             pool_test_neg, min(N_NEGATIVOS_POR_CLIENTE, len(pool_test_neg)),
         )
+        # El candidato de test (incluido el positivo real) se featuriza
+        # con el perfil COMPLETO de train -- no hay fuga: el perfil se
+        # construye solo con reservas de train, la reserva de test nunca
+        # entra en el calculo (ver por_cliente_train/por_cliente_test).
         candidatos = [test_res["experience_id"]] + cand_negativos
         for eid in candidatos:
-            X_test.append(features_item(eid))
+            X_test.append(features_item_personalizado(
+                eid, categoria_pref_completo, precio_prom_completo,
+            ))
         test_customers.append(customer_id)
         test_candidatos.append(candidatos)
 
@@ -354,13 +460,6 @@ def main():
     print("2) Entrenando LightGBM Ranker (lambdarank) con early stopping...")
     train_data = lgb.Dataset(X, label=y, group=groups)
     val_data = lgb.Dataset(X_val, label=y_val, group=groups_val, reference=train_data)
-    # Hiperparametros ajustados (31/08) tras barrido de 45 combinaciones
-    # x 5 semillas: num_leaves=15 (arboles mas simples), min_data_in_leaf=20
-    # (hojas mas conservadoras) y feature_fraction=0.8 (cada arbol ve
-    # solo 80% de las variables) juntos dieron mejor NDCG@10 (0.478 vs
-    # 0.391 promedio) Y menor dominio de 'accesibilidad' (42.4% vs 66.3%)
-    # que los valores anteriores (num_leaves=31, min_data_in_leaf=5, sin
-    # feature_fraction) -- mejora en ambos frentes, no un trade-off.
     # Hiperparametros de produccion, ver PARAMS_LIGHTGBM_BASE arriba.
     params = {**PARAMS_LIGHTGBM_BASE, "seed": RANDOM_SEED}
     model = lgb.train(
@@ -379,11 +478,7 @@ def main():
     print("3) Evaluando sobre reservas reales dejadas fuera (leave-one-out)...")
     precision, ndcg = evaluar(model, X_test, test_candidatos, k=10)
 
-    feature_names = [
-        "precio", "duracion", "rating", "review_count", "ocupacion",
-        "sensibilidad_ambiental", "accesibilidad", "capacidad",
-        "diversificacion", "temporada_baja", "impacto_local",
-    ]
+    feature_names = FEATURE_NAMES
     importancias = model.feature_importance(importance_type="gain")
     ranking_features = sorted(zip(feature_names, importancias), key=lambda x: -x[1])
 
