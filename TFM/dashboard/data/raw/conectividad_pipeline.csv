@@ -1,0 +1,40 @@
+termino_original,grupo,iata_destino,rutas_directas_es,rutas_directas_uk,rutas_directas_de,vuelos_semanales_estimados,asientos_semanales_ofertados,pasajeros_semanales_estimados,pasajeros_anuales_estimados
+Alicante,Ciudades Españolas,ALC,3,14,4,197,35460,,1567332
+Barcelona,Ciudades Españolas,BCN,9,14,11,302,54360,,2402712
+Costa del Sol,Ciudades Españolas,AGP,5,18,8,287,51660,,2283372
+Bilbao,Ciudades Españolas,BIO,8,4,3,123,22140,,978588
+Cádiz,Ciudades Españolas,XRY,4,1,6,92,16560,,731952
+Córdoba,Ciudades Españolas,SVQ,4,3,0,58,10440,,461448
+San Sebastián,Ciudades Españolas,EAS,3,0,0,21,3780,,167076
+Ibiza,Ciudades Españolas,IBZ,12,14,8,296,53280,,2354976
+Granada,Ciudades Españolas,GRX,3,0,0,21,3780,,167076
+Madrid,Ciudades Españolas,MAD,6,7,17,265,47700,,2108340
+Málaga,Ciudades Españolas,AGP,5,18,8,287,51660,,2283372
+Mallorca,Ciudades Españolas,PMI,18,23,13,473,85140,,3763188
+Gran Canaria,Ciudades Españolas,PMI,18,23,13,473,85140,,3763188
+Tenerife,Ciudades Españolas,TFS,6,22,9,343,61740,,2728908
+Sevilla,Ciudades Españolas,SVQ,4,3,0,58,10440,,461448
+Valencia,Ciudades Españolas,VLC,4,3,4,94,16920,,747864
+Phuket,Grupo 2,HKT,0,0,0,0,0,,0
+Bali,Grupo 2,DPS,0,0,0,0,0,,0
+Maldivas,Grupo 2,CMB,0,1,1,19,5700,,251940
+Dubái,Grupo 6,DXB,2,10,8,186,55800,,2466360
+Riviera Maya,Grupo 7,CUN,4,9,2,136,40800,,1803360
+Fuerteventura,sin_datos,,0,0,0,0,0,,0
+Lanzarote,sin_datos,,0,0,0,0,0,,0
+Menorca,sin_datos,,0,0,0,0,0,,0
+Antalya,sin_datos,,0,0,0,0,0,,0
+Rodas,sin_datos,,0,0,0,0,0,,0
+Santorini,sin_datos,,0,0,0,0,0,,0
+Hurghada,sin_datos,,0,0,0,0,0,,0
+Punta Cana,sin_datos,,0,0,0,0,0,,0
+Cancún,sin_datos,,0,0,0,0,0,,0
+Marrakech,sin_datos,,0,0,0,0,0,,0
+Cabo Verde,sin_datos,,0,0,0,0,0,,0
+Split,sin_datos,,0,0,0,0,0,,0
+Creta,sin_datos,,0,0,0,0,0,,0
+Sicilia,sin_datos,,0,0,0,0,0,,0
+Cerdeña,sin_datos,,0,0,0,0,0,,0
+Costa Amalfitana,sin_datos,,0,0,0,0,0,,0
+Algarve,sin_datos,,0,0,0,0,0,,0
+Túnez,sin_datos,,0,0,0,0,0,,0

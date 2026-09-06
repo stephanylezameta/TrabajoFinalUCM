@@ -1,0 +1,5 @@
+# Dependencias de desarrollo: runtime + utilidades de test.
+# Streamlit Community Cloud solo instala requirements.txt, así que pytest no
+# viaja al despliegue.
+-r requirements.txt
+pytest==9.1.1

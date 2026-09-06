@@ -1,0 +1,40 @@
+n,zona,pais,afinidad,demanda,ocupacion,impacto,temporada,accesibilidad,sostenibilidad,precio,co2,tiene_playa,tiene_patrimonio_unesco,es_isla,nivel_saturacion
+Algarve,Atlántico,Portugal,,,,0.5,,3,0.5,496.0,,1,0,0,medio
+Alicante,Mediterráneo,España,,,,0.4,,3,0.6,496.0,,1,0,0,medio
+Antalya,Mediterráneo,Turquía,,,,0.4,,3,0.6,320.0,,1,1,0,alto
+Bali,Sudeste Asiático,Indonesia,,,,0.7,,2,0.30000000000000004,352.0,,1,1,1,alto
+Barcelona,Mediterráneo,España,,,,0.5,,3,0.5,483.0,,1,1,0,muy_alto
+Bilbao,Atlántico,España,,,,0.3,,3,0.7,441.0,,1,1,0,bajo
+Cabo Verde,Atlántico,Cabo Verde,,,,0.8,,1,0.19999999999999996,348.0,,1,0,1,bajo
+Cancún,Caribe,México,,,,0.7,,3,0.30000000000000004,573.0,,1,1,0,muy_alto
+Cerdeña,Mediterráneo,Italia,,,,0.7,,2,0.30000000000000004,457.0,,1,1,1,medio
+Costa Amalfitana,Mediterráneo,Italia,,,,0.8,,2,0.19999999999999996,485.0,,1,1,0,alto
+Costa del Sol,Mediterráneo,España,,,,0.4,,3,0.6,493.0,,1,0,0,alto
+Creta,Mediterráneo,Grecia,,,,0.5,,2,0.5,477.0,,1,1,1,medio
+Cádiz,Atlántico,España,,,,0.5,,2,0.5,476.0,,1,0,0,bajo
+Córdoba,Interior,España,,,,0.3,,2,0.7,459.0,,0,1,0,bajo
+Dubái,Golfo Pérsico,Emiratos Árabes Unidos,,,,0.3,,3,0.7,993.0,,1,0,0,alto
+Fuerteventura,Atlántico,España,,,,0.8,,2,0.19999999999999996,486.0,,1,1,1,medio
+Gran Canaria,Atlántico,España,,,,0.7,,3,0.30000000000000004,421.0,,1,1,1,alto
+Granada,Interior,España,,,,0.4,,2,0.6,479.0,,0,1,0,medio
+Hurghada,Mar Rojo,Egipto,,,,0.7,,2,0.30000000000000004,294.0,,1,0,0,medio
+Ibiza,Mediterráneo,España,,,,0.7,,3,0.30000000000000004,463.0,,1,1,1,muy_alto
+Lanzarote,Atlántico,España,,,,0.8,,2,0.19999999999999996,464.0,,1,1,1,medio
+Madrid,Interior,España,,,,0.3,,3,0.7,473.0,,0,1,0,alto
+Maldivas,Océano Índico,Maldivas,,,,0.9,,1,0.09999999999999998,1348.0,,1,0,1,medio
+Mallorca,Mediterráneo,España,,,,0.6,,3,0.4,451.0,,1,1,1,alto
+Marrakech,Norte de África,Marruecos,,,,0.5,,2,0.5,262.0,,0,1,0,medio
+Menorca,Mediterráneo,España,,,,0.8,,2,0.19999999999999996,387.0,,1,1,1,medio
+Málaga,Mediterráneo,España,,,,0.4,,3,0.6,450.0,,1,0,0,medio
+Phuket,Sudeste Asiático,Tailandia,,,,0.6,,2,0.4,318.0,,1,0,1,alto
+Punta Cana,Caribe,República Dominicana,,,,0.6,,2,0.4,520.0,,1,0,1,alto
+Riviera Maya,Caribe,México,,,,0.8,,2,0.19999999999999996,496.0,,1,1,0,alto
+Rodas,Mediterráneo,Grecia,,,,0.6,,2,0.4,434.0,,1,1,1,medio
+San Sebastián,Atlántico,España,,,,0.4,,3,0.6,492.0,,1,0,0,medio
+Santorini,Mediterráneo,Grecia,,,,0.8,,2,0.19999999999999996,522.0,,1,0,1,muy_alto
+Sevilla,Interior,España,,,,0.3,,3,0.7,470.0,,0,1,0,medio
+Sicilia,Mediterráneo,Italia,,,,0.5,,2,0.5,434.0,,1,1,1,medio
+Split,Mediterráneo,Croacia,,,,0.6,,2,0.4,489.0,,1,1,0,medio
+Tenerife,Atlántico,España,,,,0.7,,3,0.30000000000000004,500.0,,1,1,1,alto
+Túnez,Norte de África,Túnez,,,,0.4,,2,0.6,215.0,,1,1,0,bajo
+Valencia,Mediterráneo,España,,,,0.4,,3,0.6,490.0,,1,1,0,medio

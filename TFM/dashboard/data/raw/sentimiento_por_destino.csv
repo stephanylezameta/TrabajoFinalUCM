@@ -1,0 +1,393 @@
+destino,resenas_analizadas,sentimiento_medio,confianza_media,resenas_positivas,resenas_neutras,resenas_negativas,pct_negativas,modelo_sentimiento
+Madrid,1078,0.4532,0.4262,171,480,427,39.61,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Riviera Maya,606,0.545,0.6837,189,274,143,23.6,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Marrakech,379,0.5473,0.6792,128,150,101,26.65,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Cancún,373,0.5167,0.6417,97,174,102,27.35,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Bali,336,0.5422,0.6595,115,128,93,27.68,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Dubái,319,0.556,0.7024,102,154,63,19.75,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Punta Cana,301,0.5718,0.7084,102,146,53,17.61,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Antalya,293,0.5709,0.67,94,145,54,18.43,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Cerdeña,259,0.5645,0.6645,85,126,48,18.53,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Jamaica,254,0.5158,0.6694,61,137,56,22.05,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Tenerife,242,0.5698,0.6721,95,91,56,23.14,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Santorini,240,0.5246,0.6496,74,100,66,27.5,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Costa Rica,240,0.5277,0.6341,70,110,60,25.0,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Mallorca,239,0.5168,0.6609,65,112,62,25.94,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Algarve,239,0.6137,0.6536,96,111,32,13.39,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Vietnam Da Nang,237,0.615,0.6295,95,113,29,12.24,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Ibiza,237,0.5302,0.6691,73,107,57,24.05,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Antigua,236,0.6067,0.6749,87,117,32,13.56,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Split,230,0.5351,0.6239,70,95,65,28.26,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Puerto Vallarta,227,0.5396,0.653,66,110,51,22.47,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Cuba,226,0.4442,0.6646,32,116,78,34.51,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Sri Lanka,213,0.567,0.6622,75,94,44,20.66,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Hurghada,209,0.5243,0.67,55,106,48,22.97,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Porto,207,0.5513,0.6645,76,67,64,30.92,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Cinque Terre,204,0.6188,0.6266,87,83,34,16.67,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Fuerteventura,196,0.6057,0.7337,72,95,29,14.8,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Corfu,194,0.582,0.6639,76,68,50,25.77,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Madeira,191,0.5362,0.6656,58,84,49,25.65,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Seychelles,188,0.5732,0.6558,63,91,34,18.09,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Malta,188,0.5511,0.7009,63,81,44,23.4,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Lanzarote,188,0.604,0.7208,73,82,33,17.55,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Costa del Sol,188,0.5786,0.7103,57,108,23,12.23,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Gran Canaria,183,0.566,0.6714,63,85,35,19.13,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Turks and Caicos,182,0.5586,0.6834,56,88,38,20.88,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Luxor,182,0.5236,0.6455,43,96,43,23.63,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Las Vegas,182,0.5265,0.6786,43,99,40,21.98,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Los Cabos,180,0.5465,0.6834,47,107,26,14.44,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Aruba,180,0.5661,0.6772,59,79,42,23.33,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Georgia Batumi,178,0.5241,0.6668,43,94,41,23.03,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Essaouira,174,0.6102,0.641,76,57,41,23.56,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Azores,173,0.541,0.6366,46,92,35,20.23,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Mykonos,168,0.601,0.658,67,75,26,15.48,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Rodas,164,0.6633,0.7831,77,73,14,8.54,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Menorca,164,0.6057,0.7051,65,71,28,17.07,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Fez,162,0.5577,0.6641,52,72,38,23.46,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Barbados,162,0.5044,0.6447,36,83,43,26.54,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Naxos,160,0.5787,0.6566,52,83,25,15.62,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Puglia,156,0.6323,0.6842,70,64,22,14.1,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Dominica,156,0.5474,0.6605,47,73,36,23.08,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Croacia,156,0.7016,0.7672,91,46,19,12.18,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Bodrum,156,0.5958,0.7221,60,68,28,17.95,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Panamá,155,0.5658,0.6806,46,82,27,17.42,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Galicia,155,0.5948,0.6833,58,70,27,17.42,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Bulgaria,152,0.5079,0.6596,36,73,43,28.29,cardiffnlp/twitter-xlm-roberta-base-sentiment
+La Palma,151,0.5741,0.6777,53,68,30,19.87,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Hvar,150,0.5183,0.6098,37,76,37,24.67,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Formentera,149,0.5826,0.7408,49,77,23,15.44,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Curaçao,148,0.5606,0.7149,42,82,24,16.22,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Hamburg,146,0.507,0.6208,37,63,46,31.51,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Southern,144,0.5618,0.6441,49,61,34,23.61,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Paris viaje,144,0.6737,0.7698,79,44,21,14.58,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Costa Brava,143,0.5896,0.6332,55,64,24,16.78,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Berlin,143,0.5525,0.6384,43,66,34,23.78,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Zante,141,0.6239,0.7202,62,51,28,19.86,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Tailandia,141,0.6387,0.7512,66,57,18,12.77,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Northern and Western,141,0.5591,0.6052,44,57,40,28.37,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Vest,140,0.5327,0.6551,43,51,46,32.86,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Fethiye,140,0.594,0.6704,51,64,25,17.86,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Barcelona,140,0.6913,0.7737,79,47,14,10.0,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Punta Cana resort,139,0.6375,0.7065,63,54,22,15.83,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Montenegro Budva,139,0.5872,0.6695,52,60,27,19.42,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Ankara,139,0.5475,0.6542,46,47,46,33.09,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Albania Saranda,139,0.538,0.6879,40,65,34,24.46,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Salzburg,138,0.6016,0.68,54,56,28,20.29,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Cádiz,137,0.637,0.6839,60,59,18,13.14,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Centro,135,0.5586,0.6467,45,57,33,24.44,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Atenas,134,0.735,0.7821,84,42,8,5.97,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Zürich,133,0.5254,0.6721,36,61,36,27.07,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Stockholm,133,0.4994,0.6528,32,58,43,32.33,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Cancun vacation experience,131,0.5535,0.6428,48,41,42,32.06,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Kos,129,0.5566,0.6738,47,46,36,27.91,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Cesme,129,0.6998,0.7371,71,45,13,10.08,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Sharm el Sheikh,126,0.5119,0.6723,29,67,30,23.81,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Kefalonia,126,0.5455,0.6666,37,56,33,26.19,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Bulgaria Sunny Beach,126,0.6174,0.7104,55,49,22,17.46,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Stuttgart,125,0.5261,0.6387,36,56,33,26.4,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Sicilia,124,0.5642,0.7113,46,51,27,21.77,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Paros,124,0.5162,0.6349,27,69,28,22.58,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Norte,124,0.4787,0.6524,25,60,39,31.45,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Cuba Varadero,124,0.4838,0.6758,37,44,43,34.68,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Playa del Ingles,123,0.614,0.7231,52,52,19,15.45,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Almería,123,0.654,0.7577,57,51,15,12.2,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Costa Blanca,122,0.6223,0.7104,47,60,15,12.3,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Bonaire,121,0.5745,0.696,44,55,22,18.18,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Maldivas,120,0.5689,0.7396,41,57,22,18.33,cardiffnlp/twitter-xlm-roberta-base-sentiment
+La Gomera,119,0.6101,0.7345,49,50,20,16.81,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Calabria,118,0.5705,0.6709,39,59,20,16.95,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Toscana,117,0.6366,0.7414,52,49,16,13.68,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Huelva,115,0.604,0.7351,47,48,20,17.39,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Kusadasi,114,0.6068,0.6933,44,51,19,16.67,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Jamaica Montego Bay,114,0.4913,0.6548,25,57,32,28.07,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Andalucía,114,0.6627,0.7499,54,45,15,13.16,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Wien,113,0.6165,0.729,46,44,23,20.35,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Islandia,113,0.6152,0.7501,46,51,16,14.16,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Cancun all inclusive experiencia,112,0.6437,0.7852,55,38,19,16.96,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Budapest,112,0.5373,0.6416,34,47,31,27.68,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Albania Ksamil,112,0.5457,0.6531,37,46,29,25.89,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Utrecht,109,0.615,0.6615,45,50,14,12.84,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Luxembourg,108,0.4844,0.5821,21,55,32,29.63,cardiffnlp/twitter-xlm-roberta-base-sentiment
+La Rioja,107,0.5702,0.6904,34,53,20,18.69,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Lisboa costa,106,0.7746,0.7983,76,23,7,6.6,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Cataluña,105,0.6351,0.7593,46,45,14,13.33,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Marmaris,104,0.4991,0.6569,25,50,29,27.88,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Martinique,103,0.6223,0.7066,42,47,14,13.59,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Marsa Alam,103,0.5294,0.6995,26,59,18,17.48,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Jordania Mar Muerto,102,0.602,0.7695,44,37,21,20.59,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Mauricio,101,0.5743,0.7134,37,43,21,20.79,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Istria,101,0.5241,0.6151,26,48,27,26.73,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Dubrovnik,101,0.4526,0.567,21,45,35,34.65,cardiffnlp/twitter-xlm-roberta-base-sentiment
+İzmir,100,0.6911,0.7665,50,44,6,6.0,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Lisboa playa,100,0.6359,0.7673,46,38,16,16.0,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Liechtenstein,100,0.5709,0.6557,32,49,19,19.0,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Dresden,100,0.5513,0.6745,33,38,29,29.0,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Alsace,100,0.6476,0.6868,44,39,17,17.0,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Halkidiki,99,0.6176,0.6912,43,43,13,13.13,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Turquia,96,0.5824,0.7554,31,53,12,12.5,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Reunión,96,0.6191,0.7103,42,35,19,19.79,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Düsseldorf,96,0.4934,0.6379,24,42,30,31.25,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Semana Santa playa,95,0.4347,0.7301,20,40,35,36.84,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Extremadura,95,0.6356,0.7361,41,43,11,11.58,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Mallorca beach travel,94,0.5879,0.656,40,28,26,27.66,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Leipzig,94,0.5509,0.6534,30,40,24,25.53,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Costa Amalfitana,94,0.7399,0.8021,57,33,4,4.26,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Cantabria,94,0.6576,0.7256,44,39,11,11.7,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Santa Lucía,93,0.5575,0.731,28,47,18,19.35,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Dubrovnik turismo,93,0.6801,0.7818,46,41,6,6.45,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Bremen,93,0.5858,0.6386,29,49,15,16.13,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Cala Millor,92,0.6863,0.7917,49,31,12,13.04,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Jordania Aqaba,90,0.684,0.7521,52,27,11,12.22,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Creta,89,0.5248,0.6519,25,45,19,21.35,cardiffnlp/twitter-xlm-roberta-base-sentiment
+RIU Cancún,87,0.7031,0.7947,47,36,4,4.6,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Praha,87,0.5869,0.7065,35,34,18,20.69,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Pest,87,0.5722,0.7258,34,29,24,27.59,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Omán Muscat,87,0.7572,0.8012,59,22,6,6.9,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Skiathos,86,0.5724,0.6674,27,43,16,18.6,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Koblenz,86,0.7013,0.718,48,27,11,12.79,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Freiburg,86,0.5946,0.6545,33,37,16,18.6,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Tirol,85,0.61,0.7274,36,33,16,18.82,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Hannover,85,0.5043,0.6464,23,34,28,32.94,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Cabo Verde Santiago,85,0.6816,0.7816,45,34,6,7.06,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Grecia Thassos,84,0.7307,0.8107,51,27,6,7.14,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Bali vs Tailandia,84,0.5858,0.7084,32,40,12,14.29,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Tánger,83,0.5858,0.769,35,29,19,22.89,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Phuket,82,0.4347,0.5691,15,31,36,43.9,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Lago de Garda,82,0.7278,0.7967,51,23,8,9.76,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Barceló Bávaro,82,0.6774,0.8217,40,36,6,7.32,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Alcudia Mallorca,82,0.7679,0.7977,55,19,8,9.76,cardiffnlp/twitter-xlm-roberta-base-sentiment
+destino sostenible Europa,81,0.749,0.7892,57,15,9,11.11,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Tenerife vs Gran Canaria,81,0.6187,0.7211,30,45,6,7.41,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Cabo Verde Sal,81,0.6253,0.7645,31,43,7,8.64,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Santa Ponsa,80,0.6957,0.7843,42,33,5,6.25,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Roma vacaciones,80,0.6679,0.763,36,40,4,5.0,cardiffnlp/twitter-xlm-roberta-base-sentiment
+País Vasco,80,0.6487,0.7738,35,37,8,10.0,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Maldives overwater villa review,80,0.7444,0.7902,50,27,3,3.75,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Escocia Highlands,80,0.7224,0.7918,49,24,7,8.75,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Aragón,80,0.5916,0.7188,30,34,16,20.0,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Köln,79,0.5718,0.7271,26,33,20,25.32,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Eslovenia Portoroz,79,0.7722,0.7869,54,22,3,3.8,cardiffnlp/twitter-xlm-roberta-base-sentiment
+mejor isla griega parejas,78,0.6956,0.7393,44,29,5,6.41,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Costa Dorada,78,0.588,0.7548,27,39,12,15.38,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Corse,78,0.6105,0.7365,33,31,14,17.95,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Guadeloupe,77,0.6095,0.7031,28,40,9,11.69,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Groningen,77,0.5381,0.6034,17,47,13,16.88,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Cancún vs Punta Cana,77,0.5711,0.7106,27,37,13,16.88,cardiffnlp/twitter-xlm-roberta-base-sentiment
+viaje aventura seguro,76,0.7148,0.8092,44,25,7,9.21,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Zanzíbar,76,0.6418,0.7828,38,25,13,17.11,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Salónica,76,0.7061,0.8262,45,22,9,11.84,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Omán Salalah,76,0.7697,0.8415,48,25,3,3.95,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Noruega fiordos,76,0.7606,0.794,49,24,3,3.95,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Eslovenia costa,76,0.6817,0.7516,40,28,8,10.53,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Canarias volcanes,76,0.6399,0.7262,41,19,16,21.05,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Madeira trekking,75,0.7337,0.7874,45,23,7,9.33,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Italia Tropea,75,0.7263,0.8263,40,33,2,2.67,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Dalaman,74,0.523,0.6975,14,48,12,16.22,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Principado de Asturias,73,0.6685,0.782,34,32,7,9.59,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Playa de las Americas,73,0.6409,0.7074,32,33,8,10.96,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Umbria,72,0.5716,0.6904,30,24,18,25.0,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Eesti,72,0.61,0.7305,30,31,11,15.28,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Bretagne,72,0.626,0.7251,32,24,16,22.22,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Ticino,71,0.631,0.6926,33,22,16,22.54,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Punta Cana resort opiniones,71,0.5494,0.7599,16,48,7,9.86,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Provence-Alpes-Côte d’Azur,71,0.7062,0.742,37,32,2,2.82,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Mayotte,71,0.6825,0.8179,40,19,12,16.9,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Lorraine,71,0.6861,0.7321,39,23,9,12.68,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Campania,71,0.5897,0.6796,22,39,10,14.08,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Tailandia Phuket,70,0.621,0.7479,25,39,6,8.57,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Crete tourism opinion,70,0.6668,0.7827,40,17,13,18.57,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Cabo Verde Santo Antão,70,0.7019,0.8015,38,26,6,8.57,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Peloponeso,69,0.6959,0.7857,36,28,5,7.25,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Ibiza playa turismo,69,0.6832,0.7837,38,22,9,13.04,cardiffnlp/twitter-xlm-roberta-base-sentiment
+El Gouna,69,0.5586,0.7185,20,36,13,18.84,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Comunidad de Madrid,69,0.6617,0.7508,30,35,4,5.8,cardiffnlp/twitter-xlm-roberta-base-sentiment
+San Antonio Ibiza,68,0.5514,0.7206,22,31,15,22.06,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Magaluf,68,0.4725,0.712,14,34,20,29.41,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Lüneburg,67,0.7896,0.8226,46,18,3,4.48,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Liguria,67,0.5748,0.6779,26,23,18,26.87,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Comunitat Valenciana,67,0.7265,0.7994,44,13,10,14.93,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Tenerife resort review,66,0.6972,0.7899,38,22,6,9.09,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Ile de France,66,0.6805,0.6903,35,20,11,16.67,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Granada Caribe,66,0.6733,0.7894,32,29,5,7.58,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Veneto,65,0.5352,0.7321,21,28,16,24.62,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Región de Murcia,65,0.5906,0.7514,28,22,15,23.08,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Latvija,65,0.6933,0.7574,35,25,5,7.69,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Karlsruhe,65,0.5492,0.6895,14,42,9,13.85,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Benidorm,65,0.4969,0.7249,12,39,14,21.54,cardiffnlp/twitter-xlm-roberta-base-sentiment
+vacaciones verano 2025 oferta,64,0.454,0.746,11,32,21,32.81,cardiffnlp/twitter-xlm-roberta-base-sentiment
+todo incluido barato,64,0.6374,0.6992,28,33,3,4.69,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Tailandia Koh Samui,64,0.6769,0.7501,32,29,3,4.69,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Oslo og Viken,64,0.6556,0.7433,28,34,2,3.12,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Helsinki-Uusimaa,64,0.6839,0.7644,32,29,3,4.69,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Comunidad Foral de Navarra,63,0.6573,0.783,32,23,8,12.7,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Ciudad de Ceuta,63,0.6482,0.7603,27,31,5,7.94,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Azores senderismo,63,0.6858,0.7898,32,28,3,4.76,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Robinson Club Fuerteventura,62,0.6518,0.8521,26,30,6,9.68,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Puerto de la Cruz Tenerife,62,0.5661,0.7112,17,37,8,12.9,cardiffnlp/twitter-xlm-roberta-base-sentiment
+"Şanlıurfa, Diyarbakır",61,0.7446,0.818,40,15,6,9.84,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Oberbayern,61,0.7112,0.8257,34,23,4,6.56,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Centre — Val de Loire,61,0.795,0.8551,45,11,5,8.2,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Cabo Verde,61,0.4646,0.6708,10,32,19,31.15,cardiffnlp/twitter-xlm-roberta-base-sentiment
+"Adana, Mersin",61,0.7314,0.7955,38,18,5,8.2,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Tübingen,60,0.6481,0.7767,23,35,2,3.33,cardiffnlp/twitter-xlm-roberta-base-sentiment
+İstanbul,59,0.4723,0.6405,9,31,19,32.2,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Maldivas atolón,59,0.721,0.7965,35,18,6,10.17,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Ciudad de Melilla,59,0.7529,0.8025,39,16,4,6.78,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Centru,59,0.533,0.7835,18,29,12,20.34,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Mellersta Norrland,58,0.7975,0.855,41,14,3,5.17,cardiffnlp/twitter-xlm-roberta-base-sentiment
+"Mardin, Batman, Şırnak, Siirt",58,0.7047,0.7605,35,17,6,10.34,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Région de Bruxelles-Capitale/Brussels Hoofdstedelijk Gewest,57,0.7711,0.8228,38,17,2,3.51,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Region Vojvodine,57,0.7958,0.8135,42,11,4,7.02,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Cancun resort review,57,0.5565,0.7064,16,28,13,22.81,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Trier,56,0.6387,0.6777,24,22,10,17.86,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Nordwestschweiz,56,0.7706,0.8121,40,12,4,7.14,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Costa Adeje,56,0.6795,0.7714,28,21,7,12.5,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Brandenburg,56,0.4642,0.5366,5,36,15,26.79,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Zentralschweiz,55,0.7952,0.8376,39,15,1,1.82,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Schwaben,55,0.6945,0.808,30,19,6,10.91,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Málaga,55,0.4174,0.4399,6,21,28,50.91,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Champagne-Ardenne,55,0.7523,0.7579,35,19,1,1.82,cardiffnlp/twitter-xlm-roberta-base-sentiment
+última hora vacaciones playa,54,0.6576,0.7729,24,25,5,9.26,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Teneriffa Hotel Bewertung,54,0.6168,0.7874,20,29,5,9.26,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Svalbard og Jan Mayen,54,0.7725,0.8096,37,14,3,5.56,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Chipre Norte,54,0.5984,0.7577,18,31,5,9.26,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Prov. Luxembourg,53,0.8067,0.7983,39,12,2,3.77,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Navidad Caribe,53,0.6691,0.7384,23,30,0,0.0,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Mallorca hotel opiniones,53,0.4632,0.7817,12,25,16,30.19,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Unterfranken,52,0.4708,0.7275,12,23,17,32.69,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Provincia Autonoma di Bolzano/Bozen,52,0.6904,0.775,27,22,3,5.77,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Midi-Pyrénées,52,0.6418,0.7308,21,28,3,5.77,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Languedoc-Roussillon,52,0.7003,0.7333,28,20,4,7.69,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Grad Zagreb,52,0.5603,0.6867,17,21,14,26.92,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Gießen,52,0.7053,0.7431,32,13,7,13.46,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Zuid-Holland,51,0.7714,0.8083,34,15,2,3.92,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Veri,51,0.7849,0.804,35,15,1,1.96,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Piemonte,51,0.5962,0.7438,21,22,8,15.69,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Lazio,51,0.5809,0.7068,17,25,9,17.65,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Innlandet,51,0.819,0.8677,41,5,5,9.8,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Emilia-Romagna,51,0.5222,0.6499,10,32,9,17.65,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Croacia islas,51,0.6811,0.782,27,19,5,9.8,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Arnsberg,51,0.8012,0.8219,39,8,4,7.84,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Łódzkie,50,0.7759,0.8332,36,10,4,8.0,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Thessalia,49,0.6977,0.7243,27,20,2,4.08,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Sud-Muntenia,49,0.5042,0.7898,20,10,19,38.78,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Jug,49,0.3727,0.5571,3,20,26,53.06,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Dél-Dunántúl,49,0.8413,0.8402,40,7,2,4.08,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Castilla y León,49,0.588,0.6885,14,30,5,10.2,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Sjælland,48,0.8276,0.8364,38,8,2,4.17,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Castilla-La Mancha,48,0.5475,0.7129,11,31,6,12.5,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Aquitaine,48,0.6177,0.7336,19,22,7,14.58,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Vorarlberg,47,0.5955,0.7342,16,26,5,10.64,cardiffnlp/twitter-xlm-roberta-base-sentiment
+TUI Magic Life Bodrum,47,0.6541,0.8224,20,24,3,6.38,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Rhodes travel tips,47,0.6198,0.6992,19,23,5,10.64,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Prov. Namur,47,0.7753,0.7765,32,13,2,4.26,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Cancun all inclusive,47,0.5828,0.6464,14,31,2,4.26,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Alentejo,47,0.5804,0.6392,15,24,8,17.02,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Abruzzo,47,0.5646,0.7143,15,24,8,17.02,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Marche,46,0.586,0.6478,16,23,7,15.22,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Cancún experiencia viaje,46,0.6031,0.7196,17,23,6,13.04,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Bratislavský kraj,46,0.7527,0.7953,30,15,1,2.17,cardiffnlp/twitter-xlm-roberta-base-sentiment
+"Ağrı, Kars, Iğdır, Ardahan",46,0.7701,0.7291,37,6,3,6.52,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Münster,45,0.5803,0.6762,13,25,7,15.56,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Lombardia,45,0.6896,0.78,22,22,1,2.22,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Bilbao,45,0.7152,0.7667,29,10,6,13.33,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Západné Slovensko,44,0.7372,0.751,30,9,5,11.36,cardiffnlp/twitter-xlm-roberta-base-sentiment
+"Kocaeli, Sakarya, Düzce, Bolu, Yalova",44,0.6725,0.7076,26,10,8,18.18,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Fuerteventura Strand,44,0.5044,0.7612,13,17,14,31.82,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Detmold,44,0.5497,0.7025,16,15,13,29.55,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Crete family holiday,44,0.5347,0.6352,15,16,13,29.55,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Sardegna,43,0.633,0.7291,18,20,5,11.63,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Santa Eulalia Ibiza,43,0.5682,0.7794,16,18,9,20.93,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Playa d'en Bossa,43,0.5546,0.7336,10,30,3,6.98,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Mittelfranken,43,0.6382,0.7397,20,19,4,9.3,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Mallorca beach holiday,43,0.5875,0.68,16,21,6,13.95,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Flevoland,43,0.5312,0.7708,16,12,15,34.88,cardiffnlp/twitter-xlm-roberta-base-sentiment
+"Van, Muş, Bitlis, Hakkari",42,0.7306,0.7548,28,10,4,9.52,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Dytiki Makedonia,42,0.8171,0.8159,32,8,2,4.76,cardiffnlp/twitter-xlm-roberta-base-sentiment
+viaje invierno sol barato,41,0.5356,0.7231,8,30,3,7.32,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Haute-Normandie,41,0.8158,0.8414,30,10,1,2.44,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Auvergne,41,0.6332,0.7304,18,18,5,12.2,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Tenerife holiday review,40,0.6265,0.7865,16,19,5,12.5,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Tenerife all inclusive,40,0.5272,0.7209,7,27,6,15.0,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Kriti,40,0.5165,0.6643,12,17,11,27.5,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Kassel,40,0.5503,0.6442,9,25,6,15.0,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Eastern and Midland,40,0.65,0.7675,18,19,3,7.5,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Córdoba,40,0.7362,0.7798,27,9,4,10.0,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Braunschweig,40,0.7028,0.7148,24,11,5,12.5,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Östra Mellansverige,39,0.6116,0.7601,19,11,9,23.08,cardiffnlp/twitter-xlm-roberta-base-sentiment
+puente mayo destino,39,0.55,0.7621,8,27,4,10.26,cardiffnlp/twitter-xlm-roberta-base-sentiment
+mejor destino luna de miel,39,0.6108,0.734,13,23,3,7.69,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Pelión,39,0.6809,0.799,21,14,4,10.26,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Noord-Holland,39,0.6499,0.7247,17,17,5,12.82,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Mallorca hotel,39,0.5215,0.6538,7,26,6,15.38,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Guyane,39,0.5769,0.7315,17,12,10,25.64,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Creta vacaciones opinión,39,0.7256,0.7731,22,16,1,2.56,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Antalya all inclusive,39,0.6363,0.7702,16,20,3,7.69,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Zeeland,38,0.5296,0.6257,7,27,4,10.53,cardiffnlp/twitter-xlm-roberta-base-sentiment
+"Konya, Karaman",38,0.6588,0.7532,18,17,3,7.89,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Etelä-Suomi,38,0.6199,0.7825,16,17,5,13.16,cardiffnlp/twitter-xlm-roberta-base-sentiment
+"Samsun, Tokat, Çorum, Amasya",37,0.7308,0.7598,25,7,5,13.51,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Provincia Autonoma di Trento,37,0.6856,0.7795,20,12,5,13.51,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Pohjois- ja Itä-Suomi,37,0.6928,0.7648,20,13,4,10.81,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Nord-Est,37,0.6637,0.7383,17,18,2,5.41,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Canarias,37,0.5521,0.7034,8,26,3,8.11,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Sud-Est,36,0.6615,0.7653,17,17,2,5.56,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Iberostar Creta,36,0.6147,0.8113,14,17,5,13.89,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Darmstadt,36,0.6725,0.6826,17,16,3,8.33,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Costa del Sol vs Algarve,36,0.5534,0.7914,9,23,4,11.11,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Basilicata,36,0.6092,0.6909,14,17,5,13.89,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Antalya vs Hurghada,36,0.5389,0.7537,10,20,6,16.67,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Vestlandet,35,0.6737,0.7526,18,14,3,8.57,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Rhône-Alpes,35,0.5603,0.7138,11,19,5,14.29,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Molise,35,0.4959,0.7027,6,22,7,20.0,cardiffnlp/twitter-xlm-roberta-base-sentiment
+La Réunion,35,0.5409,0.7136,12,14,9,25.71,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Grande Lisboa,35,0.4778,0.7729,7,18,10,28.57,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Crete tourism,35,0.5347,0.6146,11,16,8,22.86,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Steiermark,34,0.7099,0.8422,17,16,1,2.94,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Playa de Palma,34,0.5115,0.7129,9,18,7,20.59,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Pays de la Loire,34,0.5501,0.6181,9,22,3,8.82,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Nord-Pas de Calais,34,0.5541,0.7061,11,16,7,20.59,cardiffnlp/twitter-xlm-roberta-base-sentiment
+"Balıkesir, Çanakkale",34,0.7854,0.8161,24,8,2,5.88,cardiffnlp/twitter-xlm-roberta-base-sentiment
+vacaciones playa familia Europa,33,0.7051,0.7348,19,12,2,6.06,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Prov. Liège,33,0.517,0.7659,8,19,6,18.18,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Grecia Lefkada,33,0.5946,0.7417,11,19,3,9.09,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Franche-Comté,33,0.6804,0.6678,16,17,0,0.0,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Crna Gora,33,0.593,0.7764,11,18,4,12.12,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Chipre,33,0.4245,0.7228,2,23,8,24.24,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Stredné Slovensko,32,0.6657,0.7711,14,16,2,6.25,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Mallorca vs Creta,32,0.5123,0.7493,6,21,5,15.62,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Limousin,32,0.568,0.7081,9,19,4,12.5,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Maldivas vs Mauricio,31,0.5626,0.7235,6,24,1,3.23,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Limburg,31,0.622,0.751,13,13,5,16.13,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Ibiza playa,31,0.5169,0.6092,8,17,6,19.35,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Yugoiztochen,30,0.7174,0.8076,15,14,1,3.33,cardiffnlp/twitter-xlm-roberta-base-sentiment
+"Malatya, Elazığ, Bingöl, Tunceli",30,0.6569,0.7304,17,8,5,16.67,cardiffnlp/twitter-xlm-roberta-base-sentiment
+"Hatay, Kahramanmaraş, Osmaniye",30,0.5863,0.7796,13,10,7,23.33,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Friesland,30,0.5469,0.6594,7,19,4,13.33,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Burgenland,30,0.6414,0.7387,13,14,3,10.0,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Mallorca holiday review,29,0.6868,0.7697,17,10,2,6.9,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Ipeiros,29,0.5411,0.7852,8,16,5,17.24,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Cabo Verde Boa Vista,29,0.555,0.7846,6,21,2,6.9,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Attiki,29,0.4884,0.6883,5,19,5,17.24,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Åland,28,0.6297,0.7172,11,15,2,7.14,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Thüringen,28,0.5934,0.7222,11,12,5,17.86,cardiffnlp/twitter-xlm-roberta-base-sentiment
+TUI Blue Mallorca,28,0.6822,0.8616,14,12,2,7.14,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Severna Makedonija,28,0.6933,0.7413,14,13,1,3.57,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Friuli-Venezia Giulia,28,0.5608,0.7504,10,12,6,21.43,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Dubai turismo,28,0.4983,0.7259,9,10,9,32.14,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Bourgogne,28,0.6115,0.6834,11,14,3,10.71,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Antalya All Inclusive,28,0.5415,0.5183,10,12,6,21.43,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Warmińsko-mazurskie,27,0.5336,0.7603,6,17,4,14.81,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Saarland,27,0.5694,0.7084,8,15,4,14.81,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Nord-Norge,27,0.7575,0.779,18,7,2,7.41,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Illes Balears,27,0.4563,0.735,4,14,9,33.33,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Bucureşti-Ilfov,27,0.4938,0.736,7,12,8,29.63,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Agder og Sør-Østlandet,27,0.6247,0.7497,9,16,2,7.41,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Peloponnisos,26,0.7814,0.7534,20,3,3,11.54,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Niederbayern,26,0.7263,0.8321,16,8,2,7.69,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Creta playa familiar,26,0.6609,0.7149,12,13,1,3.85,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Poitou-Charentes,25,0.4895,0.67,4,17,4,16.0,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Midtjylland,25,0.5563,0.7338,7,15,3,12.0,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Gelderland,25,0.5515,0.7368,4,20,1,4.0,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Creta vacaciones,25,0.5586,0.7643,5,19,1,4.0,cardiffnlp/twitter-xlm-roberta-base-sentiment
+Basse-Normandie,25,0.5714,0.6966,7,15,3,12.0,cardiffnlp/twitter-xlm-roberta-base-sentiment

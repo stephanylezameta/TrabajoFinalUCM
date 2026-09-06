@@ -1,0 +1,42 @@
+{
+  "Algarve": {
+    "file": "algarve.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Mallorca": {
+    "file": "mallorca.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Menorca": {
+    "file": "menorca.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Split": {
+    "file": "split.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Dubrovnik": {
+    "file": "dubrovnik.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Zadar": {
+    "file": "zadar.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Creta": {
+    "file": "creta.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Naxos": {
+    "file": "naxos.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Maldivas": {
+    "file": "maldivas.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Cabo Verde": {
+    "file": "cabo-verde.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  }
+}
