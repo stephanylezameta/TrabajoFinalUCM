@@ -55,11 +55,7 @@ def correr_una_vez(db_path: str, seed: int) -> dict:
 
     precision, ndcg = tlr.evaluar(model, X_test, test_candidatos, k=10)
 
-    feature_names = [
-        "precio", "duracion", "rating", "review_count", "ocupacion",
-        "sensibilidad_ambiental", "accesibilidad", "capacidad",
-        "diversificacion", "temporada_baja", "impacto_local",
-    ]
+    feature_names = tlr.FEATURE_NAMES
     importancias = model.feature_importance(importance_type="gain")
     total_importancia = sum(importancias) or 1
     importancia_relativa = {
