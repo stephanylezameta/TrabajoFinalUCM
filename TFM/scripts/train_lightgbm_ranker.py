@@ -90,6 +90,7 @@ FEATURE_NAMES = [
     "diversificacion", "temporada_baja", "impacto_local",
     "temp_confort", "dias_secos", "horas_sol",
     "capacidad_sanitaria", "seguridad_criminalidad",
+    "tiene_accesibilidad_real",
     "match_categoria_cliente", "diferencia_precio_habitual_cliente",
 ]
 
@@ -306,6 +307,11 @@ def construir_dataset(db_path: str):
         precio_item = precios.get(experience_id, 0.5)
         match_categoria = 1.0 if (categoria_preferida is not None and categoria_preferida == categoria_item) else 0.0
         diff_precio = abs(precio_item - precio_habitual)
+        # Bandera (01/09): distingue accesibilidad real (AENA, solo
+        # aeropuertos españoles) de relleno neutro para destinos
+        # internacionales -- sin esto el modelo trataria el 0.5 como un
+        # valor medido real, no como "dato ausente".
+        tiene_accesibilidad_real = 1.0 if destino in accesibilidad else 0.0
         return [
             precio_item,
             duraciones.get(experience_id, 0.5),
@@ -323,6 +329,7 @@ def construir_dataset(db_path: str):
             horas_sol.get(destino, 0.5),
             capacidad_sanitaria.get(destino, 0.5),
             seguridad_criminalidad.get(destino, 0.5),
+            tiene_accesibilidad_real,
             match_categoria,
             diff_precio,
         ]

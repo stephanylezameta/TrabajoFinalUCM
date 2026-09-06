@@ -344,7 +344,7 @@ def cargar_clima_por_destino(db_path: str) -> tuple[dict, dict, dict]:
         if temps:
             temp_confort[destino] = sum(1 for t in temps if 18 <= t <= 28) / len(temps)
         if precs:
-            dias_secos[destino] = sum(1 for p in precs if p <= 1.0) / len(precs)
+            dias_secos[destino] = sum(1 for p in precs if p <= 50.0) / len(precs)
         if soles:
             horas_sol_promedio[destino] = sum(soles) / len(soles)
 
@@ -386,7 +386,7 @@ def cargar_datos_humanos_por_destino(db_path: str) -> dict:
                     100 * sum(1 for t in temps if t is not None and 18 <= t <= 28) / len(temps), 1
                 ) if temps else None
                 precipitacion_pct = round(
-                    100 * sum(1 for p in precs if p is not None and p > 1.0) / len(precs), 1
+                    100 * sum(1 for p in precs if p is not None and p > 50.0) / len(precs), 1
                 ) if precs else None
                 resultado[destino]["dias_soleados_pct"] = dias_soleados_pct
                 resultado[destino]["precipitacion_pct"] = precipitacion_pct
@@ -411,8 +411,8 @@ def cargar_datos_humanos_por_destino(db_path: str) -> dict:
             "FROM seguridad_destinos"
         ).fetchall()
         for destino, camas, homicidios in rows:
-            resultado[destino]["camas_hospital_1000hab"] = camas
-            resultado[destino]["tasa_homicidios_100mil"] = homicidios
+            resultado[destino]["camas_hospital_1000hab"] = round(camas, 2) if camas is not None else None
+            resultado[destino]["tasa_homicidios_100mil"] = round(homicidios, 2) if homicidios is not None else None
     except Exception:
         pass
 
@@ -734,6 +734,13 @@ def calcular_candidato(
     ocupacion_real = ocupacion_por_destino.get(destino, 0.5)
     sensibilidad_real = sensibilidad_por_destino.get(destino, 0.3)
     accesibilidad_real = accesibilidad_por_destino.get(destino, 0.5)
+    # Bandera (01/09): distingue si 'accesibilidad' es dato real (AENA,
+    # solo cubre aeropuertos españoles) o un relleno neutro 0.5 para
+    # destinos internacionales que nunca van a tener ese dato. Sin esto,
+    # el modelo (y el dashboard) tratarian el 0.5 como si fuera un valor
+    # medido "intermedio", cuando en realidad significa "no sabemos" --
+    # una diferencia real, no un matiz cosmetico.
+    tiene_accesibilidad_real = 1.0 if destino in accesibilidad_por_destino else 0.0
     capacidad_real = capacidad_por_destino.get(destino, 0.5)
     diversificacion_real = diversificacion_por_destino.get(destino, 0.5)
     temporada_baja_real = temporada_baja_por_destino.get(destino, 0.5)
@@ -748,12 +755,13 @@ def calcular_candidato(
     afinidad_coseno = max(0.0, min(1.0, (score_similitud + 1) / 2))
 
     if modelo_lgbm is not None:
-        # 18 features, mismo orden que train_lightgbm_ranker.py: precio,
+        # 19 features, mismo orden que train_lightgbm_ranker.py: precio,
         # duracion, rating, review_count, ocupacion, sensibilidad,
         # accesibilidad, capacidad, diversificacion, temporada_baja,
         # impacto_local, temp_confort, dias_secos, horas_sol,
         # capacidad_sanitaria, seguridad_criminalidad,
-        # match_categoria_cliente, diferencia_precio_habitual_cliente.
+        # tiene_accesibilidad_real, match_categoria_cliente,
+        # diferencia_precio_habitual_cliente.
         # Las ultimas 2 requieren un cliente identificado con historial;
         # en una consulta de texto libre anonima como esta no hay
         # cliente conocido, se usan valores neutros (0.0 = sin
@@ -776,6 +784,7 @@ def calcular_candidato(
             horas_sol_real,
             capacidad_sanitaria_real,
             seguridad_criminalidad_real,
+            tiene_accesibilidad_real,
             0.0,
             0.5,
         ]]
