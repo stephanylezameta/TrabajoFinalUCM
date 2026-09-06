@@ -122,3 +122,39 @@ class ReRankingEngine:
     def rank_all_scenarios(self, candidates: list[dict], k: int = 10) -> dict[str, list[dict]]:
         """Retorna los 3 rankings en una sola llamada."""
         return {esc: self.rank(candidates, esc, k) for esc in self.SCENARIOS}
+
+    def pesos_interpolados(self, objetivo_popularidad: float) -> dict:
+        """Interpola linealmente los 5 pesos entre 'intensivo' (extremo de
+        redistribucion, objetivo_popularidad=0.0) y 'tradicional' (extremo
+        de pura afinidad/popularidad, objetivo_popularidad=1.0).
+
+        Agregado (01/09) para el dashboard: la pestaña 'Recomendador
+        España' pide un slider continuo "Objetivo de popularidad"
+        (0.0-1.0), no 3 botones fijos como el Simulador TDRS. En vez de
+        reemplazar los 3 escenarios existentes (que siguen sirviendo para
+        esa otra vista), se agrega esta interpolacion como una opcion
+        mas -- moderado queda disponible como un punto de referencia
+        util en el medio del rango, pero no es exactamente el punto
+        medio matematico de esta interpolacion (fue optimizado aparte).
+        """
+        objetivo_popularidad = max(0.0, min(1.0, objetivo_popularidad))
+        t = objetivo_popularidad
+        extremo_redistribucion = self.SCENARIOS["intensivo"]
+        extremo_popularidad = self.SCENARIOS["tradicional"]
+        return {
+            clave: (1 - t) * extremo_redistribucion[clave] + t * extremo_popularidad[clave]
+            for clave in extremo_redistribucion
+        }
+
+    def rank_por_objetivo_popularidad(
+        self, candidates: list[dict], objetivo_popularidad: float, k: int = 10,
+    ) -> list[dict]:
+        """Ranking usando pesos interpolados segun el slider continuo, en
+        vez de uno de los 3 escenarios fijos."""
+        pesos = self.pesos_interpolados(objetivo_popularidad)
+        self.SCENARIOS = {**self.SCENARIOS, "_interpolado_temporal": pesos}
+        try:
+            return self.rank(candidates, escenario="_interpolado_temporal", k=k)
+        finally:
+            self.SCENARIOS = {k: v for k, v in self.SCENARIOS.items() if k != "_interpolado_temporal"}
+

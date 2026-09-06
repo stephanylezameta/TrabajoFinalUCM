@@ -846,6 +846,7 @@ def recomendar(
     excluir_ids: list[str] | None = None,
     excluir_destinos: list[str] | None = None,
     filtros: dict | None = None,
+    objetivo_popularidad: float | None = None,
 ) -> tuple[dict[str, list[dict]], str]:
     """Ejecuta el flujo completo y devuelve (rankings, session_id).
 
@@ -868,6 +869,12 @@ def recomendar(
           - presupuesto_max: float, precio_eur <= este valor
           - categoria: str, coincidencia exacta con experiencias.category
           - destino: str, coincidencia exacta con experiencias.destination
+      objetivo_popularidad: opcional, 0.0-1.0. Si se pasa, agrega un
+        4to ranking ("personalizado") interpolando entre el extremo de
+        redistribucion (0.0, mismos pesos que 'intensivo') y el extremo
+        de pura afinidad/popularidad (1.0, mismos pesos que
+        'tradicional') -- para el slider continuo del dashboard, sin
+        reemplazar los 3 escenarios fijos ya existentes.
     """
     excluir_ids = set(excluir_ids or [])
     excluir_destinos = set(excluir_destinos or [])
@@ -953,6 +960,13 @@ def recomendar(
     print("4) Aplicando re-ranking (3 escenarios)...")
     reranker = ReRankingEngine()
     rankings = reranker.rank_all_scenarios(candidatos, k=k_final)
+    if objetivo_popularidad is not None:
+        # Ranking adicional con el slider continuo del dashboard
+        # ('Recomendador España'), sin reemplazar los 3 escenarios fijos
+        # (que sigue usando 'Simulador TDRS' con sus 3 botones).
+        rankings["personalizado"] = reranker.rank_por_objetivo_popularidad(
+            candidatos, objetivo_popularidad, k=k_final,
+        )
 
     print("5) Registrando resultados para futuro reentrenamiento...")
     log_ids = {}
