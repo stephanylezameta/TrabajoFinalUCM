@@ -61,6 +61,51 @@ def normalizar_dict(d: dict) -> dict:
     return {k: (v - vmin) / (vmax - vmin) if v is not None else 0.5 for k, v in d.items()}
 
 
+def cargar_estancia_media_por_destino(db_path: str) -> dict:
+    """Estancia media real en noches por destino: pernoctaciones totales
+    / viajeros totales (INE, tablas 2078 y 2074 respectivamente).
+
+    Agregada (01/09): encontrada al buscar si teniamos algun dato real
+    de "duracion de estadia" -- 'ocupacion_hotelera_mensual' (ya usada)
+    mide % de habitaciones llenas, un concepto DISTINTO de cuantas
+    noches se queda un viajero en promedio. 'viajeros_mensuales' y
+    'pernoctaciones_mensuales' ya estaban extraidas en indicadores_destino
+    pero nunca se habian usado en ningun lado. Cobertura real: 14
+    destinos con pernoctaciones, 18 con viajeros -- la interseccion
+    (destinos con ambos) determina la cobertura final de esta metrica.
+
+    No es un dato a nivel de item individual (nuestro catalogo son
+    actividades de horas, no paquetes de noches de hotel) -- es una
+    caracteristica del DESTINO completo, util como dato informativo y
+    como filtro de destino ("solo destinos donde la gente se queda poco
+    tiempo"), no como filtro de item al estilo presupuesto_max."""
+    conn = sqlite3.connect(db_path)
+    try:
+        pernoctaciones = conn.execute("""
+            SELECT destino_nombre, SUM(valor) FROM indicadores_destino
+            WHERE tipo_indicador = 'pernoctaciones_mensuales'
+            GROUP BY destino_nombre
+        """).fetchall()
+        viajeros = conn.execute("""
+            SELECT destino_nombre, SUM(valor) FROM indicadores_destino
+            WHERE tipo_indicador = 'viajeros_mensuales'
+            GROUP BY destino_nombre
+        """).fetchall()
+    except Exception:
+        pernoctaciones, viajeros = [], []
+    finally:
+        conn.close()
+
+    pernoctaciones_dict = {d: v for d, v in pernoctaciones if v}
+    viajeros_dict = {d: v for d, v in viajeros if v}
+
+    return {
+        d: round(pernoctaciones_dict[d] / viajeros_dict[d], 1)
+        for d in (set(pernoctaciones_dict) & set(viajeros_dict))
+        if viajeros_dict[d] > 0
+    }
+
+
 def cargar_ocupacion_por_destino(db_path: str) -> dict:
     """Ocupación real normalizada [0,1] por destino (Eurostat/INE), con
     19/39 destinos cubiertos. Para los 20 restantes, en vez de un
@@ -428,6 +473,24 @@ def cargar_datos_humanos_por_destino(db_path: str) -> dict:
             resultado[destino]["n_resenas_reales"] = n_resenas
     except Exception:
         pass
+
+    # DESACTIVADA (01/09): investigacion encontro que pernoctaciones_mensuales
+    # es ~10% de viajeros_mensuales para el mismo destino/mes (Barcelona:
+    # 131.917 vs 1.261.966) -- fisicamente imposible (el minimo posible es
+    # pernoctaciones >= viajeros, cualquier persona que se hospeda una
+    # noche ya genera 1 pernoctacion). Sugiere que ambas series miden
+    # poblaciones o niveles geograficos distintos en la fuente INE
+    # original, no comparables por division directa. No se expone en
+    # datos_humanos ni como filtro hasta investigar la extraccion
+    # original (extract_ine_dataestur.py, tablas INE 2074 y 2078) con
+    # mas tiempo. La funcion se deja documentada, no borrada, para no
+    # perder el hallazgo ni el trabajo de investigacion de hoy.
+    # try:
+    #     estancia_media = cargar_estancia_media_por_destino(db_path)
+    #     for destino, noches in estancia_media.items():
+    #         resultado[destino]["estancia_media_noches"] = noches
+    # except Exception:
+    #     pass
 
     conn.close()
     return dict(resultado)
@@ -869,6 +932,8 @@ def recomendar(
           - presupuesto_max: float, precio_eur <= este valor
           - categoria: str, coincidencia exacta con experiencias.category
           - destino: str, coincidencia exacta con experiencias.destination
+          (estancia_media_max_noches: DESACTIVADO, dato INE no confiable,
+          ver docstring de cargar_estancia_media_por_destino)
       objetivo_popularidad: opcional, 0.0-1.0. Si se pasa, agrega un
         4to ranking ("personalizado") interpolando entre el extremo de
         redistribucion (0.0, mismos pesos que 'intensivo') y el extremo
@@ -893,6 +958,9 @@ def recomendar(
     print("3) Calculando TDRS por candidato (redistribución/sostenibilidad)...")
     metadata = cargar_metadata_experiencias(db_path)
     ocupacion_por_destino = cargar_ocupacion_por_destino(db_path)
+    # estancia_media_por_destino DESACTIVADA (01/09) -- ver docstring de
+    # cargar_estancia_media_por_destino, datos de fuente no confiables.
+    # estancia_media_por_destino = cargar_estancia_media_por_destino(db_path)
     sensibilidad_por_destino = cargar_caracteristicas_destino(db_path)
     accesibilidad_por_destino = cargar_accesibilidad_por_destino(db_path)
     capacidad_por_destino = cargar_capacidad_por_destino(db_path)
@@ -937,6 +1005,10 @@ def recomendar(
             continue
         if "destino" in filtros and destino != filtros["destino"]:
             continue
+        # Filtro "estancia_media_max_noches" DESACTIVADO (01/09) -- ver
+        # docstring de cargar_estancia_media_por_destino, dato de fuente
+        # INE no confiable (pernoctaciones/viajeros da valores fisicamente
+        # imposibles, <1 noche promedio).
 
         candidato, detalle = calcular_candidato(
             id_paq, destino, c["score_similitud"],
