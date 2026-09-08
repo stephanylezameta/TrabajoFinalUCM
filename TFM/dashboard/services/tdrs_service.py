@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import math
+import os
 from statistics import median
 from typing import Any
+
+import requests
 
 from database.connection import db_session
 from utils.text import normalize_text
@@ -28,14 +31,15 @@ FACTORS = CSV_FACTORS
 # Al extremar la señal dominante de cada escenario, el ranking sí cambia.
 PRESETS = {
     "Popular": {
-        # Manda la popularidad; el resto pesa poco. Favorece destinos masivos
-        # aunque su satisfacción o su clima no destaquen.
         "sunny_days_pct": 30,
         "low_precipitation_pct": 25,
         "popularity": 100,
         "hospital_beds": 20,
         "safety": 30,
         "satisfaction": 25,
+        "impacto_local": 70,
+        "diversificacion": 20,
+        "temporada_baja": 15,
     },
     "Equilibrado": {
         "sunny_days_pct": 70,
@@ -44,16 +48,20 @@ PRESETS = {
         "hospital_beds": 65,
         "safety": 80,
         "satisfaction": 75,
+        "impacto_local": 55,
+        "diversificacion": 55,
+        "temporada_baja": 55,
     },
     "Explorador": {
-        # Penaliza la popularidad y prima calidad del destino: clima, seguridad y
-        # sobre todo la satisfacción real de quienes ya fueron.
         "sunny_days_pct": 85,
         "low_precipitation_pct": 75,
         "popularity": 10,
         "hospital_beds": 70,
         "safety": 95,
         "satisfaction": 100,
+        "impacto_local": 30,
+        "diversificacion": 80,
+        "temporada_baja": 85,
     },
     "Personalizado": {
         "sunny_days_pct": 60,
@@ -62,6 +70,9 @@ PRESETS = {
         "hospital_beds": 60,
         "safety": 60,
         "satisfaction": 60,
+        "impacto_local": 60,
+        "diversificacion": 60,
+        "temporada_baja": 60,
     },
 }
 
@@ -302,66 +313,105 @@ def csv_factor_values(d: dict[str, Any], ranges: dict[str, list[float]]) -> dict
     }
 
 
+TUI_MODELO_API_BASE = os.getenv("TUI_MODELO_API_BASE", "http://localhost:8000")
+
+_MAPEO_PESOS = {
+    "sunny_days_pct": "sunny_days_pct",
+    "low_precipitation_pct": "dry_months_pct",
+    "popularity": "popularity",
+    "hospital_beds": "hospital_beds",
+    "safety": "safety",
+    "satisfaction": "satisfaction",
+    "impacto_local": "impacto_local",
+    "diversificacion": "diversificacion",
+    "temporada_baja": "temporada_baja",
+}
+
+_CAMPOS_COBERTURA = [
+    "sunny_days_pct", "precipitation_days_pct", "annual_passengers",
+    "hospital_beds", "homicide_rate", "sentiment_score",
+]
+
+
 def compute_scores(
     weights: dict[str, float],
     max_price: float | None = None,
     max_stay_days: int | None = None,
 ) -> dict[str, Any]:
-    """Ranquea los destinos aplicando pesos y restricciones.
+    """Ranquea los 39 destinos reales llamando al modelo real (embeddings +
+    LightGBM + TDRS con datos reales de Eurostat/INE, AENA, Open-Meteo,
+    sentimiento XLM-RoBERTa), en vez de la reimplementacion local anterior
+    con datos propios del dashboard.
 
-    Las restricciones solo excluyen cuando el dato existe: un precio o una
-    duración desconocidos no descartan el destino.
+    NOTA (fix de integracion): 'max_stay_days' ya no filtra nada -- el dato
+    de "dias hospedados" (estancia media real) resulto tener valores
+    fisicamente imposibles en la fuente INE (menos de 1 noche promedio) y
+    quedo desactivado en el modelo hasta investigar la extraccion original.
     """
-    destinations = _knn_impute(get_destination_context(), k=3)
-    ranges = _model_ranges(destinations)
+    pesos_api = {
+        _MAPEO_PESOS[clave]: valor
+        for clave, valor in weights.items()
+        if clave in _MAPEO_PESOS
+    }
+
+    if sum(max(0.0, v) for v in pesos_api.values()) <= 0:
+        return {
+            "ranked": [], "excluded": [],
+            "factor_model": "Ajusta al menos un criterio para generar un ranking",
+            "max_price": max_price, "max_stay_days": max_stay_days,
+            "imputation_method": "Sin pesos activos",
+        }
+
+    try:
+        resp = requests.post(
+            f"{TUI_MODELO_API_BASE}/tdrs_ranking",
+            json={"weights": pesos_api, "max_price": max_price},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "ranked": [], "excluded": [],
+            "factor_model": "Error de conexion con el modelo real",
+            "max_price": max_price, "max_stay_days": max_stay_days,
+            "imputation_method": f"API no disponible: {exc}",
+        }
+
     ranked: list[dict[str, Any]] = []
-    excluded: list[dict[str, Any]] = []
-
-    for d in destinations:
-        reasons: list[str] = []
-        price = d.get("reference_price_eur")
-        stay_days = d.get("catalog_stay_days")
-        if max_price is not None and price is not None and float(price) > float(max_price):
-            reasons.append("precio")
-        if max_stay_days is not None and stay_days is not None and int(stay_days) > int(max_stay_days):
-            reasons.append("días hospedados")
-        if reasons:
-            excluded.append({**d, "excluded_by": reasons})
-            continue
-
-        factor_values = csv_factor_values(d, ranges)
-        total_weight = sum(max(0.0, float(weights.get(key, 0))) for key, _, _ in CSV_FACTORS)
-        score = 0.0
-        contributions: list[dict[str, Any]] = []
-        for key, label, source in CSV_FACTORS:
-            value = factor_values.get(key)
-            weight = max(0.0, float(weights.get(key, 0)))
-            contribution = (weight / total_weight) * float(value) if value is not None and total_weight > 0 else 0.0
-            score += contribution
-            contributions.append({
-                "factor": key,
-                "label": label,
-                "source": source,
-                "weight": weight,
-                "value": value,
-                "contribution": contribution,
-            })
-        contributions.sort(key=lambda x: x["contribution"], reverse=True)
+    for item in data.get("ranked", []):
+        dh = item.get("datos_humanos") or {}
+        model_values = {
+            "sunny_days_pct": dh.get("dias_soleados_pct"),
+            "precipitation_days_pct": dh.get("precipitacion_pct"),
+            "annual_passengers": dh.get("pasajeros_anuales"),
+            "hospital_beds": dh.get("camas_hospital_1000hab"),
+            "homicide_rate": dh.get("tasa_homicidios_100mil"),
+            "sentiment_score": dh.get("sentimiento_real"),
+        }
+        cobertura = sum(1 for c in _CAMPOS_COBERTURA if model_values.get(c) is not None)
         ranked.append({
-            **d,
-            "score": score,
-            "csv_factor_values": factor_values,
-            "contributions": contributions,
+            "name": item["destino_nombre"],
+            "score": item["score"],
+            "reference_price_eur": item.get("precio_referencia_eur"),
+            "model_values": model_values,
+            "model_raw_values": {"sentiment_score": dh.get("sentimiento_real")},
+            "data_coverage": cobertura / len(_CAMPOS_COBERTURA),
+            "contributions": item.get("contribuciones", []),
         })
 
-    ranked.sort(key=lambda x: (-x["score"], -x["data_coverage"], x["name"]))
+    excluded = [
+        {"name": e["destino_nombre"], "excluded_by": e.get("excluded_by", [])}
+        for e in data.get("excluded", [])
+    ]
+
     return {
         "ranked": ranked,
         "excluded": excluded,
-        "factor_model": "TDRS CSV v3.2 · 6 señales · KNN",
+        "factor_model": "Modelo real TUI (embeddings + LightGBM + TDRS, datos reales)",
         "max_price": max_price,
         "max_stay_days": max_stay_days,
-        "imputation_method": "KNN k=3 sobre señales CSV; los campos imputados se marcan en la salida",
+        "imputation_method": "Sin imputacion: valores ausentes se muestran como tal, no se estiman",
     }
 
 

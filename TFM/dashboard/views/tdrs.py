@@ -32,6 +32,9 @@ MODEL_SLIDER_SUFFIX = {
     "hospital_beds": "beds",
     "safety": "safety",
     "satisfaction": "satisf",
+    "impacto_local": "impacto",
+    "diversificacion": "diversif",
+    "temporada_baja": "tempbaja",
 }
 
 
@@ -220,6 +223,21 @@ def render_tdrs_sidebar_controls() -> dict:
                 "Satisfacción de viajeros", 0, 100, int(defaults["satisfaction"]),
                 key=f"sb_{scenario}_satisf",
                 help="Sentimiento medio de reseñas reales analizadas por el pipeline.",
+            ),
+            "impacto_local": st.slider(
+                "Impacto económico local", 0, 100, int(defaults["impacto_local"]),
+                key=f"sb_{scenario}_impacto",
+                help="Ingresos reales generados en el destino (reservas historicas).",
+            ),
+            "diversificacion": st.slider(
+                "Diversificación de visitantes", 0, 100, int(defaults["diversificacion"]),
+                key=f"sb_{scenario}_diversif",
+                help="Que tan variado es el origen de los viajeros reales del destino.",
+            ),
+            "temporada_baja": st.slider(
+                "Favorecer temporada baja", 0, 100, int(defaults["temporada_baja"]),
+                key=f"sb_{scenario}_tempbaja",
+                help="Prioriza destinos con demanda mas repartida a lo largo del año.",
             ),
         }
 
