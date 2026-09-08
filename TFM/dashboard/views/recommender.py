@@ -1,23 +1,12 @@
 from __future__ import annotations
 
-"""Vista Recomendador España: consume el motor externo vía API.
-
-Esta vista no calcula nada. Envía las preferencias a la API, pinta el ranking que
-devuelve y expone su explicabilidad: por qué cada destino aparece, qué señales lo
-sostienen, qué concesiones implica y con qué cobertura de datos se ha construido.
-
-El motor es independiente del TDRS: ranquea municipios españoles a partir de
-catálogo turístico, OpenStreetMap, señales de YouTube y clima histórico de AEMET.
-"""
-
 from html import escape
 
-import pandas as pd
 import streamlit as st
 
 from components.assets import get_local_destination_image
 from services import recommendation_api_service as reco
-from services.destination_image_service import get_destination_image
+from services.destination_image_service import resolve_destination_image
 from services.tracking_service import register_event
 
 VIEW_LABEL = "Recomendador España"
@@ -27,18 +16,24 @@ STATE_AUTORUN = "reco_autorun_done"
 STATE_CUSTOM = "reco_is_custom"
 
 
-def _chip(text: str, kind: str = "") -> str:
-    css = f"reco-chip {kind}".strip()
-    return f'<span class="{css}">{escape(text)}</span>'
-
+# --------------------------------------------------------------------------
+# Ayudas de formato
+# --------------------------------------------------------------------------
 
 def _fmt(value, suffix: str = "", decimals: int = 1) -> str:
-    """Formatea un número respetando la regla de que un dato ausente es `—`."""
-    if value is None or (isinstance(value, float) and pd.isna(value)):
+    """Formatea un número; un dato ausente se muestra como `—`."""
+    if value is None:
+        return "—"
+    if isinstance(value, float) and value != value:  # NaN
         return "—"
     if isinstance(value, (int, float)):
         return f"{value:,.{decimals}f}{suffix}"
     return str(value)
+
+
+def _chip(text: str, kind: str = "") -> str:
+    css = f"reco-chip {kind}".strip()
+    return f'<span class="{css}">{escape(text)}</span>'
 
 
 def _bar(label: str, value: float | None) -> str:
@@ -54,6 +49,65 @@ def _bar(label: str, value: float | None) -> str:
         f'<div class="reco-bar-value">{value:.2f}</div></div>'
     )
 
+
+def _photo(row: dict) -> dict | None:
+    """Fotografía del destino, ajustada a la tarjeta como banner.
+
+    La resolución es en vivo y desambiguada: usa provincia y comunidad para no
+    traer la imagen de un homónimo famoso (p. ej. "Palma" → Palma de Mallorca,
+    no la Palma de Oro de Cannes). Se prueba primero una foto local si existe,
+    porque es instantánea, pero la app no depende de tenerla: si no está, la
+    busca en Wikipedia sin necesidad de redesplegar.
+    """
+    destination = row.get("destination") or {}
+    name = destination.get("name")
+    if not name:
+        return None
+    local = get_local_destination_image(name)
+    if local:
+        return local
+    return resolve_destination_image(destination)
+
+
+def _place(destination: dict) -> str:
+    """Ubicación legible sin repetir el nombre del municipio.
+
+    La API devuelve municipios donde a veces el nombre coincide con la provincia
+    (p. ej. "Santa Cruz de Tenerife"). Se evita "Municipio · Municipio · CCAA":
+    solo se añaden provincia y comunidad si aportan algo nuevo.
+    """
+    name = str(destination.get("name") or "").strip()
+    province = str(destination.get("province") or "").strip()
+    community = str(destination.get("autonomous_community") or "").strip()
+    seen = {name.lower()}
+    bits: list[str] = []
+    for value in (province, community):
+        key = value.lower()
+        if value and key not in seen:
+            bits.append(value)
+            seen.add(key)
+    return " · ".join(bits)
+
+
+def _unmatched_prefs(row: dict) -> list[str]:
+    """Preferencias pedidas que el destino no cumple. `matched: null` no cuenta:
+    el motor entrenado marca null cuando no tiene dato, no un incumplimiento."""
+    match = row.get("preference_match") or {}
+    labels = {
+        "sunny_days": "días de sol",
+        "precipitation_days": "días de lluvia",
+        "popularity": "popularidad",
+    }
+    return [
+        labels.get(key, key)
+        for key, value in match.items()
+        if isinstance(value, dict) and value.get("matched") is False
+    ]
+
+
+# --------------------------------------------------------------------------
+# Formulario
+# --------------------------------------------------------------------------
 
 def _render_form() -> dict | None:
     """Formulario de preferencias. Devuelve el payload si se ha enviado."""
@@ -87,7 +141,7 @@ def _render_form() -> dict | None:
             reco.INTERESTS,
             default=defaults["interests"],
             format_func=reco.interest_label,
-            help="Selecciona al menos uno. Estos son los siete intereses que acepta el motor.",
+            help="Selecciona al menos uno. Estos son los intereses que acepta el motor.",
         )
 
         c4, c5, c6 = st.columns(3)
@@ -164,196 +218,32 @@ def _render_form() -> dict | None:
     )
 
 
-def _render_card(row: dict, idx: int) -> None:
-    destination = row.get("destination") or {}
-    climate = row.get("climate_profile") or {}
-    offers = row.get("what_it_offers") or {}
-    popularity = row.get("popularity_profile") or {}
-    confidence = row.get("confidence") or {}
-    match = row.get("preference_match") or {}
-
-    name = str(destination.get("name") or "Destino sin nombre")
-    place_bits = [destination.get("province"), destination.get("autonomous_community")]
-    place = " · ".join(str(b) for b in place_bits if b)
-    score = row.get("recommendation_score")
-    score_text = "—" if score is None else f"{float(score):.2f}"
-    typology = destination.get("primary_typology")
-
-    strengths = [str(s) for s in (row.get("strengths") or [])]
-    tradeoffs = [str(s) for s in (row.get("tradeoffs") or [])]
-    reasons = [reco.reason_label(str(c)) for c in (row.get("reason_codes") or [])]
-    available, total, missing = reco.coverage_summary(row.get("data_coverage"))
-
-    parts: list[str] = [f'<div class="reco-card {"first" if idx == 0 else ""}">']
-
-    photo = _photo(row)
-    if photo:
-        alt = photo.get("alt") or f"Imagen de {name}"
-        parts.append(
-            f'<img class="reco-photo" src="{escape(photo["url"], quote=True)}" '
-            f'alt="{escape(alt, quote=True)}" loading="lazy">'
-        )
-    else:
-        parts.append(f'<div class="reco-photo-fallback">{escape(name)}</div>')
-
-    parts += [
-        '<div class="reco-head"><div class="reco-head-main">',
-        f'<div class="reco-rank">opción {row.get("rank", idx + 1)}</div>',
-        f'<div class="reco-name">{escape(name)}</div>',
-    ]
-    if place:
-        parts.append(f'<div class="reco-place">{escape(place)}</div>')
-    parts.append("</div><div>")
-    parts.append(f'<div class="reco-score">{escape(score_text)}</div>')
-    parts.append('<div class="reco-score-label">score</div>')
-    parts.append("</div></div>")
-
-    if typology:
-        parts.append(f'<span class="reco-typology">{escape(str(typology))}</span>')
-    if row.get("headline"):
-        parts.append(f'<div class="reco-headline">{escape(str(row["headline"]))}</div>')
-
-    # Desglose de las cinco dimensiones del score.
-    breakdown = reco.breakdown_rows(row.get("score_breakdown"))
-    if breakdown:
-        parts.append('<div class="reco-block"><div class="reco-block-title">Desglose del score</div>')
-        for item in breakdown:
-            parts.append(_bar(str(item["Dimensión"]), item["Valor"]))
-        parts.append("</div>")
-
-    # Datos objetivos del destino. Un valor ausente se muestra como `—`.
-    parts.append('<div class="reco-block"><div class="reco-block-title">Perfil del destino</div>')
-    parts.append('<div class="reco-meta-grid">')
-    parts.append(
-        f'<div class="reco-meta-item">Días de sol <strong>{_fmt(climate.get("sunny_days"), decimals=1)}</strong></div>'
-    )
-    parts.append(
-        f'<div class="reco-meta-item">Días de lluvia <strong>{_fmt(climate.get("precipitation_days"), decimals=1)}</strong></div>'
-    )
-    parts.append(
-        f'<div class="reco-meta-item">Temp. media <strong>{_fmt(climate.get("temperature_mean_c"), " °C", 1)}</strong></div>'
-    )
-    parts.append(
-        f'<div class="reco-meta-item">Popularidad <strong>{_fmt(popularity.get("index"), decimals=2)}</strong></div>'
-    )
-    parts.append(
-        f'<div class="reco-meta-item">Puntos de interés <strong>{_fmt(offers.get("poi_count"), decimals=0)}</strong></div>'
-    )
-    parts.append(
-        f'<div class="reco-meta-item">Confianza <strong>{escape(reco.confidence_label(confidence.get("level")))}</strong></div>'
-    )
-    parts.append("</div></div>")
-
-    if reasons:
-        parts.append('<div class="reco-block"><div class="reco-block-title">Motivos</div>')
-        parts.append('<div class="reco-chips">' + "".join(_chip(r, "ok") for r in reasons) + "</div>")
-        parts.append("</div>")
-
-    if strengths:
-        parts.append('<div class="reco-block"><div class="reco-block-title">Fortalezas</div>')
-        parts.append('<ul class="reco-list">' + "".join(f"<li>{escape(s)}</li>" for s in strengths) + "</ul>")
-        parts.append("</div>")
-
-    if tradeoffs:
-        parts.append('<div class="reco-block"><div class="reco-block-title">Concesiones</div>')
-        parts.append('<ul class="reco-list">' + "".join(f"<li>{escape(s)}</li>" for s in tradeoffs) + "</ul>")
-        parts.append("</div>")
-
-    # Trazabilidad: qué fuentes respaldan esta recomendación.
-    if total:
-        coverage_kind = "ok" if available == total else "warn"
-        coverage_chips = [_chip(f"Cobertura {available}/{total}", coverage_kind)]
-        coverage_chips += [_chip(f"Falta {name}", "warn") for name in missing]
-        parts.append('<div class="reco-block"><div class="reco-block-title">Cobertura de datos</div>')
-        parts.append('<div class="reco-chips">' + "".join(coverage_chips) + "</div>")
-        parts.append("</div>")
-
-    for warning in row.get("data_warnings") or []:
-        parts.append(f'<div class="reco-block"><div class="reco-headline">{escape(str(warning))}</div></div>')
-
-    # Comprobación explícita de si se cumple cada preferencia pedida.
-    unmatched = [
-        key for key, value in match.items()
-        if isinstance(value, dict) and value.get("matched") is False
-    ]
-    if unmatched:
-        labels = {
-            "sunny_days": "días de sol",
-            "precipitation_days": "días de lluvia",
-            "popularity": "popularidad",
-        }
-        pending = ", ".join(labels.get(k, k) for k in unmatched)
-        parts.append(
-            f'<div class="reco-block"><div class="reco-chips">{_chip("No cumple: " + pending, "warn")}</div></div>'
-        )
-
-    parts.append("</div>")
-    st.markdown("".join(parts), unsafe_allow_html=True)
-
-
-def _photo(row: dict) -> dict | None:
-    """Fotografía del destino, buscada en Wikipedia. Decorativa y opcional.
-
-    Los destinos que devuelve la API son municipios españoles, así que la
-    búsqueda acierta casi siempre. Si falla, la tarjeta cae en su fondo sólido.
-    """
-    destination = (row.get("destination") or {}).get("name")
-    if not destination:
-        return None
-    # Foto local si existe (rápida), y si no, Wikipedia.
-    local = get_local_destination_image(destination)
-    if local:
-        return local
-    province = (row.get("destination") or {}).get("province")
-    # Añadir la provincia desambigua topónimos repetidos, frecuentes en España.
-    return get_destination_image(destination) or (
-        get_destination_image(f"{destination} {province}") if province else None
-    )
-
-
-def _score_reading(score: float | None) -> str:
-    """Lectura cualitativa del score. Un 0,86 a secas no dice nada al usuario."""
-    if score is None:
-        return ""
-    value = float(score)
-    if value >= 0.85:
-        return "afinidad muy alta"
-    if value >= 0.70:
-        return "afinidad alta"
-    if value >= 0.50:
-        return "afinidad media"
-    return "afinidad baja"
-
+# --------------------------------------------------------------------------
+# Hero: la recomendación principal
+# --------------------------------------------------------------------------
 
 def _hero_facts(row: dict) -> list[tuple[str, str]]:
-    """Cuatro datos objetivos del destino recomendado, con `—` si faltan."""
     climate = row.get("climate_profile") or {}
     offers = row.get("what_it_offers") or {}
     popularity = row.get("popularity_profile") or {}
     confidence = row.get("confidence") or {}
-    return [
+    facts = [
         (_fmt(climate.get("sunny_days"), decimals=0), "Días de sol"),
         (_fmt(climate.get("temperature_mean_c"), "°", 0), "Temp. media"),
         (_fmt(offers.get("poi_count"), decimals=0), "Puntos de interés"),
         (reco.confidence_label(confidence.get("level")), "Confianza"),
-    ] + (
-        [(_fmt(popularity.get("index"), decimals=2), "Popularidad")]
-        if popularity.get("index") is not None else []
-    )
+    ]
+    if popularity.get("index") is not None:
+        facts.append((_fmt(popularity.get("index"), decimals=2), "Popularidad"))
+    return facts
 
 
 def _render_hero(row: dict, payload: dict) -> None:
-    """Tarjeta principal: la recomendación, legible de un vistazo."""
     destination = row.get("destination") or {}
     name = str(destination.get("name") or "Destino sin nombre")
-    place = " · ".join(
-        str(b) for b in (destination.get("province"), destination.get("autonomous_community")) if b
-    )
-    score = row.get("recommendation_score")
-    score_text = "—" if score is None else f"{float(score):.2f}"
+    place = _place(destination)
+    typology = destination.get("primary_typology")
 
-    # El "por qué" sale de la propia API: primero su titular, y si no, la
-    # primera fortaleza. Nunca se redacta aquí una justificación inventada.
     why = str(row.get("headline") or "")
     strengths = [str(s) for s in (row.get("strengths") or [])]
     if not why and strengths:
@@ -366,100 +256,173 @@ def _render_hero(row: dict, payload: dict) -> None:
         reco.interest_label(code)
         for code in (payload.get("preferences", {}).get("interests") or [])
     ]
-
     chips = [f"{month} · {days} días"] + interests
     tradeoffs = [str(s) for s in (row.get("tradeoffs") or [])]
 
-    # La fotografía va como fondo con degradado encima: da contexto visual sin
-    # competir con el texto ni desplazar la información.
     photo = _photo(row)
+    parts = ['<div class="offer">']
+
+    # --- Banner de la oferta: imagen a todo el ancho con el titular montado ---
     if photo:
-        overlay = (
-            "linear-gradient(180deg, rgba(17,24,39,.34) 0%, rgba(17,24,39,.74) 46%, "
-            "rgba(17,24,39,.94) 100%)"
+        parts.append(
+            f'<div class="offer-media" style="background-image:'
+            f'url(&quot;{escape(photo["url"], quote=True)}&quot;)">'
         )
-        style = (
-            f' style="background-image:{overlay}, '
-            f'url(&quot;{escape(photo["url"], quote=True)}&quot;)"'
-        )
-        parts = [f'<div class="hero-reco has-photo"{style}>']
     else:
-        parts = ['<div class="hero-reco">']
-
-    parts.append('<div class="hero-reco-kicker">Destino recomendado</div>')
-    parts.append('<div class="hero-reco-top"><div>')
-    parts.append(f'<h2 class="hero-reco-name">{escape(name)}</h2>')
+        parts.append('<div class="offer-media offer-media--empty">')
+    parts.append('<div class="offer-media-veil"></div>')
+    parts.append('<div class="offer-flag">Recomendado para ti</div>')
+    parts.append('<div class="offer-media-caption">')
+    parts.append(f'<h2 class="offer-name">{escape(name)}</h2>')
     if place:
-        parts.append(f'<div class="hero-reco-place">{escape(place)}</div>')
-    parts.append('</div><div class="hero-reco-score">')
-    parts.append(f'<div class="hero-reco-score-value">{escape(score_text)}</div>')
-    parts.append('<div class="hero-reco-score-label">afinidad</div>')
-    reading = _score_reading(score)
-    if reading:
-        parts.append(f'<div class="hero-reco-read">{escape(reading)}</div>')
-    parts.append("</div></div>")
+        parts.append(f'<div class="offer-place">📍 {escape(place)}</div>')
+    parts.append('</div>')  # caption
+    parts.append('</div>')  # media
 
+    # --- Panel de la oferta: motivo, contexto y datos, estilo comercial ---
+    parts.append('<div class="offer-body">')
+    if typology:
+        parts.append(f'<span class="offer-typology">{escape(str(typology))}</span>')
     if why:
-        parts.append(f'<p class="hero-reco-why">{escape(why)}</p>')
+        parts.append(f'<p class="offer-why">{escape(why)}</p>')
 
-    parts.append('<div class="hero-reco-chips">')
-    parts.append("".join(f'<span class="hero-reco-chip">{escape(c)}</span>' for c in chips))
+    parts.append('<div class="offer-chips">')
+    parts.append("".join(f'<span class="offer-chip">{escape(c)}</span>' for c in chips))
     for tradeoff in tradeoffs[:1]:
-        parts.append(f'<span class="hero-reco-chip warn">{escape(tradeoff)}</span>')
-    parts.append("</div>")
+        parts.append(f'<span class="offer-chip warn">⚠ {escape(tradeoff)}</span>')
+    parts.append('</div>')
 
-    parts.append('<div class="hero-reco-facts">')
+    parts.append('<div class="offer-facts">')
     for value, label in _hero_facts(row):
         parts.append(
-            f'<div class="hero-reco-fact"><div class="hero-reco-fact-value">{escape(str(value))}</div>'
-            f'<div class="hero-reco-fact-label">{escape(label)}</div></div>'
+            f'<div class="offer-fact"><div class="offer-fact-value">{escape(str(value))}</div>'
+            f'<div class="offer-fact-label">{escape(label)}</div></div>'
         )
-    parts.append("</div>")
-
-    # Atribución de la fotografía, como en las tarjetas del simulador.
-    if photo and photo.get("credit"):
-        parts.append(f'<div class="hero-reco-credit">{escape(str(photo["credit"]))}</div>')
-    parts.append("</div>")
+    parts.append('</div>')
+    parts.append('</div>')  # body
+    parts.append('</div>')  # offer
 
     st.markdown("".join(parts), unsafe_allow_html=True)
 
 
-def _render_result(result: dict, skip_first: bool = False) -> None:
-    engine = result.get("engine") or {}
-    engine_type = engine.get("type") or "—"
-    engine_version = engine.get("version") or "—"
-    trained = engine.get("trained_model_used")
-    trained_text = "modelo entrenado" if trained else "heurística determinista"
-    cached = " · respuesta servida desde caché local" if result.get("from_cache") else ""
+# --------------------------------------------------------------------------
+# Tarjeta galería: cada una de las otras opciones
+# --------------------------------------------------------------------------
 
-    st.markdown(
-        f'<div class="reco-engine">Motor <strong>{escape(str(engine_type))}</strong> · '
-        f'versión <strong>{escape(str(engine_version))}</strong> · {escape(trained_text)}'
-        f'{escape(cached)}</div>',
-        unsafe_allow_html=True,
-    )
+def _render_card(row: dict, idx: int) -> None:
+    destination = row.get("destination") or {}
+    climate = row.get("climate_profile") or {}
+    offers = row.get("what_it_offers") or {}
 
+    name = str(destination.get("name") or "Destino")
+    place = _place(destination)
+    typology = destination.get("primary_typology")
+
+    parts = ['<div class="reco-card">']
+
+    # Banner: la imagen ocupa todo el ancho, pegada al borde, con chip de ranking.
+    parts.append('<div class="reco-photo-wrap">')
+    photo = _photo(row)
+    if photo:
+        alt = photo.get("alt") or f"Imagen de {name}"
+        parts.append(
+            f'<img class="reco-photo" src="{escape(photo["url"], quote=True)}" '
+            f'alt="{escape(alt, quote=True)}" loading="lazy">'
+        )
+    else:
+        parts.append(f'<div class="reco-photo-fallback">{escape(name)}</div>')
+    parts.append('<div class="reco-photo-veil"></div>')
+    parts.append(f'<div class="reco-rank-badge">Opción {row.get("rank", idx + 1)}</div>')
+    # Nombre y lugar montados sobre la imagen, estilo tarjeta de viaje.
+    parts.append('<div class="reco-photo-caption">')
+    parts.append(f'<div class="reco-name">{escape(name)}</div>')
+    if place:
+        parts.append(f'<div class="reco-place">📍 {escape(place)}</div>')
+    parts.append('</div>')  # cierra caption
+    parts.append('</div>')  # cierra photo-wrap
+
+    # Cuerpo: todo visible, sin desplegables, para comparar de un vistazo.
+    parts.append('<div class="reco-body">')
+
+    if typology:
+        parts.append(f'<span class="reco-typology">{escape(str(typology))}</span>')
+    if row.get("headline"):
+        parts.append(f'<p class="reco-headline">{escape(str(row["headline"]))}</p>')
+
+    # Tres datos objetivos, en rejilla compacta.
+    parts.append('<div class="reco-facts">')
+    for value, label in (
+        (_fmt(climate.get("sunny_days"), decimals=0), "Días de sol"),
+        (_fmt(climate.get("temperature_mean_c"), "°", 0), "Temp. media"),
+        (_fmt(offers.get("poi_count"), decimals=0), "Puntos interés"),
+    ):
+        parts.append(
+            f'<div class="reco-fact"><div class="reco-fact-value">{escape(str(value))}</div>'
+            f'<div class="reco-fact-label">{escape(label)}</div></div>'
+        )
+    parts.append('</div>')
+
+    # Motivos como chips.
+    reasons = [reco.reason_label(str(c)) for c in (row.get("reason_codes") or [])]
+    if reasons:
+        parts.append('<div class="reco-block-title">Por qué encaja</div>')
+        parts.append('<div class="reco-chips">' + "".join(_chip(r, "ok") for r in reasons[:4]) + '</div>')
+
+    # Fortalezas, en lista corta.
+    strengths = [str(s) for s in (row.get("strengths") or [])]
+    if strengths:
+        parts.append('<div class="reco-block-title">Fortalezas</div>')
+        parts.append(
+            '<ul class="reco-list">'
+            + "".join(f'<li>{escape(s)}</li>' for s in strengths[:3])
+            + '</ul>'
+        )
+
+    # Desglose del score, siempre visible (es la comparativa que interesa ver).
+    breakdown = reco.breakdown_rows(row.get("score_breakdown"))
+    if breakdown:
+        parts.append('<div class="reco-block-title">Desglose del score</div>')
+        parts.append('<div class="reco-bars">')
+        parts.append("".join(_bar(str(i["Dimensión"]), i["Valor"]) for i in breakdown))
+        parts.append('</div>')
+
+    # Concesiones: lo que el destino no cumple del todo.
+    tradeoffs = [str(s) for s in (row.get("tradeoffs") or [])]
+    unmatched = _unmatched_prefs(row)
+    concessions = tradeoffs[:2]
+    if unmatched:
+        concessions.append("No cumple: " + ", ".join(unmatched))
+    if concessions:
+        parts.append('<div class="reco-block-title">A tener en cuenta</div>')
+        parts.append(
+            '<div class="reco-chips">'
+            + "".join(_chip(c, "warn") for c in concessions)
+            + '</div>'
+        )
+
+    parts.append('</div>')  # cierra body
+    parts.append('</div>')  # cierra card
+    st.markdown("".join(parts), unsafe_allow_html=True)
+
+
+# --------------------------------------------------------------------------
+# Orquestación
+# --------------------------------------------------------------------------
+
+def _render_alternatives(result: dict) -> None:
     ranking = result.get("ranking") or []
-    if not ranking:
-        st.info("La API no ha devuelto destinos para estos criterios.")
+    cards = ranking[1:]
+    if not cards:
         return
-
-    # El primer destino ya se muestra destacado arriba, así que aquí solo van
-    # las alternativas. Sin bloque destacado se pintan las tres.
-    cards = ranking[1:] if skip_first else ranking
-    if cards:
-        cols = st.columns(len(cards), gap="medium")
-        for position, row in enumerate(cards):
-            with cols[position]:
-                _render_card(row, position + (1 if skip_first else 0))
-
-    with st.expander("Comparativa en tabla", expanded=False):
-        table = pd.DataFrame(reco.ranking_table(ranking))
-        st.dataframe(table, width="stretch", hide_index=True)
+    st.markdown('<div class="alt-title">Otras opciones que encajan</div>', unsafe_allow_html=True)
+    cols = st.columns(len(cards), gap="medium")
+    for position, row in enumerate(cards):
+        with cols[position]:
+            _render_card(row, position + 1)
 
     warnings = result.get("warnings") or []
     if warnings:
-        with st.expander("Advertencias del motor", expanded=False):
+        with st.expander("Notas del motor sobre estos datos", expanded=False):
             for warning in warnings:
                 st.caption(f"· {warning}")
 
@@ -488,21 +451,25 @@ def _render_error(result: dict) -> None:
             "en `.streamlit/secrets.toml.example`) o como variables de entorno:"
         )
         st.code(
-            'TUI_RECO_API_BASE = "https://<function-app>.azurewebsites.net/api/recommendations"\n'
-            'TUI_RECO_API_KEY = "<function-key>"',
+            'TUI_RECO_API_URL = "https://<function-app>.azurewebsites.net/api/recommendations?code=<clave>"',
             language="toml",
         )
 
 
 def _run(payload: dict, is_custom: bool) -> dict:
     """Llama a la API, guarda el resultado en sesión y registra el evento."""
-    with st.spinner("Consultando el motor de recomendaciones…"):
+    # El modelo corre en la nube con arranque en frío: la primera consulta del
+    # día puede tardar. Se avisa para que la espera no parezca un cuelgue.
+    with st.spinner(
+        "Consultando el modelo de recomendaciones… "
+        "La primera consulta puede tardar unos segundos mientras el servicio "
+        "despierta."
+    ):
         result = reco.fetch_recommendations(payload)
     st.session_state[STATE_KEY] = result
     st.session_state[STATE_PAYLOAD] = payload
     st.session_state[STATE_CUSTOM] = is_custom
 
-    # Trazabilidad de uso: la app registra sus propias interacciones.
     register_event(
         st.session_state.session_id,
         "recommendation_request",
@@ -522,12 +489,7 @@ def _run(payload: dict, is_custom: bool) -> dict:
 
 
 def _autorun_if_needed() -> None:
-    """Pide una recomendación por defecto la primera vez que se abre la vista.
-
-    Así el dashboard muestra una recomendación real sin exigir que el usuario
-    rellene nada. Solo se hace una vez por sesión, y el cliente cachea la
-    respuesta, de modo que no se consume cuota de la API en cada rerun.
-    """
+    """Pide una recomendación por defecto la primera vez que se abre la vista."""
     if st.session_state.get(STATE_AUTORUN):
         return
     st.session_state[STATE_AUTORUN] = True
@@ -548,57 +510,56 @@ def _autorun_if_needed() -> None:
 
 
 def render_recommender() -> None:
-    st.markdown("### Recomendador de destinos de España")
-    st.caption(
-        "Consulta en tiempo real un modelo de recomendación desplegado en la nube, "
-        "independiente del Simulador TDRS. El motor puntúa municipios españoles "
-        "cruzando catálogo turístico, puntos de interés de OpenStreetMap, señales "
-        "de popularidad de YouTube y clima histórico de AEMET, y devuelve tres "
-        "destinos con la explicación de por qué encajan con lo que buscas."
+    st.markdown(
+        '<div class="reco-header">'
+        '<div class="reco-kicker">Recomendador España</div>'
+        '<h2 class="reco-hero-title">Tu próximo viaje por España, '
+        '<em>hecho a tu medida</em></h2>'
+        '<p class="reco-hero-lead">Cuéntanos cómo te gusta viajar y te proponemos '
+        'tres destinos que encajan contigo, con el motivo de cada elección.</p>'
+        '</div>',
+        unsafe_allow_html=True,
     )
 
-    configured = reco.is_configured()
-    if not configured:
-        st.caption("Modelo sin conectar · la vista queda en modo informativo")
+    if not reco.is_configured():
+        st.caption("Recomendador sin conectar · la vista queda en modo informativo")
         _render_error({
             "error_kind": "not_configured",
-            "error": "El modelo de recomendación no está conectado.",
+            "error": "El recomendador no está conectado.",
         })
         with st.expander("Ver el contrato que se enviaría", expanded=False):
             _render_form()
         return
 
-    # No se muestra la URL completa: expondría el host y la clave del servicio en
-    # una app pública. Basta con indicar que el modelo responde.
-    st.caption("🟢 Modelo conectado · recomendaciones en tiempo real")
-
-    # La recomendación se muestra sin pedirla: es la respuesta principal de la
-    # vista, no el resultado de rellenar un formulario.
+    # La recomendación se calcula sin pedirla la primera vez, para no mostrar
+    # una pantalla vacía al entrar.
     _autorun_if_needed()
 
+    # Primero se elige: el formulario va arriba. Queda abierto solo si aún no
+    # hay resultados; una vez hay recomendación, se pliega para dar protagonismo
+    # al resultado, pero sigue siendo lo primero que se ve.
     result = st.session_state.get(STATE_KEY) or {}
-    payload = st.session_state.get(STATE_PAYLOAD) or {}
     ranking = result.get("ranking") or []
 
-    if result.get("ok") and ranking:
-        _render_hero(ranking[0], payload)
-        if not st.session_state.get(STATE_CUSTOM):
-            st.caption(
-                "Recomendación con preferencias por defecto. Ajústalas abajo para "
-                "adaptarla a tu viaje."
-            )
-    elif result and not result.get("ok"):
-        _render_error(result)
-
-    # El formulario queda plegado: sirve para refinar, no para empezar.
-    with st.expander("Ajustar preferencias", expanded=not ranking):
+    with st.expander("Ajusta tu viaje", expanded=not ranking):
         new_payload = _render_form()
     if new_payload is not None:
         _run(new_payload, is_custom=True)
         st.rerun()
 
+    # Después, las tres recomendaciones juntas, sin nada que las separe.
+    result = st.session_state.get(STATE_KEY) or {}
+    payload = st.session_state.get(STATE_PAYLOAD) or {}
+    ranking = result.get("ranking") or []
+
     if result.get("ok") and ranking:
-        st.divider()
+        if not st.session_state.get(STATE_CUSTOM):
+            st.caption(
+                "Recomendación con preferencias por defecto. Abre «Ajusta tu viaje» "
+                "arriba para adaptarla."
+            )
+        _render_hero(ranking[0], payload)
         if len(ranking) > 1:
-            st.markdown('<div class="alt-title">Otras opciones</div>', unsafe_allow_html=True)
-        _render_result(result, skip_first=True)
+            _render_alternatives(result)
+    elif result and not result.get("ok"):
+        _render_error(result)

@@ -11,7 +11,7 @@ import streamlit as st
 
 CSS = """
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap');
 :root {
     --tui-red:#D40E14;
     --tui-red-soft:rgba(212,14,20,.12);
@@ -34,35 +34,22 @@ CSS = """
     --shadow:0 18px 46px rgba(17,24,39,.08);
     --shadow-soft:0 10px 28px rgba(17,24,39,.06);
 }
-html, body, [class*="css"] { font-family:'Inter', Arial, sans-serif; }
+html, body, [class*="css"] { font-family:'Poppins', Arial, sans-serif; }
 .stApp {
     color:var(--text);
-    background-color:#EAF4FB;
-    background-image:
-      url("data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A//www.w3.org/2000/svg%27%20viewBox%3D%270%200%201600%20960%27%3E%0A%3Crect%20width%3D%271600%27%20height%3D%27960%27%20fill%3D%27none%27/%3E%0A%3Cg%20fill%3D%27none%27%20stroke-linecap%3D%27round%27%3E%0A%20%20%3Cpath%20d%3D%27M-80%20120%20C%20160%2040%20320%20220%20560%20150%20S%201020%2040%201680%20120%27%20stroke%3D%27%23111827%27%20stroke-opacity%3D%27.12%27%20stroke-width%3D%273%27/%3E%0A%20%20%3Cpath%20d%3D%27M-90%20210%20C%20220%20110%20410%20320%20700%20235%20S%201120%20120%201690%20210%27%20stroke%3D%27%236B7280%27%20stroke-opacity%3D%27.11%27%20stroke-width%3D%273.2%27/%3E%0A%20%20%3Cpath%20d%3D%27M-60%20340%20C%20180%20250%20430%20420%20760%20340%20S%201220%20250%201660%20340%27%20stroke%3D%27%231F2937%27%20stroke-opacity%3D%27.09%27%20stroke-width%3D%272.6%27/%3E%0A%20%20%3Cpath%20d%3D%27M-60%20500%20C%20260%20430%20420%20650%20760%20560%20S%201180%20430%201660%20530%27%20stroke%3D%27%236B7280%27%20stroke-opacity%3D%27.10%27%20stroke-width%3D%273%27/%3E%0A%20%20%3Cpath%20d%3D%27M-40%20650%20C%20280%20560%20520%20790%20900%20690%20S%201280%20600%201660%20710%27%20stroke%3D%27%23111827%27%20stroke-opacity%3D%27.08%27%20stroke-width%3D%273.6%27/%3E%0A%20%20%3Cpath%20d%3D%27M-30%20810%20C%20240%20720%20420%20910%20760%20840%20S%201180%20760%201650%20850%27%20stroke%3D%27%239CA3AF%27%20stroke-opacity%3D%27.12%27%20stroke-width%3D%273%27/%3E%0A%20%20%3Ccircle%20cx%3D%271360%27%20cy%3D%27160%27%20r%3D%27140%27%20stroke%3D%27%23111827%27%20stroke-opacity%3D%27.05%27%20stroke-width%3D%277%27/%3E%0A%20%20%3Ccircle%20cx%3D%271490%27%20cy%3D%27220%27%20r%3D%27220%27%20stroke%3D%27%236B7280%27%20stroke-opacity%3D%27.04%27%20stroke-width%3D%2711%27/%3E%0A%20%20%3Ccircle%20cx%3D%27180%27%20cy%3D%27760%27%20r%3D%27220%27%20stroke%3D%27%239CA3AF%27%20stroke-opacity%3D%27.05%27%20stroke-width%3D%279%27/%3E%0A%3C/g%3E%0A%3C/svg%3E"),
-      radial-gradient(circle at 50% 10%, rgba(255,255,255,.84), transparent 18%),
-      radial-gradient(circle at 55% 80%, rgba(255,255,255,.74), transparent 16%),
-      repeating-linear-gradient(0deg, rgba(17,24,39,.030) 0 1px, transparent 1px 38px),
-      repeating-linear-gradient(90deg, rgba(17,24,39,.030) 0 1px, transparent 1px 38px),
-      linear-gradient(180deg,#EDF6FC 0%,#E5F1F9 100%);
-    background-size:cover, auto, auto, auto, auto, auto;
-    background-position:center center, center top, center bottom, center center, center center, center center;
-    background-repeat:no-repeat, no-repeat, no-repeat, repeat, repeat, no-repeat;
-    background-attachment:fixed;
+    background-color:#FFFFFF;
+    background-image:none;
 }
-/* Fondo principal claro e iluminado con trama neutra. */
+/* Fondo principal blanco, limpio. */
 [data-testid="stAppViewContainer"] > .main .block-container {
     position:relative;
-    background:linear-gradient(180deg,rgba(234,244,251,.46) 0%,rgba(241,247,251,.40) 100%);
-    border:1px solid rgba(17,24,39,.06);
-    border-radius:24px;
-    box-shadow:
-      0 16px 38px rgba(17,24,39,.04),
-      inset 0 1px 0 rgba(255,255,255,.50);
+    background:#FFFFFF;
+    border:none;
+    border-radius:0;
+    box-shadow:none;
     padding-left:1.8rem;
     padding-right:1.8rem;
     z-index:1;
-    backdrop-filter:blur(2px);
 }
 
 [data-testid="stAppViewContainer"] > .main .block-container > * { position:relative; z-index:1; }
@@ -173,88 +160,125 @@ hr { border-color:rgba(17,24,39,.10)!important; }
 .map-note{font-size:.70rem;color:var(--muted);margin:.25rem 0 .6rem}.map-kpi{font-weight:900;color:var(--tui-dark)}
 .selector-title{font-size:.98rem;font-weight:900;color:var(--tui-dark);margin-bottom:.15rem}.selector-sub{font-size:.74rem;color:var(--muted);margin-bottom:.55rem}.selector-active{font-size:.72rem;color:var(--muted);margin-top:.35rem}.selector-active strong{color:var(--tui-dark)}
 
-/* Recomendador externo (API de destinos de España) */
-.reco-card{position:relative;overflow:hidden;border-radius:22px;padding:1.05rem 1.15rem;background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(248,250,252,.96));border:1px solid rgba(17,24,39,.10);box-shadow:var(--shadow-soft);height:100%;transition:.18s ease}
-.reco-card:hover{transform:translateY(-3px);box-shadow:0 20px 42px rgba(17,24,39,.10)}
-.reco-card.first{border:1px solid rgba(17,24,39,.18);box-shadow:0 18px 40px rgba(17,24,39,.09)}
-.reco-head{display:flex;align-items:flex-start;justify-content:space-between;gap:.9rem}
-.reco-rank{font-size:.70rem;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-.reco-name{font-size:1.3rem;font-weight:900;color:var(--tui-dark);margin:.2rem 0 0;line-height:1.1}
-.reco-place{font-size:.72rem;color:var(--muted);margin-top:.2rem}
-.reco-score{font-size:1.75rem;font-weight:900;color:var(--tui-red);line-height:1;text-align:right;white-space:nowrap}
-.reco-score-label{font-size:.60rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);text-align:right;margin-top:.22rem}
-.reco-typology{display:inline-block;margin-top:.6rem;font-size:.66rem;font-weight:850;border-radius:999px;padding:.2rem .55rem;background:#EEF2F6;color:#344054}
-.reco-headline{font-size:.80rem;color:#475467;line-height:1.45;margin-top:.65rem}
-.reco-block{margin-top:.7rem}
-.reco-block-title{font-size:.64rem;font-weight:900;letter-spacing:.07em;text-transform:uppercase;color:var(--muted);margin-bottom:.25rem}
-.reco-list{margin:0;padding-left:1.05rem;font-size:.74rem;color:#475467;line-height:1.5}
-.reco-chips{display:flex;flex-wrap:wrap;gap:.28rem;margin-top:.2rem}
-.reco-chip{font-size:.63rem;font-weight:800;border-radius:999px;padding:.18rem .5rem;background:#EEF2F6;color:#344054;border:1px solid rgba(17,24,39,.07)}
-.reco-chip.ok{background:#DDF3E9;color:#116947}
-.reco-chip.warn{background:#FFF0CC;color:#8D5D00}
-.reco-bar-row{display:flex;align-items:center;gap:.5rem;margin-bottom:.28rem}
-.reco-bar-label{font-size:.68rem;color:#475467;min-width:118px}
-.reco-bar-track{flex:1;height:7px;border-radius:999px;background:#EDF0F4;overflow:hidden}
-.reco-bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,#D40E14,#F2646A)}
-.reco-bar-value{font-size:.68rem;font-weight:900;color:var(--tui-dark);min-width:38px;text-align:right}
-.reco-meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:.3rem .8rem;margin-top:.2rem}
-.reco-meta-item{font-size:.71rem;color:var(--muted)}
-.reco-meta-item strong{color:var(--tui-dark);font-weight:850}
-.reco-engine{font-size:.70rem;color:var(--muted);margin:.15rem 0 .85rem}
-.reco-engine strong{color:var(--tui-dark)}
-@media(max-width:900px){.reco-meta-grid{grid-template-columns:1fr}}
+/* ==========================================================================
+   Recomendador España (API). Diseño "portada de viaje": una recomendación
+   principal inmersiva a pantalla completa y dos tarjetas editoriales debajo.
+   Lenguaje visual único: rojo TUI de acento, oscuro TUI de texto, tipografía
+   Poppins de peso alto, sombras en capas y radios generosos y consistentes.
+   ========================================================================== */
 
-/* Recomendacion destacada: la respuesta principal, visible sin buscarla */
-.hero-reco{position:relative;overflow:hidden;border-radius:26px;padding:1.6rem 1.8rem;margin:.35rem 0 1.1rem;
-  background:linear-gradient(135deg,#111827 0%,#1F2937 62%,#37414F 100%);color:#fff;
-  background-size:cover;background-position:center 38%;
-  box-shadow:0 22px 52px rgba(17,24,39,.22);animation:fadeUp .45s ease both;min-height:250px;
-  display:flex;flex-direction:column;justify-content:flex-end}
-.hero-reco.has-photo{padding-top:5rem}
-.hero-reco:before{content:"";position:absolute;width:300px;height:300px;border-radius:50%;right:-110px;top:-140px;
-  border:26px solid rgba(255,255,255,.05)}
-.hero-reco:after{content:"";position:absolute;width:190px;height:190px;border-radius:50%;left:-90px;bottom:-120px;
-  background:radial-gradient(circle,rgba(212,14,20,.28),transparent 68%)}
-.hero-reco-credit{position:absolute;right:.85rem;bottom:.5rem;z-index:3;font-size:.56rem;
-  color:rgba(255,255,255,.42);max-width:46%;text-align:right;line-height:1.3}
-.hero-reco-read{position:relative;z-index:2;font-size:.66rem;font-weight:800;letter-spacing:.05em;
-  text-transform:uppercase;color:rgba(255,255,255,.6);margin-top:.28rem;text-align:right}
-.hero-reco-kicker{position:relative;z-index:2;text-transform:uppercase;letter-spacing:.13em;font-weight:900;
-  font-size:.64rem;color:rgba(255,255,255,.62);margin-bottom:.5rem}
-.hero-reco-top{position:relative;z-index:2;display:flex;align-items:flex-start;justify-content:space-between;gap:1.5rem}
-.hero-reco-name{font-size:2.5rem;font-weight:900;line-height:1.02;letter-spacing:-.035em;margin:0;color:#fff}
-.hero-reco-place{font-size:.86rem;color:rgba(255,255,255,.72);margin-top:.4rem}
-.hero-reco-score{text-align:right;white-space:nowrap}
-.hero-reco-score-value{font-size:2.9rem;font-weight:900;line-height:1;color:#FF6B70}
-.hero-reco-score-label{font-size:.6rem;font-weight:800;letter-spacing:.1em;text-transform:uppercase;
-  color:rgba(255,255,255,.55);margin-top:.3rem}
-.hero-reco-why{position:relative;z-index:2;font-size:.96rem;line-height:1.5;color:rgba(255,255,255,.9);
-  margin:1rem 0 0;max-width:760px}
-.hero-reco-chips{position:relative;z-index:2;display:flex;flex-wrap:wrap;gap:.35rem;margin-top:1rem}
-.hero-reco-chip{font-size:.66rem;font-weight:800;border-radius:999px;padding:.26rem .62rem;
-  background:rgba(255,255,255,.13);color:#fff;border:1px solid rgba(255,255,255,.16)}
-.hero-reco-chip.warn{background:rgba(255,214,102,.18);color:#FFD666;border-color:rgba(255,214,102,.3)}
-.hero-reco-facts{position:relative;z-index:2;display:flex;flex-wrap:wrap;gap:1.7rem;margin-top:1.15rem;
-  padding-top:1rem;border-top:1px solid rgba(255,255,255,.12)}
-.hero-reco-fact{min-width:96px}
-.hero-reco-fact-value{font-size:1.2rem;font-weight:900;color:#fff;line-height:1.1}
-.hero-reco-fact-label{font-size:.62rem;text-transform:uppercase;letter-spacing:.07em;font-weight:800;
-  color:rgba(255,255,255,.55);margin-top:.2rem}
-.alt-title{font-size:.68rem;text-transform:uppercase;letter-spacing:.09em;font-weight:900;color:var(--muted);
-  margin:.2rem 0 .5rem}
+/* --- Cabecera comercial del recomendador, tono editorial de viajes --- */
+.reco-header{margin:.3rem 0 1.3rem;animation:fadeUp .4s ease both}
+.reco-kicker{display:inline-flex;align-items:center;gap:.5rem;font-size:.66rem;font-weight:800;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--tui-red);margin-bottom:.55rem}
+.reco-kicker:before{content:"";width:22px;height:2px;border-radius:2px;background:var(--tui-red)}
+.reco-hero-title{font-size:2.55rem;font-weight:800;color:var(--tui-dark);line-height:1.06;letter-spacing:-.035em;
+  margin:0 0 .55rem}
+.reco-hero-title em{font-style:normal;color:var(--tui-red)}
+.reco-hero-lead{font-size:1.05rem;color:var(--muted);line-height:1.55;font-weight:400;margin:0;max-width:620px}
 
-/* Fotografia en las tarjetas de alternativas */
-.reco-photo{width:calc(100% + 2.3rem);height:132px;object-fit:cover;display:block;
-  margin:-1.05rem -1.15rem .85rem -1.15rem;border-bottom:1px solid rgba(17,24,39,.10);background:#F1F5F9}
-.reco-photo-fallback{width:calc(100% + 2.3rem);height:132px;margin:-1.05rem -1.15rem .85rem -1.15rem;
-  display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#FFFFFF,#F3F4F6);
-  color:var(--tui-dark);font-weight:900;border-bottom:1px solid rgba(17,24,39,.10)}
+/* --- Oferta destacada (opción 1): tarjeta comercial estilo TUI ---
+   Banner de imagen a todo el ancho con el titular montado, y un panel claro
+   debajo con el motivo, el contexto del viaje y los datos clave. */
+.offer{position:relative;overflow:hidden;border-radius:24px;margin:.5rem 0 1.6rem;background:#fff;
+  border:1px solid rgba(17,24,39,.07);
+  box-shadow:0 4px 16px rgba(17,24,39,.05),0 34px 70px -28px rgba(17,24,39,.36);
+  animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both}
+/* Banner: la imagen llena todo el ancho, sin franjas, esquinas superiores redondeadas. */
+.offer-media{position:relative;width:100%;height:380px;background-size:cover;background-position:center 42%;
+  border-radius:24px 24px 0 0;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
+.offer-media--empty{background:linear-gradient(135deg,#1B2432,#3A4657)}
+.offer-media-veil{position:absolute;inset:0;z-index:1;pointer-events:none;
+  background:linear-gradient(180deg,rgba(17,24,39,0) 40%,rgba(17,24,39,.34) 66%,rgba(17,24,39,.86) 100%)}
+.offer-flag{position:absolute;top:1.2rem;left:1.2rem;z-index:2;display:inline-flex;align-items:center;gap:.4rem;
+  font-size:.66rem;font-weight:700;letter-spacing:.04em;color:#fff;background:var(--tui-red);
+  padding:.42rem .85rem;border-radius:999px;box-shadow:0 8px 20px rgba(212,14,20,.42)}
+.offer-media-caption{position:relative;z-index:2;padding:1.7rem 1.9rem}
+.offer-name{font-size:2.9rem;font-weight:800;line-height:1;letter-spacing:-.04em;margin:0;color:#fff;
+  text-shadow:0 5px 30px rgba(0,0,0,.55)}
+.offer-place{font-size:.92rem;color:rgba(255,255,255,.94);margin-top:.5rem;font-weight:500;
+  display:flex;align-items:center;gap:.3rem;text-shadow:0 2px 14px rgba(0,0,0,.45)}
+/* Panel claro */
+.offer-body{padding:1.6rem 1.9rem 1.8rem;display:flex;flex-direction:column}
+.offer-typology{align-self:flex-start;font-size:.62rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  border-radius:999px;padding:.26rem .68rem;background:var(--tui-red-soft);color:var(--tui-red-deep)}
+.offer-why{font-size:1.14rem;line-height:1.5;color:var(--tui-dark);font-weight:500;margin:.9rem 0 0;max-width:760px}
+.offer-chips{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:1.1rem}
+.offer-chip{font-size:.72rem;font-weight:600;border-radius:999px;padding:.34rem .78rem;
+  background:#F1F4F8;color:#475467;border:1px solid rgba(17,24,39,.06)}
+.offer-chip.warn{background:#FFF3D6;color:#8D5D00;border-color:rgba(141,93,0,.16)}
+.offer-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:.7rem;margin-top:1.4rem;
+  padding-top:1.35rem;border-top:1px solid rgba(17,24,39,.08)}
+.offer-fact{background:#F7F9FB;border:1px solid rgba(17,24,39,.05);border-radius:16px;padding:.85rem .6rem;text-align:center}
+.offer-fact-value{font-size:1.55rem;font-weight:800;color:var(--tui-dark);line-height:1;letter-spacing:-.02em}
+.offer-fact-label{font-size:.58rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--muted);margin-top:.35rem}
+
+/* --- Tarjetas de alternativas: editorial, imagen banner + datos limpios --- */
+.alt-title{font-size:1.2rem;font-weight:800;color:var(--tui-dark);letter-spacing:-.015em;
+  margin:1.6rem 0 1rem;display:flex;align-items:center;gap:.6rem}
+.alt-title:before{content:"";width:4px;height:22px;background:var(--tui-red);border-radius:3px}
+.reco-card{position:relative;overflow:hidden;border-radius:22px;background:#fff;padding:0;
+  border:1px solid rgba(17,24,39,.07);
+  box-shadow:0 4px 14px rgba(17,24,39,.04),0 16px 36px -16px rgba(17,24,39,.16);
+  height:100%;transition:transform .3s cubic-bezier(.16,1,.3,1),box-shadow .3s ease;
+  display:flex;flex-direction:column}
+.reco-card:hover{transform:translateY(-7px);
+  box-shadow:0 10px 22px rgba(17,24,39,.07),0 32px 56px -18px rgba(17,24,39,.26)}
+/* Banner: imagen pegada a los bordes de la tarjeta, sin franja blanca.
+   Ocupa todo el ancho y redondea las esquinas superiores igual que la tarjeta. */
+.reco-photo-wrap{position:relative;width:100%;aspect-ratio:16/10;overflow:hidden;background:#EEF2F6;
+  display:block;margin:0;line-height:0;border-radius:21px 21px 0 0}
+.reco-photo{width:100%;height:100%;object-fit:cover;object-position:center center;display:block;
+  margin:0;background:#EEF2F6;transition:transform .55s cubic-bezier(.16,1,.3,1)}
+.reco-card:hover .reco-photo{transform:scale(1.08)}
+.reco-photo-veil{position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(180deg,rgba(17,24,39,0) 34%,rgba(17,24,39,.72) 100%)}
+.reco-photo-fallback{width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,#243244,#3B4A5E);color:#fff;font-weight:700;font-size:1.3rem;letter-spacing:.02em}
+.reco-rank-badge{position:absolute;top:.9rem;left:.9rem;z-index:2;font-size:.58rem;font-weight:800;
+  letter-spacing:.08em;text-transform:uppercase;color:var(--tui-dark);background:rgba(255,255,255,.95);
+  border-radius:999px;padding:.3rem .68rem;box-shadow:0 6px 16px rgba(17,24,39,.22);backdrop-filter:blur(4px)}
+/* Nombre y lugar montados sobre la foto, estilo tarjeta de viaje. */
+.reco-photo-caption{position:absolute;left:1.1rem;right:1.1rem;bottom:1rem;z-index:2;line-height:1.1}
+.reco-name{font-size:1.5rem;font-weight:800;color:#fff;line-height:1.06;letter-spacing:-.025em;
+  text-shadow:0 3px 18px rgba(0,0,0,.5)}
+.reco-place{font-size:.76rem;color:rgba(255,255,255,.92);font-weight:500;margin-top:.28rem;
+  display:inline-flex;align-items:center;gap:.28rem}
+/* Cuerpo: todo visible, sin desplegables, para comparar de un vistazo. */
+.reco-body{padding:1.2rem 1.3rem 1.35rem;display:flex;flex-direction:column;gap:.78rem;flex:1}
+.reco-typology{align-self:flex-start;font-size:.6rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  border-radius:999px;padding:.24rem .62rem;background:var(--tui-red-soft);color:var(--tui-red-deep)}
+.reco-headline{font-size:.86rem;color:#5B6472;line-height:1.5;font-weight:400;margin:0}
+.reco-block-title{font-size:.6rem;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);
+  margin:.15rem 0 .1rem}
+.reco-list{margin:0;padding-left:1.05rem;font-size:.79rem;color:#5B6472;line-height:1.55}
+.reco-list li{margin-bottom:.15rem}
+.reco-chips{display:flex;flex-wrap:wrap;gap:.36rem}
+.reco-chip{font-size:.64rem;font-weight:600;border-radius:999px;padding:.24rem .58rem;
+  background:#F1F4F8;color:#475467;border:1px solid rgba(17,24,39,.06)}
+.reco-chip.ok{background:#E4F5EC;color:#0F7A4D;border-color:rgba(15,122,77,.14)}
+.reco-chip.warn{background:#FFF3D6;color:#8D5D00;border-color:rgba(141,93,0,.16)}
+/* Barras del desglose del score, siempre visibles. */
+.reco-bars{display:flex;flex-direction:column;gap:.1rem}
+.reco-bar-row{display:flex;align-items:center;gap:.55rem;margin-bottom:.38rem}
+.reco-bar-label{font-size:.68rem;color:#5B6472;min-width:120px;font-weight:500}
+.reco-bar-track{flex:1;height:6px;border-radius:999px;background:#EEF1F5;overflow:hidden}
+.reco-bar-fill{height:100%;border-radius:999px;background:linear-gradient(90deg,var(--tui-red),#FF7A80)}
+.reco-bar-value{font-size:.68rem;font-weight:700;color:var(--tui-dark);min-width:34px;text-align:right}
+/* Rejilla de datos objetivos, tono producto. */
+.reco-facts{display:grid;grid-template-columns:repeat(3,1fr);gap:.55rem;margin-top:.1rem}
+.reco-fact{background:#F7F9FB;border:1px solid rgba(17,24,39,.05);border-radius:14px;padding:.62rem .5rem;text-align:center}
+.reco-fact-value{font-size:1.08rem;font-weight:800;color:var(--tui-dark);line-height:1}
+.reco-fact-label{font-size:.55rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-top:.3rem}
 
 @media(max-width:900px){
-  .hero-reco-top{flex-direction:column}
-  .hero-reco-name{font-size:1.9rem}
-  .hero-reco-score{text-align:left}
-  .hero-reco-score-value{font-size:2.2rem}
+  .reco-hero-title{font-size:1.85rem}
+  .offer-media{height:260px}
+  .offer-name{font-size:2rem}
+  .offer-media-caption{padding:1.3rem}
+  .offer-body{padding:1.3rem}
+  .reco-facts{grid-template-columns:repeat(3,1fr)}
 }
 
 </style>

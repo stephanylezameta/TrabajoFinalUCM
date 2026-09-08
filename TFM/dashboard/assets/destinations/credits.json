@@ -38,5 +38,77 @@
   "Cabo Verde": {
     "file": "cabo-verde.jpg",
     "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Madrid": {
+    "file": "madrid.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Barcelona": {
+    "file": "barcelona.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Granada": {
+    "file": "granada.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Sevilla": {
+    "file": "sevilla.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Córdoba": {
+    "file": "cordoba.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Marbella": {
+    "file": "marbella.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Cartagena": {
+    "file": "cartagena.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Benidorm": {
+    "file": "benidorm.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Níjar": {
+    "file": "nijar.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Benasque": {
+    "file": "benasque.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Santiago de Compostela": {
+    "file": "santiago-de-compostela.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Málaga": {
+    "file": "malaga.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Donostia/San Sebastián": {
+    "file": "donostia-san-sebastian.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Palma": {
+    "file": "palma.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Vigo": {
+    "file": "vigo.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Murcia": {
+    "file": "murcia.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Bilbao": {
+    "file": "bilbao.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
+  },
+  "Toledo": {
+    "file": "toledo.jpg",
+    "credit": "Wikipedia / Wikimedia Commons"
   }
 }

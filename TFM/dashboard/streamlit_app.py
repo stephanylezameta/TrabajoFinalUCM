@@ -63,7 +63,6 @@ from services.data_control_service import (  # noqa: E402
 )
 from services.tracking_service import create_session, register_event  # noqa: E402
 from views.control_web import render_control_web  # noqa: E402
-from views.data_model import render_data_model  # noqa: E402
 from views.recommender import render_recommender  # noqa: E402
 from views.tdrs import render_tdrs, render_tdrs_sidebar_controls  # noqa: E402
 
@@ -72,8 +71,7 @@ inject_styles()
 NAV_TDRS = "Simulador TDRS"
 NAV_RECO = "Recomendador España"
 NAV_CONTROL = "Control Web"
-NAV_DATA = "Datos / modelo"
-NAV = [NAV_TDRS, NAV_RECO, NAV_CONTROL, NAV_DATA]
+NAV = [NAV_TDRS, NAV_RECO, NAV_CONTROL]
 
 
 @st.cache_resource(show_spinner=False)
@@ -148,10 +146,8 @@ def main() -> None:
         render_tdrs(tdrs_controls)
     elif view == NAV_RECO:
         render_recommender()
-    elif view == NAV_CONTROL:
-        render_control_web()
     else:
-        render_data_model()
+        render_control_web()
 
 
 main()

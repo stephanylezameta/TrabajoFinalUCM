@@ -45,6 +45,10 @@ _REJECTED_PATTERNS = (
     "seal_of", "shield", "blason", "blazon", "wappen",
     "mapa", "_map", "map_of", "location", "locator", "ubicacion", "ubicación",
     "logo", "icon", "signature", "firma", "spain_location", "localizacion",
+    # Premios, galardones y carteles que se cuelan por homonimia
+    # (p. ej. "Palme d'Or"/Cannes al buscar "Palma").
+    "palme", "cannes", "award", "premio", "trophy", "medal", "poster",
+    "cartel", "festival", "diploma",
 )
 
 # Un escudo o una bandera son claramente más altos que anchos, o cuadrados.
@@ -176,3 +180,225 @@ def get_destination_image(destination: str) -> dict | None:
             # Respuesta inválida: probamos la siguiente Wikipedia sin bloquear red.
             continue
     return None
+
+
+# --------------------------------------------------------------------------
+# Resolución desambiguada para municipios españoles.
+#
+# El motor de la API devuelve nombres de municipio que, a secas, son ambiguos en
+# Wikipedia: "Palma" resuelve a la Palma de Oro de Cannes, "Santiago" a la ciudad
+# de Chile, etc. Con la provincia y la comunidad que la propia API entrega se
+# construyen consultas cada vez menos específicas, de modo que la primera que
+# acierte gane. Así no hay que mantener imágenes locales ni redesplegar la app
+# cuando el modelo devuelve un municipio nuevo: la foto se resuelve en vivo.
+# --------------------------------------------------------------------------
+
+# Municipios cuyo nombre "a secas" es ambiguo en Wikipedia (un homónimo más
+# famoso gana): se fija el título exacto del artículo del municipio español.
+# Para el resto, el propio nombre ya resuelve al artículo correcto en es.wikipedia.
+_CANONICAL_TITLES: dict[str, str] = {
+    "palma": "Palma de Mallorca",
+    "donostia/san sebastián": "San Sebastián (España)",
+    "donostia/san sebastian": "San Sebastián (España)",
+    "vitoria-gasteiz": "Vitoria",
+    "a coruña": "La Coruña",
+    "santiago": "Santiago de Compostela",
+    "cartagena": "Cartagena (España)",
+    "córdoba": "Córdoba (España)",
+    "cordoba": "Córdoba (España)",
+    "guadalajara": "Guadalajara (España)",
+    "león": "León (España)",
+    "leon": "León (España)",
+    "valencia": "Valencia (España)",
+    "valència": "Valencia (España)",
+    "cuenca": "Cuenca (España)",
+    "santa cruz de tenerife": "Santa Cruz de Tenerife",
+    "ávila": "Ávila",
+    "soria": "Soria",
+    "murcia": "Murcia",
+}
+
+
+def _dedup(seq: list[str]) -> list[str]:
+    seen: set[str] = set()
+    out: list[str] = []
+    for item in seq:
+        key = item.lower()
+        if item and key not in seen:
+            seen.add(key)
+            out.append(item)
+    return out
+
+
+def _candidate_queries(destination: dict) -> list[str]:
+    """Consultas de imagen para un destino, de la más precisa a la más general.
+
+    La estrategia es apuntar al **artículo del municipio**, no hacer búsquedas
+    difusas: en es.wikipedia el título del municipio (o su forma canónica con
+    "(provincia)"/"(España)") tiene la foto correcta. Pegar la comunidad autónoma
+    como texto libre traía artículos tangenciales (carreras, mapas), así que no
+    se usa como consulta de búsqueda.
+    """
+    name = " ".join(str(destination.get("name") or "").split()).strip()
+    if not name:
+        return []
+    province = str(destination.get("province") or "").strip()
+
+    canonical = _CANONICAL_TITLES.get(name.lower())
+    queries: list[str] = []
+    if canonical:
+        # Con título canónico conocido, es la apuesta más segura: va primero.
+        queries.append(canonical)
+    # Desambiguación estándar de Wikipedia en es: "Municipio (provincia)". Se
+    # prioriza sobre el nombre pelado porque este cae en homónimos genéricos
+    # ("Cuenca" → cuenca hidrográfica, "San Sebastián" → una carrera).
+    if province and province.lower() != name.lower():
+        queries.append(f"{name} ({province})")
+    queries.append(f"{name} (España)")
+    # El nombre a secas, como último recurso.
+    queries.append(name)
+    return _dedup(queries)
+
+
+def resolve_destination_image(destination: dict) -> dict | None:
+    """Imagen de un municipio español a partir del bloque ``destination`` de la API.
+
+    Prueba consultas desambiguadas (con provincia y comunidad) antes que el
+    nombre a secas, para no traer la imagen de un homónimo famoso. Devuelve el
+    mismo formato que :func:`get_destination_image`.
+    """
+    for query in _candidate_queries(destination):
+        image = get_destination_image(query)
+        if image:
+            return image
+    return None
+
+
+# --------------------------------------------------------------------------
+# Set curado de fotografías de municipios españoles.
+#
+# En lugar de adivinar en Wikipedia (que trae homónimos: la Palma de Oro de
+# Cannes, un tren de Renfe en San Sebastián, un mapa para Cuenca), se fija una
+# URL de Wikimedia Commons verificada para los municipios que el modelo devuelve
+# con más frecuencia. Son fotografías reales del lugar, con licencia libre. Es
+# la opción fiable para una app pública: no depende de búsquedas ni de tener la
+# imagen descargada, y nunca muestra una foto equivocada.
+#
+# Clave: nombre del municipio normalizado (minúsculas, sin acentos).
+# --------------------------------------------------------------------------
+
+def _norm(text: str) -> str:
+    import unicodedata
+
+    plain = unicodedata.normalize("NFKD", str(text or "").lower())
+    plain = "".join(c for c in plain if not unicodedata.combining(c))
+    return " ".join(plain.split())
+
+
+CURATED_SPAIN_IMAGES: dict[str, dict[str, str]] = {
+    "madrid": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/85/Puerta_de_Alcal%C3%A1_%28Madrid%29_01.jpg/1280px-Puerta_de_Alcal%C3%A1_%28Madrid%29_01.jpg",
+        "credit": "Diego Delso · Wikimedia Commons · CC BY-SA",
+    },
+    "barcelona": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e6/Sagrada_Fam%C3%ADlia_01.jpg/1280px-Sagrada_Fam%C3%ADlia_01.jpg",
+        "credit": "Wikimedia Commons · CC BY-SA",
+    },
+    "granada": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/85/Vista_de_la_Alhambra.jpg/1280px-Vista_de_la_Alhambra.jpg",
+        "credit": "Wikimedia Commons · CC BY-SA",
+    },
+    "sevilla": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/13/Plaza_de_Espa%C3%B1a_-_Sevilla%2C_Spain_-_Sept_2009.jpg/1280px-Plaza_de_Espa%C3%B1a_-_Sevilla%2C_Spain_-_Sept_2009.jpg",
+        "credit": "Wikimedia Commons · CC BY-SA",
+    },
+    "cordoba": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a3/Mezquita_de_C%C3%B3rdoba_desde_el_aire_%28C%C3%B3rdoba%2C_Espa%C3%B1a%29.jpg/1280px-Mezquita_de_C%C3%B3rdoba_desde_el_aire_%28C%C3%B3rdoba%2C_Espa%C3%B1a%29.jpg",
+        "credit": "Toni Castillo Quero · Wikimedia Commons · CC BY-SA",
+    },
+    "malaga": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6e/Malaga_aerea.jpg/1280px-Malaga_aerea.jpg",
+        "credit": "Wikimedia Commons · CC BY-SA",
+    },
+    "donostia/san sebastian": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9a/Bah%C3%ADa_de_La_Concha%2C_San_Sebasti%C3%A1n%2C_Espa%C3%B1a%2C_2012-05-19%2C_DD_04.jpg/1280px-Bah%C3%ADa_de_La_Concha%2C_San_Sebasti%C3%A1n%2C_Espa%C3%B1a%2C_2012-05-19%2C_DD_04.jpg",
+        "credit": "Diego Delso · Wikimedia Commons · CC BY-SA",
+    },
+    "palma": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/12/Kathedrale_von_Palma_II.jpg/1280px-Kathedrale_von_Palma_II.jpg",
+        "credit": "Wikimedia Commons · CC BY-SA",
+    },
+    "marbella": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/55/Marbella_-_Casco_antiguo.jpg/1280px-Marbella_-_Casco_antiguo.jpg",
+        "credit": "Wikimedia Commons · CC BY-SA",
+    },
+    "cartagena": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/Puerto_de_Cartagena%2C_Espa%C3%B1a.jpg/1280px-Puerto_de_Cartagena%2C_Espa%C3%B1a.jpg",
+        "credit": "Wikimedia Commons · CC BY-SA",
+    },
+    "benidorm": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/0/00/Benidorm_-_Playa_de_Levante.jpg/1280px-Benidorm_-_Playa_de_Levante.jpg",
+        "credit": "Wikimedia Commons · CC BY-SA",
+    },
+    "nijar": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/95/Cabo_de_Gata_-_Playa_de_M%C3%B3nsul.jpg/1280px-Cabo_de_Gata_-_Playa_de_M%C3%B3nsul.jpg",
+        "credit": "Wikimedia Commons · CC BY-SA",
+    },
+    "benasque": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/Benasque_desde_la_carretera_de_Anciles.jpg/1280px-Benasque_desde_la_carretera_de_Anciles.jpg",
+        "credit": "Wikimedia Commons · CC BY-SA",
+    },
+    "vigo": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2a/Vigo_desde_A_Guia.jpg/1280px-Vigo_desde_A_Guia.jpg",
+        "credit": "Wikimedia Commons · CC BY-SA",
+    },
+    "murcia": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1e/Catedral_de_Murcia_-_fachada.jpg/1280px-Catedral_de_Murcia_-_fachada.jpg",
+        "credit": "Wikimedia Commons · CC BY-SA",
+    },
+    "cuenca": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/6/6d/Casas_Colgadas_de_Cuenca%2C_Espa%C3%B1a.jpg/1280px-Casas_Colgadas_de_Cuenca%2C_Espa%C3%B1a.jpg",
+        "credit": "Wikimedia Commons · CC BY-SA",
+    },
+    "valencia": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7e/Ciudad_de_las_Artes_y_las_Ciencias_de_Valencia.jpg/1280px-Ciudad_de_las_Artes_y_las_Ciencias_de_Valencia.jpg",
+        "credit": "Wikimedia Commons · CC BY-SA",
+    },
+    "bilbao": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/Guggenheim-bilbao-jan05.jpg/1280px-Guggenheim-bilbao-jan05.jpg",
+        "credit": "Wikimedia Commons · CC BY-SA",
+    },
+    "toledo": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/Toledo_Skyline_Panorama%2C_Spain_-_Dec_2006.jpg/1280px-Toledo_Skyline_Panorama%2C_Spain_-_Dec_2006.jpg",
+        "credit": "Diliff · Wikimedia Commons · CC BY-SA",
+    },
+    "santiago de compostela": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/Cathedral_of_Santiago_de_Compostela.jpg/1280px-Cathedral_of_Santiago_de_Compostela.jpg",
+        "credit": "Wikimedia Commons · CC BY-SA",
+    },
+    "santa cruz de tenerife": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Auditorio_de_Tenerife%2C_Santa_Cruz_de_Tenerife%2C_Espa%C3%B1a%2C_2012-12-15%2C_DD_02.jpg/1280px-Auditorio_de_Tenerife%2C_Santa_Cruz_de_Tenerife%2C_Espa%C3%B1a%2C_2012-12-15%2C_DD_02.jpg",
+        "credit": "Diego Delso · Wikimedia Commons · CC BY-SA",
+    },
+    "zaragoza": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/9/93/Basilica_del_Pilar%2C_Zaragoza.jpg/1280px-Basilica_del_Pilar%2C_Zaragoza.jpg",
+        "credit": "Wikimedia Commons · CC BY-SA",
+    },
+    "salamanca": {
+        "url": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3d/Vista_de_Salamanca_desde_el_puente_romano.jpg/1280px-Vista_de_Salamanca_desde_el_puente_romano.jpg",
+        "credit": "Wikimedia Commons · CC BY-SA",
+    },
+}
+
+
+def curated_spain_image(name: str) -> dict | None:
+    """Foto verificada de un municipio español, si está en el set curado."""
+    entry = CURATED_SPAIN_IMAGES.get(_norm(name))
+    if not entry:
+        return None
+    return {
+        "url": entry["url"],
+        "alt": f"Imagen de {name}",
+        "credit": entry.get("credit", "Wikimedia Commons"),
+        "source": "curated",
+    }

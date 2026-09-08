@@ -61,6 +61,33 @@ DESTINATIONS: list[tuple[str, str]] = [
     ("Alentejo", "Alentejo paisaje"),
 ]
 
+# Municipios españoles que devuelve el motor de la API de recomendaciones.
+# Se guardan con el mismo mecanismo que los del TDRS para que el recomendador
+# muestre fotos reales sin llamar a Wikipedia en vivo por tarjeta.
+SPAIN_MUNICIPALITIES: list[tuple[str, str]] = [
+    ("Madrid", "Madrid ciudad skyline"),
+    ("Barcelona", "Barcelona ciudad"),
+    ("Granada", "Granada Alhambra"),
+    ("Sevilla", "Sevilla Plaza de España"),
+    ("Córdoba", "Córdoba Mezquita"),
+    ("Málaga", "Málaga skyline panorámica"),
+    ("Donostia/San Sebastián", "Playa de la Concha San Sebastián"),
+    ("Palma", "Catedral de Palma de Mallorca"),
+    ("Marbella", "Marbella playa paseo"),
+    ("Cartagena", "Cartagena puerto España"),
+    ("Benidorm", "Benidorm playa skyline"),
+    ("Níjar", "Cabo de Gata Níjar"),
+    ("Benasque", "Benasque valle Pirineos"),
+    ("Vigo", "Ría de Vigo panorámica"),
+    ("Murcia", "Catedral de Murcia fachada"),
+    ("Cuenca", "Casas colgadas de Cuenca"),
+    ("Valencia", "Ciudad de las Artes y las Ciencias"),
+    ("València", "Ciudad de las Artes y las Ciencias"),
+    ("Bilbao", "Museo Guggenheim Bilbao"),
+    ("Toledo", "Panorámica de Toledo España"),
+    ("Santiago de Compostela", "Santiago de Compostela catedral"),
+]
+
 
 def _resize_and_save(data: bytes, dest: Path) -> int:
     from PIL import Image  # import diferido: solo lo usa este script
@@ -103,13 +130,14 @@ def _resolve_image_url(name: str, search_hint: str) -> tuple[str, str] | None:
     return None
 
 
-def main(force: bool) -> int:
+def main(force: bool, spain: bool = False) -> int:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
+    catalog = SPAIN_MUNICIPALITIES if spain else DESTINATIONS
     credits: dict[str, dict[str, str]] = {}
     ok = 0
     failed: list[str] = []
 
-    for name, hint in DESTINATIONS:
+    for name, hint in catalog:
         dest = OUT_DIR / f"{slugify(name)}.jpg"
         if dest.exists() and not force:
             print(f"  ya existe   {name}")
@@ -137,7 +165,7 @@ def main(force: bool) -> int:
         time.sleep(_PAUSE_SECONDS)
 
     _write_credits(credits)
-    print(f"\n{ok}/{len(DESTINATIONS)} imágenes en {OUT_DIR}")
+    print(f"\n{ok}/{len(catalog)} imágenes en {OUT_DIR}")
     if failed:
         print(f"Sin foto local: {', '.join(failed)} (usarán el fallback a Wikipedia en vivo).")
     return 0
@@ -168,5 +196,10 @@ def _write_credits(new: dict[str, dict[str, str]]) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--force", action="store_true", help="Vuelve a descargar aunque exista.")
+    parser.add_argument(
+        "--spain",
+        action="store_true",
+        help="Descarga los municipios españoles del recomendador en vez del catálogo del TDRS.",
+    )
     args = parser.parse_args()
-    raise SystemExit(main(args.force))
+    raise SystemExit(main(args.force, args.spain))

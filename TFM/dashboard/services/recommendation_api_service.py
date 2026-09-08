@@ -7,6 +7,11 @@ sustituye: el TDRS ranquea el catálogo internacional de TUI a partir del SQLite
 local, mientras que esta API ranquea municipios españoles combinando catálogo
 turístico, OpenStreetMap, señales de YouTube y clima histórico de AEMET.
 
+El motor en producción es ``tui_hybrid_mapped`` (modelo entrenado): mapea el
+ranking del modelo a municipios de ``dbo.places``. El contrato de respuesta es
+compatible con el motor heurístico anterior, así que el cliente sirve a ambos
+sin cambios: solo varían ``engine`` y algún ``reason_code``.
+
 Configuración por entorno (o ``.streamlit/secrets.toml``):
 
 - ``TUI_RECO_API_BASE`` + ``TUI_RECO_API_KEY``: opción recomendada. La clave
@@ -115,6 +120,7 @@ COVERAGE_LABELS: dict[str, str] = {
 
 REASON_CODE_LABELS: dict[str, str] = {
     "INTEREST_MATCH": "Coincide con tus intereses",
+    "TUI_HYBRID_MATCH": "Afinidad del modelo entrenado",
     "PRECIPITATION_MATCH": "Precipitación dentro de tu tolerancia",
     "SUNNY_DAYS_MATCH": "Cumple tus días de sol",
     "POPULARITY_CLOSE_TO_TARGET": "Popularidad cercana a la solicitada",

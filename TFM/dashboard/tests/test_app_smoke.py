@@ -22,7 +22,7 @@ APP = Path(__file__).resolve().parents[1] / "streamlit_app.py"
 # margen suficiente para evitar falsos negativos por timeout.
 TIMEOUT = 120
 
-NAV_OPTIONS = ["Simulador TDRS", "Recomendador España", "Control Web", "Datos / modelo"]
+NAV_OPTIONS = ["Simulador TDRS", "Recomendador España", "Control Web"]
 
 
 def _run(view: str | None = None) -> AppTest:
@@ -41,7 +41,7 @@ def test_app_starts_without_exception():
     assert not app.exception, [str(e) for e in app.exception]
 
 
-def test_sidebar_exposes_the_four_views():
+def test_sidebar_exposes_the_three_views():
     app = _run()
     assert app.sidebar.radio[0].options == NAV_OPTIONS
 
@@ -69,13 +69,6 @@ def test_control_web_shows_commercial_kpis():
     app = _run("Control Web")
     labels = [m.label for m in app.metric]
     for expected in ("Sesiones", "Clics", "Reservas", "Ingresos", "ROI"):
-        assert expected in labels
-
-
-def test_data_model_shows_technical_kpis():
-    app = _run("Datos / modelo")
-    labels = [m.label for m in app.metric]
-    for expected in ("SQLite", "Tablas", "Fuentes activas"):
         assert expected in labels
 
 
