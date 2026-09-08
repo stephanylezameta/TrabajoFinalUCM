@@ -26,7 +26,20 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import anthropic
 
-from scripts.recommendation.run_recommendation import recomendar, registrar_feedback
+from scripts.recommendation.run_recommendation import (
+    recomendar,
+    registrar_feedback,
+    cargar_metadata_experiencias,
+    cargar_clima_por_destino,
+    cargar_accesibilidad_por_destino,
+    cargar_capacidad_sanitaria_por_destino,
+    cargar_seguridad_criminalidad_por_destino,
+    cargar_sentimiento_por_destino,
+    cargar_impacto_local_por_destino,
+    cargar_diversificacion_por_destino,
+    cargar_temporada_baja_por_destino,
+    cargar_datos_humanos_por_destino,
+)
 
 app = FastAPI(title="TUI Recomendador API")
 
@@ -199,6 +212,103 @@ def endpoint_chat(req: ChatRequest):
         historial.append({"role": "assistant", "content": respuesta.content})
 
     return {"respuesta": texto, "historial": historial, "session_id": session_id}
+
+
+# --------------------------------------------------------------------------
+# /tdrs_ranking -- para la pestaña "Simulador TDRS", donde el usuario mueve
+# sliders de peso y rankea el catalogo COMPLETO de 39 destinos, sin ninguna
+# consulta de texto. A diferencia de /recomendar (que arranca de una
+# busqueda semantica), esto usa directo las señales reales por destino ya
+# construidas -- no pasa por embeddings ni LightGBM, no hace falta para este
+# tipo de pantalla. Reemplaza la reimplementacion local que hacia el
+# dashboard a mano, con datos propios; esto usa las mismas fuentes reales
+# ya validadas del modelo (Eurostat/INE, AENA, Open-Meteo, indicadores tipo
+# Banco Mundial, sentimiento real via XLM-RoBERTa).
+# --------------------------------------------------------------------------
+SEÑALES_TDRS_RANKING = [
+    "sunny_days_pct", "dry_months_pct", "popularity", "hospital_beds",
+    "safety", "satisfaction", "impacto_local", "diversificacion", "temporada_baja",
+]
+
+
+def _cargar_todas_las_señales(db_path: str) -> dict[str, dict]:
+    """Junta, en un solo lugar, todas las señales reales por destino que
+    puede pedir /tdrs_ranking. Los nombres de la izquierda son los que
+    usa el dashboard (sunny_days_pct, popularity, etc.); a la derecha,
+    de donde salen en nuestro pipeline real."""
+    temp_confort, dias_secos, horas_sol = cargar_clima_por_destino(db_path)
+    return {
+        "sunny_days_pct": temp_confort,
+        "dry_months_pct": dias_secos,
+        "popularity": cargar_accesibilidad_por_destino(db_path),
+        "hospital_beds": cargar_capacidad_sanitaria_por_destino(db_path),
+        "safety": cargar_seguridad_criminalidad_por_destino(db_path),
+        "satisfaction": cargar_sentimiento_por_destino(db_path),
+        "impacto_local": cargar_impacto_local_por_destino(db_path),
+        "diversificacion": cargar_diversificacion_por_destino(db_path),
+        "temporada_baja": cargar_temporada_baja_por_destino(db_path),
+    }
+
+
+class TdrsRankingRequest(BaseModel):
+    weights: dict[str, float]  # ej: {"sunny_days_pct": 70, "popularity": 30, ...}
+    max_price: float | None = None
+    max_stay_days: int | None = None
+
+
+@app.post("/tdrs_ranking")
+def endpoint_tdrs_ranking(req: TdrsRankingRequest):
+    señales = _cargar_todas_las_señales(DB_PATH)
+    metadata = cargar_metadata_experiencias(DB_PATH)
+    datos_humanos = cargar_datos_humanos_por_destino(DB_PATH)
+
+    precio_por_destino: dict[str, float] = {}
+    for meta in metadata.values():
+        destino = meta["destino_nombre"]
+        precio = meta.get("price_eur")
+        if precio is not None:
+            actual = precio_por_destino.get(destino)
+            if actual is None or precio < actual:
+                precio_por_destino[destino] = precio
+
+    destinos = sorted({m["destino_nombre"] for m in metadata.values()})
+    total_peso = sum(max(0.0, v) for v in req.weights.values()) or 1.0
+
+    ranked, excluded = [], []
+    for destino in destinos:
+        precio_ref = precio_por_destino.get(destino)
+
+        if req.max_price is not None and precio_ref is not None and precio_ref > req.max_price:
+            excluded.append({"destino_nombre": destino, "excluded_by": ["precio"]})
+            continue
+
+        score = 0.0
+        contribuciones = []
+        for nombre_señal, peso in req.weights.items():
+            peso = max(0.0, peso)
+            valor = señales.get(nombre_señal, {}).get(destino)
+            contribucion = (peso / total_peso) * valor if valor is not None else 0.0
+            score += contribucion
+            contribuciones.append({
+                "factor": nombre_señal, "peso": peso, "valor": valor, "contribucion": contribucion,
+            })
+        contribuciones.sort(key=lambda c: -c["contribucion"])
+
+        ranked.append({
+            "destino_nombre": destino,
+            "score": round(score, 4),
+            "precio_referencia_eur": precio_ref,
+            "datos_humanos": datos_humanos.get(destino, {}),
+            "contribuciones": contribuciones,
+        })
+
+    ranked.sort(key=lambda r: -r["score"])
+    return {
+        "ranked": ranked,
+        "excluded": excluded,
+        "señales_disponibles": SEÑALES_TDRS_RANKING,
+        "fuente": "Datos reales del modelo TDRS (Eurostat/INE, AENA, Open-Meteo, sentimiento XLM-RoBERTa)",
+    }
 
 
 # --------------------------------------------------------------------------
