@@ -42,6 +42,9 @@ from scripts.recommendation.run_recommendation import (
     cargar_temporada_baja_por_destino,
     cargar_impacto_local_por_destino,
     cargar_sentimiento_por_destino,
+    cargar_clima_por_destino,
+    cargar_capacidad_sanitaria_por_destino,
+    cargar_seguridad_criminalidad_por_destino,
     cargar_modelo_lightgbm,
     calcular_candidato,
     normalizar_dict,
@@ -108,6 +111,9 @@ def generar_candidatos_por_consulta(db_path: str) -> list[list[dict]]:
     temporada_baja_por_destino = cargar_temporada_baja_por_destino(db_path)
     impacto_local_por_destino = cargar_impacto_local_por_destino(db_path)
     sentimiento_por_destino = cargar_sentimiento_por_destino(db_path)
+    temp_confort_por_destino, dias_secos_por_destino, horas_sol_por_destino = cargar_clima_por_destino(db_path)
+    capacidad_sanitaria_por_destino = cargar_capacidad_sanitaria_por_destino(db_path)
+    seguridad_criminalidad_por_destino = cargar_seguridad_criminalidad_por_destino(db_path)
     tdrs_calc = TDRSCalculator()  # pesos DEFAULT, no se tocan
 
     modelo_lgbm, _ = cargar_modelo_lightgbm()
@@ -141,6 +147,8 @@ def generar_candidatos_por_consulta(db_path: str) -> list[list[dict]]:
                 accesibilidad_por_destino, capacidad_por_destino,
                 diversificacion_por_destino, temporada_baja_por_destino,
                 impacto_local_por_destino, sentimiento_por_destino,
+                temp_confort_por_destino, dias_secos_por_destino, horas_sol_por_destino,
+                capacidad_sanitaria_por_destino, seguridad_criminalidad_por_destino,
                 modelo_lgbm, precios, duraciones, ratings, reviews, tdrs_calc,
             )
             candidatos.append(candidato)

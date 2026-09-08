@@ -36,11 +36,7 @@ NUM_LEAVES_OPCIONES = [15, 31, 63]
 MIN_DATA_IN_LEAF_OPCIONES = [5, 10, 20]
 SEMILLAS_POR_COMBO = 5
 
-FEATURE_NAMES = [
-    "precio", "duracion", "rating", "review_count", "ocupacion",
-    "sensibilidad_ambiental", "accesibilidad", "capacidad",
-    "diversificacion", "temporada_baja", "impacto_local",
-]
+FEATURE_NAMES = tlr.FEATURE_NAMES
 
 
 def entrenar_y_evaluar(db_path: str, seed: int, feature_fraction: float, num_leaves: int, min_data_in_leaf: int) -> dict:
