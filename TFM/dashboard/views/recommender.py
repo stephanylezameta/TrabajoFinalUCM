@@ -157,15 +157,10 @@ def _price_txt(value: float | None) -> str | None:
 
 
 def _trip_line(price: float | None) -> str:
-    """Línea comercial estilo TUI: «desde 1.615 €».
-
-    No se muestra la duración (días/noches): esos días no son un dato del
-    destino, sino lo que pidió el usuario, así que puede confundir. Solo se
-    muestra el precio orientativo cuando hay coincidencia en el catálogo; si no,
-    la línea queda vacía y no se pinta.
-    """
-    price_txt = _price_txt(price)
-    return f"desde {price_txt}" if price_txt else ""
+    """Reservado. Ya no se muestra ni duración ni precio en las tarjetas: los
+    montos en euros no eran fiables (precio orientativo derivado) y confundían.
+    Devuelve cadena vacía para no pintar nada."""
+    return ""
 
 
 def _bar(label: str, value: float | None) -> str:
@@ -494,8 +489,6 @@ def _card_html(row: dict, idx: int, compact: bool = False, payload: dict | None 
     name = str(destination.get("name") or "Destino")
     place = _place(destination)
     typology = destination.get("primary_typology")
-    price = price_lookup.reference_price(destination)
-    trip_line = _trip_line(price)
 
     parts = ['<div class="reco-card">']
 
@@ -518,8 +511,6 @@ def _card_html(row: dict, idx: int, compact: bool = False, payload: dict | None 
     parts.append(f'<div class="reco-name">{escape(name)}</div>')
     if place:
         parts.append(f'<div class="reco-place">📍 {escape(place)}</div>')
-    if trip_line:
-        parts.append(f'<div class="reco-trip">{escape(trip_line)}</div>')
 
     if not compact:
         if typology:
