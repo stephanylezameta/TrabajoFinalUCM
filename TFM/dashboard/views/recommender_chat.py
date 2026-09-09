@@ -35,7 +35,6 @@ import streamlit as st
 
 from components.assets import get_local_destination_image
 from services import recommendation_api_service as reco
-from services.destination_image_service import resolve_destination_image
 
 CHAT_HISTORY_KEY = "reco_chat_history"
 
@@ -118,17 +117,13 @@ def _tarjetas_demo(limit: int = 2) -> list[dict]:
 
 
 def _photo_url(name: str, province: str, community: str) -> str | None:
-    """Foto del destino, sin exponer crédito. Local primero; si no, en vivo."""
+    """Foto del destino desde el archivo local ``.jpg``, sin exponer crédito.
+
+    No se consultan URLs externas ni Wikipedia: si no existe imagen local, la
+    tarjeta se muestra sin foto (fondo/placeholder)."""
     local = get_local_destination_image(name)
     if local:
         return local.get("url")
-    resolved = resolve_destination_image({
-        "name": name,
-        "province": province,
-        "autonomous_community": community,
-    })
-    if resolved:
-        return resolved.get("url")
     return None
 
 

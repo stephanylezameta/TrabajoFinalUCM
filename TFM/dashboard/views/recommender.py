@@ -6,7 +6,6 @@ import streamlit as st
 
 from components.assets import get_local_destination_image
 from services import recommendation_api_service as reco
-from services.destination_image_service import resolve_destination_image
 from services.tracking_service import register_event
 from views.recommender_chat import render_recommender_chat
 
@@ -63,20 +62,15 @@ def _bar(label: str, value: float | None) -> str:
 def _photo(row: dict) -> dict | None:
     """Fotografía del destino, ajustada a la tarjeta como banner.
 
-    La resolución es en vivo y desambiguada: usa provincia y comunidad para no
-    traer la imagen de un homónimo famoso (p. ej. "Palma" → Palma de Mallorca,
-    no la Palma de Oro de Cannes). Se prueba primero una foto local si existe,
-    porque es instantánea, pero la app no depende de tenerla: si no está, la
-    busca en Wikipedia sin necesidad de redesplegar.
+    Solo se usan las imágenes locales (``assets/destinations/*.jpg``). No se
+    consultan URLs externas ni Wikipedia: si no existe el archivo local, la
+    tarjeta cae al fondo/placeholder sólido.
     """
     destination = row.get("destination") or {}
     name = destination.get("name")
     if not name:
         return None
-    local = get_local_destination_image(name)
-    if local:
-        return local
-    return resolve_destination_image(destination)
+    return get_local_destination_image(name)
 
 
 def _place(destination: dict) -> str:
