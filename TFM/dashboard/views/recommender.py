@@ -156,23 +156,16 @@ def _price_txt(value: float | None) -> str | None:
         return None
 
 
-def _trip_line(payload: dict, price: float | None) -> str:
-    """Línea comercial estilo TUI: «8 días / 7 noches · desde 1.615 €».
+def _trip_line(price: float | None) -> str:
+    """Línea comercial estilo TUI: «desde 1.615 €».
 
-    Los días salen de lo que pidió el usuario (``trip_length_days``); las noches
-    son días − 1. El precio (orientativo) solo se añade si hay coincidencia en el
-    catálogo; si no, la línea muestra solo la duración.
+    No se muestra la duración (días/noches): esos días no son un dato del
+    destino, sino lo que pidió el usuario, así que puede confundir. Solo se
+    muestra el precio orientativo cuando hay coincidencia en el catálogo; si no,
+    la línea queda vacía y no se pinta.
     """
-    travel = payload.get("travel") or {}
-    days = travel.get("trip_length_days")
-    bits: list[str] = []
-    if isinstance(days, int) and days > 0:
-        nights = max(0, days - 1)
-        bits.append(f"{days} días / {nights} noches")
     price_txt = _price_txt(price)
-    if price_txt:
-        bits.append(f"desde {price_txt}")
-    return " · ".join(bits)
+    return f"desde {price_txt}" if price_txt else ""
 
 
 def _bar(label: str, value: float | None) -> str:
@@ -492,7 +485,7 @@ def _card_html(row: dict, idx: int, compact: bool = False, payload: dict | None 
     place = _place(destination)
     typology = destination.get("primary_typology")
     price = price_lookup.reference_price(destination)
-    trip_line = _trip_line(payload, price)
+    trip_line = _trip_line(price)
 
     parts = ['<div class="reco-card">']
 

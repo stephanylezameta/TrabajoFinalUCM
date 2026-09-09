@@ -74,6 +74,12 @@ _DESTINATION_ALIASES: dict[str, str] = {
     "donostia san sebastian": "san-sebastian",
     "san sebastian": "san-sebastian",
     "las palmas de gran canaria": "gran-canaria",
+    # Nombres cooficiales (catalán/valenciano/gallego) que el motor devuelve con
+    # barra: se mapean al slug del archivo local existente.
+    "alicante alacant": "alicante",
+    "alacant": "alicante",
+    "castello de la plana castellon de la plana": "castellon",
+    "a coruna": "a-coruna",
 }
 
 

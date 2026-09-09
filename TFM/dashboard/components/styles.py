@@ -261,7 +261,8 @@ hr { border-color:rgba(17,24,39,.10)!important; }
    NO va montado sobre la imagen; baja al cuerpo en azul, como las ofertas TUI. */
 .offer-media{position:relative;width:100%;height:220px;overflow:hidden;
   border-radius:24px 24px 0 0;background:#EEF2F6}
-.offer-media-img{width:100%;height:100%;object-fit:cover;object-position:center 42%;display:block}
+.offer-media-img{width:100%!important;height:100%!important;max-width:none!important;
+  object-fit:cover!important;object-position:center 42%;display:block!important;margin:0!important;border-radius:0!important}
 .offer-media--empty{background:linear-gradient(135deg,#1B2432,#3A4657)}
 /* Badge «Oferta TUI»: pastilla blanca con texto rojo, arriba-izquierda. */
 .offer-flag{position:absolute;top:1.1rem;left:1.1rem;z-index:2;display:inline-flex;align-items:center;
@@ -328,8 +329,9 @@ hr { border-color:rgba(17,24,39,.10)!important; }
    Ocupa todo el ancho y redondea las esquinas superiores igual que la tarjeta. */
 .reco-photo-wrap{position:relative;width:100%;aspect-ratio:16/10;overflow:hidden;background:#EEF2F6;
   display:block;margin:0;line-height:0;border-radius:21px 21px 0 0}
-.reco-photo{width:100%;height:100%;object-fit:cover;object-position:center center;display:block;
-  margin:0;background:#EEF2F6;transition:transform .55s cubic-bezier(.16,1,.3,1)}
+.reco-photo{width:100%!important;height:100%!important;max-width:none!important;object-fit:cover!important;
+  object-position:center center;display:block!important;margin:0!important;border-radius:0!important;
+  background:#EEF2F6;transition:transform .55s cubic-bezier(.16,1,.3,1)}
 .reco-card:hover .reco-photo{transform:scale(1.08)}
 .reco-photo-fallback{width:100%;height:100%;display:flex;align-items:center;justify-content:center;
   background:linear-gradient(135deg,#243244,#3B4A5E);color:#fff;font-weight:700;font-size:1.3rem;letter-spacing:.02em}
