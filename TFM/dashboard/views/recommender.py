@@ -4,7 +4,8 @@ from html import escape
 
 import streamlit as st
 
-from components.assets import get_local_destination_image
+from components.assets import SCENARIO_ICON_URLS, get_local_destination_image
+from services import price_lookup
 from services import recommendation_api_service as reco
 from services.tracking_service import register_event
 from views.recommender_chat import render_recommender_chat
@@ -16,6 +17,101 @@ STATE_KEY = "reco_result"
 STATE_PAYLOAD = "reco_payload"
 STATE_AUTORUN = "reco_autorun_done"
 STATE_CUSTOM = "reco_is_custom"
+STATE_POLICY = "reco_policy"
+
+# --------------------------------------------------------------------------
+# Escenarios de redistribución (TDRS) integrados en el recomendador.
+# --------------------------------------------------------------------------
+# Cada escenario es una forma de pedir al MISMO modelo (la Function de Azure vía
+# ``reco.fetch_recommendations``) un reparto distinto de la demanda. La palanca
+# central es ``popularity_target`` (0 = destinos menos saturados · 1 = turismo
+# tradicional muy visitado); los intereses de referencia se traducen al contrato
+# del modelo. Es la tesis del TDRS aplicada sobre el recomendador real.
+POLICIES = ("Tradicional", "Equilibrado", "Redistribuido")
+DEFAULT_POLICY = "Equilibrado"
+
+POLICY_PRESETS: dict[str, dict] = {
+    "Tradicional": {
+        "popularity_target": 0.85,
+        "temperature_preference": "warm_sunny",
+        "interests": {
+            "coast_beach": 90, "history_culture": 60, "gastronomy_wine": 55,
+            "nature_mountains": 20, "rural": 10, "wellness": 20, "sports_outdoors": 20,
+        },
+    },
+    "Equilibrado": {
+        "popularity_target": 0.5,
+        "temperature_preference": "mild",
+        "interests": {
+            "coast_beach": 60, "history_culture": 60, "gastronomy_wine": 55,
+            "nature_mountains": 55, "rural": 40, "wellness": 40, "sports_outdoors": 40,
+        },
+    },
+    "Redistribuido": {
+        "popularity_target": 0.15,
+        "temperature_preference": "any",
+        "interests": {
+            "coast_beach": 25, "history_culture": 55, "gastronomy_wine": 60,
+            "nature_mountains": 90, "rural": 85, "wellness": 60, "sports_outdoors": 60,
+        },
+    },
+}
+
+# Cada escenario mapea a uno de los iconos empaquetados en assets.
+POLICY_ICON_BY_NAME = {
+    "Tradicional": "Popular",
+    "Equilibrado": "Equilibrado",
+    "Redistribuido": "Explorador",
+}
+
+# Umbral (0-100) por encima del cual un interés se envía al modelo, y máximo de
+# intereses que admite el contrato del recomendador.
+_INTEREST_ACTIVE_THRESHOLD = 50
+_MAX_INTERESTS = 3
+
+
+def _current_policy_name() -> str:
+    name = st.session_state.get(STATE_POLICY, DEFAULT_POLICY)
+    if name not in POLICIES:
+        name = DEFAULT_POLICY
+        st.session_state[STATE_POLICY] = name
+    return name
+
+
+def _policy_to_payload(policy_name: str) -> dict:
+    """Traduce un escenario de redistribución al payload del recomendador.
+
+    Mueve ``popularity_target`` según el escenario y envía los intereses de
+    referencia que superan el umbral (máximo tres, como exige el contrato).
+    """
+    preset = POLICY_PRESETS.get(policy_name, POLICY_PRESETS[DEFAULT_POLICY])
+    defaults = reco.default_request()
+
+    weights: dict[str, int] = preset.get("interests") or {}
+    interests = [
+        code
+        for code, weight in sorted(weights.items(), key=lambda kv: -float(kv[1]))
+        if code in reco.INTERESTS and float(weight) >= _INTEREST_ACTIVE_THRESHOLD
+    ][:_MAX_INTERESTS]
+    if not interests:
+        interests = list(defaults["interests"])[:_MAX_INTERESTS]
+
+    temperature = preset.get("temperature_preference", defaults["temperature_preference"])
+    if temperature not in reco.TEMPERATURE_LABELS:
+        temperature = defaults["temperature_preference"]
+
+    return reco.build_payload(
+        month=defaults["month"],
+        trip_length_days=defaults["trip_length_days"],
+        interests=interests,
+        temperature_preference=temperature,
+        minimum_sunny_days=defaults["minimum_sunny_days"],
+        maximum_precipitation_days=defaults["maximum_precipitation_days"],
+        popularity_target=max(0.0, min(1.0, float(preset["popularity_target"]))),
+        accommodation_type=defaults["accommodation_type"],
+        include_regions=[],
+        exclude_regions=[],
+    )
 
 # El asistente de viaje está INTEGRADO en la vista como un copiloto único, al
 # estilo de los agentes de viaje conversacionales (Layla, Mindtrip): la
@@ -43,6 +139,35 @@ def _fmt(value, suffix: str = "", decimals: int = 1) -> str:
 def _chip(text: str, kind: str = "") -> str:
     css = f"reco-chip {kind}".strip()
     return f'<span class="{css}">{escape(text)}</span>'
+
+
+def _price_txt(value: float | None) -> str | None:
+    """Formatea el precio orientativo (p. ej. «1.615 €»), o None si no hay."""
+    if value is None:
+        return None
+    try:
+        return f"{float(value):,.0f} €".replace(",", ".")
+    except (TypeError, ValueError):
+        return None
+
+
+def _trip_line(payload: dict, price: float | None) -> str:
+    """Línea comercial estilo TUI: «8 días / 7 noches · desde 1.615 €».
+
+    Los días salen de lo que pidió el usuario (``trip_length_days``); las noches
+    son días − 1. El precio (orientativo) solo se añade si hay coincidencia en el
+    catálogo; si no, la línea muestra solo la duración.
+    """
+    travel = payload.get("travel") or {}
+    days = travel.get("trip_length_days")
+    bits: list[str] = []
+    if isinstance(days, int) and days > 0:
+        nights = max(0, days - 1)
+        bits.append(f"{days} días / {nights} noches")
+    price_txt = _price_txt(price)
+    if price_txt:
+        bits.append(f"desde {price_txt}")
+    return " · ".join(bits)
 
 
 def _bar(label: str, value: float | None) -> str:
@@ -114,37 +239,44 @@ def _unmatched_prefs(row: dict) -> list[str]:
 # --------------------------------------------------------------------------
 
 def _render_form() -> dict | None:
-    """Formulario de preferencias. Devuelve el payload si se ha enviado."""
-    defaults = reco.default_request()
+    """Formulario de preferencias. Devuelve el payload si se ha enviado.
 
+    El formulario arranca SIN valores preseleccionados: el usuario elige mes,
+    intereses y clima desde cero. Los selectores usan un marcador de posición y
+    los deslizadores parten del mínimo de su rango.
+    """
     with st.form("reco_form"):
         c1, c2, c3 = st.columns([1.1, 1, 1])
         month = c1.selectbox(
             "Mes del viaje",
             list(range(1, 13)),
-            index=defaults["month"] - 1,
+            index=None,
+            placeholder="Elige un mes",
             format_func=reco.month_name,
         )
         trip_length = c2.number_input(
             "Duración (días)",
             min_value=reco.TRIP_LENGTH_RANGE[0],
             max_value=reco.TRIP_LENGTH_RANGE[1],
-            value=defaults["trip_length_days"],
+            value=None,
             step=1,
+            placeholder="Días",
             help="La API admite viajes de 1 a 30 días.",
         )
         accommodation = c3.selectbox(
             "Alojamiento",
             reco.ACCOMMODATION_TYPES,
-            index=reco.ACCOMMODATION_TYPES.index(defaults["accommodation_type"]),
+            index=None,
+            placeholder="Cualquiera",
             format_func=lambda code: reco.ACCOMMODATION_LABELS[code],
         )
 
         interests = st.multiselect(
             "Intereses",
             reco.INTERESTS,
-            default=defaults["interests"],
+            default=[],
             format_func=reco.interest_label,
+            placeholder="Selecciona al menos uno",
             help="Selecciona al menos uno. Estos son los intereses que acepta el motor.",
         )
 
@@ -152,23 +284,24 @@ def _render_form() -> dict | None:
         temperature = c4.selectbox(
             "Temperatura preferida",
             reco.TEMPERATURE_PREFERENCES,
-            index=reco.TEMPERATURE_PREFERENCES.index(defaults["temperature_preference"]),
+            index=None,
+            placeholder="Indiferente",
             format_func=lambda code: reco.TEMPERATURE_LABELS[code],
         )
         min_sunny = c5.slider(
             "Mínimo de días soleados / mes",
             reco.SUNNY_DAYS_RANGE[0], reco.SUNNY_DAYS_RANGE[1],
-            defaults["minimum_sunny_days"],
+            reco.SUNNY_DAYS_RANGE[0],
         )
         max_precip = c6.slider(
             "Máximo de días de lluvia / mes",
             reco.PRECIPITATION_DAYS_RANGE[0], reco.PRECIPITATION_DAYS_RANGE[1],
-            defaults["maximum_precipitation_days"],
+            reco.PRECIPITATION_DAYS_RANGE[1],
         )
 
         popularity = st.slider(
             "Objetivo de popularidad",
-            0.0, 1.0, defaults["popularity_target"], 0.05,
+            0.0, 1.0, 0.5, 0.05,
             help="0 = destinos poco conocidos · 1 = destinos muy conocidos. "
                  "El motor busca proximidad a este valor, no el máximo.",
         )
@@ -192,6 +325,20 @@ def _render_form() -> dict | None:
 
     if not submitted:
         return None
+
+    # Campos obligatorios sin preselección: se avisa si el usuario no los rellena.
+    faltantes = []
+    if month is None:
+        faltantes.append("el mes del viaje")
+    if trip_length is None:
+        faltantes.append("la duración")
+    if faltantes:
+        st.error("Indica " + " y ".join(faltantes) + " para pedir recomendaciones.")
+        return None
+
+    # Los selectores opcionales sin elegir equivalen a "Indiferente" (any).
+    temperature = temperature or "any"
+    accommodation = accommodation or "any"
 
     errors = reco.validate_request(
         month=month,
@@ -240,7 +387,10 @@ def _hero_facts(row: dict) -> list[tuple[str, str]]:
     return facts
 
 
-def _render_hero(row: dict, payload: dict) -> None:
+def _render_hero(row: dict, payload: dict, compact: bool = False) -> None:
+    """Tarjeta de oferta destacada (opción 1), al estilo de las ofertas TUI:
+    imagen grande con el badge «Oferta TUI», título en azul, línea de duración y
+    precio orientativo (si hay), y los datos reales del modelo."""
     destination = row.get("destination") or {}
     name = str(destination.get("name") or "Destino sin nombre")
     place = _place(destination)
@@ -251,20 +401,13 @@ def _render_hero(row: dict, payload: dict) -> None:
     if not why and strengths:
         why = strengths[0]
 
-    travel = payload.get("travel") or {}
-    month = reco.month_name(travel.get("month", 1))
-    days = travel.get("trip_length_days")
-    interests = [
-        reco.interest_label(code)
-        for code in (payload.get("preferences", {}).get("interests") or [])
-    ]
-    chips = [f"{month} · {days} días"] + interests
     tradeoffs = [str(s) for s in (row.get("tradeoffs") or [])]
 
     photo = _photo(row)
-    parts = ['<div class="offer">']
+    offer_cls = "offer offer--compact" if compact else "offer"
+    parts = [f'<div class="{offer_cls}">']
 
-    # --- Banner de la oferta: imagen a todo el ancho con el titular montado ---
+    # --- Banner: imagen a todo el ancho con el badge «Oferta TUI» ---
     if photo:
         parts.append(
             f'<div class="offer-media" style="background-image:'
@@ -272,27 +415,30 @@ def _render_hero(row: dict, payload: dict) -> None:
         )
     else:
         parts.append('<div class="offer-media offer-media--empty">')
-    parts.append('<div class="offer-media-veil"></div>')
-    parts.append('<div class="offer-flag">Recomendado para ti</div>')
-    parts.append('<div class="offer-media-caption">')
+    parts.append('<div class="offer-flag">Oferta TUI</div>')
+    parts.append('</div>')  # media
+
+    # --- Cuerpo: título, motivo, lugares y datos ---
+    parts.append('<div class="offer-body">')
     parts.append(f'<h2 class="offer-name">{escape(name)}</h2>')
     if place:
         parts.append(f'<div class="offer-place">📍 {escape(place)}</div>')
-    parts.append('</div>')  # caption
-    parts.append('</div>')  # media
 
-    # --- Panel de la oferta: motivo, contexto y datos, estilo comercial ---
-    parts.append('<div class="offer-body">')
     if typology:
         parts.append(f'<span class="offer-typology">{escape(str(typology))}</span>')
     if why:
         parts.append(f'<p class="offer-why">{escape(why)}</p>')
 
-    parts.append('<div class="offer-chips">')
-    parts.append("".join(f'<span class="offer-chip">{escape(c)}</span>' for c in chips))
+    # Lo más parecido a una «lista de lugares» que ofrece el modelo: sus
+    # fortalezas reales. Si no hay, no se muestra nada.
+    if strengths:
+        parts.append(
+            '<div class="offer-places">'
+            + "".join(f'<span class="offer-place-item">{escape(s)}</span>' for s in strengths[:3])
+            + '</div>'
+        )
     for tradeoff in tradeoffs[:1]:
-        parts.append(f'<span class="offer-chip warn">⚠ {escape(tradeoff)}</span>')
-    parts.append('</div>')
+        parts.append(f'<div class="offer-tradeoff">⚠ {escape(tradeoff)}</div>')
 
     parts.append('<div class="offer-facts">')
     for value, label in _hero_facts(row):
@@ -301,6 +447,8 @@ def _render_hero(row: dict, payload: dict) -> None:
             f'<div class="offer-fact-label">{escape(label)}</div></div>'
         )
     parts.append('</div>')
+
+    parts.append('<button class="offer-cta" disabled>Ver opciones</button>')
     parts.append('</div>')  # body
     parts.append('</div>')  # offer
 
@@ -311,14 +459,18 @@ def _render_hero(row: dict, payload: dict) -> None:
 # Tarjeta galería: cada una de las otras opciones
 # --------------------------------------------------------------------------
 
-def _card_html(row: dict, idx: int) -> str:
-    """Devuelve el HTML de una tarjeta de alternativa (no la renderiza).
+def _card_html(row: dict, idx: int, compact: bool = False, payload: dict | None = None) -> str:
+    """HTML de una tarjeta de alternativa (opciones 2, 3…), estilo oferta TUI.
 
-    Se construye como string para poder concatenar todas las tarjetas en un
-    único ``st.markdown`` (rejilla CSS), en vez de usar ``st.columns`` con un
-    número variable de columnas: ese patrón disparaba el error removeChild de
-    React al repintar tras un rerun.
+    Se construye como string para concatenar todas las tarjetas en un único
+    ``st.markdown`` (rejilla CSS), en vez de usar ``st.columns`` de número
+    variable: ese patrón disparaba el error removeChild de React tras un rerun.
+
+    Sigue el mismo patrón que la destacada —imagen con badge «Oferta TUI»,
+    título azul, duración y precio orientativo si hay— pero más contenido:
+    en modo ``compact`` muestra solo lo esencial (sin motivos ni concesiones).
     """
+    payload = payload or {}
     destination = row.get("destination") or {}
     climate = row.get("climate_profile") or {}
     offers = row.get("what_it_offers") or {}
@@ -326,10 +478,12 @@ def _card_html(row: dict, idx: int) -> str:
     name = str(destination.get("name") or "Destino")
     place = _place(destination)
     typology = destination.get("primary_typology")
+    price = price_lookup.reference_price(destination)
+    trip_line = _trip_line(payload, price)
 
     parts = ['<div class="reco-card">']
 
-    # Banner: la imagen ocupa todo el ancho, pegada al borde, con chip de ranking.
+    # Banner: imagen a todo el ancho con el badge «Oferta TUI».
     parts.append('<div class="reco-photo-wrap">')
     photo = _photo(row)
     if photo:
@@ -340,69 +494,45 @@ def _card_html(row: dict, idx: int) -> str:
         )
     else:
         parts.append(f'<div class="reco-photo-fallback">{escape(name)}</div>')
-    parts.append('<div class="reco-photo-veil"></div>')
-    parts.append(f'<div class="reco-rank-badge">Opción {row.get("rank", idx + 1)}</div>')
-    # Nombre y lugar montados sobre la imagen, estilo tarjeta de viaje.
-    parts.append('<div class="reco-photo-caption">')
+    parts.append('<div class="reco-flag">Oferta TUI</div>')
+    parts.append('</div>')  # cierra photo-wrap
+
+    # Cuerpo: título azul debajo de la imagen (estilo oferta TUI).
+    parts.append('<div class="reco-body">')
     parts.append(f'<div class="reco-name">{escape(name)}</div>')
     if place:
         parts.append(f'<div class="reco-place">📍 {escape(place)}</div>')
-    parts.append('</div>')  # cierra caption
-    parts.append('</div>')  # cierra photo-wrap
+    if trip_line:
+        parts.append(f'<div class="reco-trip">{escape(trip_line)}</div>')
 
-    # Cuerpo: todo visible, sin desplegables, para comparar de un vistazo.
-    parts.append('<div class="reco-body">')
+    if not compact:
+        if typology:
+            parts.append(f'<span class="reco-typology">{escape(str(typology))}</span>')
+        if row.get("headline"):
+            parts.append(f'<p class="reco-headline">{escape(str(row["headline"]))}</p>')
 
-    if typology:
-        parts.append(f'<span class="reco-typology">{escape(str(typology))}</span>')
-    if row.get("headline"):
-        parts.append(f'<p class="reco-headline">{escape(str(row["headline"]))}</p>')
+        # Tres datos objetivos del modelo, en rejilla compacta.
+        parts.append('<div class="reco-facts">')
+        for value, label in (
+            (_fmt(climate.get("sunny_days"), decimals=0), "Días de sol"),
+            (_fmt(climate.get("temperature_mean_c"), "°", 0), "Temp. media"),
+            (_fmt(offers.get("poi_count"), decimals=0), "Puntos interés"),
+        ):
+            parts.append(
+                f'<div class="reco-fact"><div class="reco-fact-value">{escape(str(value))}</div>'
+                f'<div class="reco-fact-label">{escape(label)}</div></div>'
+            )
+        parts.append('</div>')
 
-    # Tres datos objetivos, en rejilla compacta.
-    parts.append('<div class="reco-facts">')
-    for value, label in (
-        (_fmt(climate.get("sunny_days"), decimals=0), "Días de sol"),
-        (_fmt(climate.get("temperature_mean_c"), "°", 0), "Temp. media"),
-        (_fmt(offers.get("poi_count"), decimals=0), "Puntos interés"),
-    ):
-        parts.append(
-            f'<div class="reco-fact"><div class="reco-fact-value">{escape(str(value))}</div>'
-            f'<div class="reco-fact-label">{escape(label)}</div></div>'
-        )
-    parts.append('</div>')
-
-    # Motivos como chips.
-    reasons = [reco.reason_label(str(c)) for c in (row.get("reason_codes") or [])]
-    if reasons:
-        parts.append('<div class="reco-block-title">Por qué encaja</div>')
-        parts.append('<div class="reco-chips">' + "".join(_chip(r, "ok") for r in reasons[:4]) + '</div>')
-
-    # Fortalezas, en lista corta.
-    strengths = [str(s) for s in (row.get("strengths") or [])]
-    if strengths:
-        parts.append('<div class="reco-block-title">Fortalezas</div>')
-        parts.append(
-            '<ul class="reco-list">'
-            + "".join(f'<li>{escape(s)}</li>' for s in strengths[:3])
-            + '</ul>'
-        )
-
-    # (El desglose del score no se muestra en las opciones 2 y 3: recarga la
-    # tarjeta y no aporta a la decisión rápida. Queda solo en la destacada.)
-
-    # Concesiones: lo que el destino no cumple del todo.
-    tradeoffs = [str(s) for s in (row.get("tradeoffs") or [])]
-    unmatched = _unmatched_prefs(row)
-    concessions = tradeoffs[:2]
-    if unmatched:
-        concessions.append("No cumple: " + ", ".join(unmatched))
-    if concessions:
-        parts.append('<div class="reco-block-title">A tener en cuenta</div>')
-        parts.append(
-            '<div class="reco-chips">'
-            + "".join(_chip(c, "warn") for c in concessions)
-            + '</div>'
-        )
+        # Fortalezas del modelo, como lista corta de "lugares"/motivos.
+        strengths = [str(s) for s in (row.get("strengths") or [])]
+        if strengths:
+            parts.append(
+                '<div class="reco-places">'
+                + "".join(f'<span class="reco-place-item">{escape(s)}</span>' for s in strengths[:2])
+                + '</div>'
+            )
+        parts.append('<button class="reco-cta" disabled>Ver opciones</button>')
 
     parts.append('</div>')  # cierra body
     parts.append('</div>')  # cierra card
@@ -413,18 +543,25 @@ def _card_html(row: dict, idx: int) -> str:
 # Orquestación
 # --------------------------------------------------------------------------
 
-def _render_alternatives(result: dict) -> None:
+def _render_alternatives(result: dict, compact: bool = False) -> None:
     ranking = result.get("ranking") or []
     cards = ranking[1:]
     if not cards:
         return
+    payload = st.session_state.get(STATE_PAYLOAD) or {}
     # Todas las tarjetas en UN SOLO bloque HTML (rejilla CSS), no en st.columns
     # de número variable: ese patrón rompía el DOM de React (removeChild).
-    grid = '<div class="alt-grid">' + "".join(
-        _card_html(row, position + 1) for position, row in enumerate(cards)
+    # En modo compacto (opciones 2 y 3 en la vista del asistente) se añade una
+    # clase modificadora a la rejilla y al título para reducir su tamaño; como
+    # todo va en el mismo bloque HTML, el escalado por CSS es fiable.
+    grid_cls = "alt-grid alt-grid--compact" if compact else "alt-grid"
+    title_cls = "alt-title alt-title--compact" if compact else "alt-title"
+    grid = f'<div class="{grid_cls}">' + "".join(
+        _card_html(row, position + 1, compact=compact, payload=payload)
+        for position, row in enumerate(cards)
     ) + "</div>"
     st.markdown(
-        '<div class="alt-title">Otras opciones que encajan</div>' + grid,
+        f'<div class="{title_cls}">Otras opciones que encajan</div>' + grid,
         unsafe_allow_html=True,
     )
 
@@ -440,6 +577,24 @@ def _render_alternatives(result: dict) -> None:
 def _render_error(result: dict) -> None:
     kind = result.get("error_kind")
     message = str(result.get("error") or "Error desconocido.")
+
+    # El motor a veces no consigue mapear tres destinos distintos a dbo.places
+    # (p. ej. filtros muy estrechos o poca cobertura). No es un fallo del
+    # sistema: se explica en lenguaje de usuario y se sugiere ampliar filtros.
+    low = message.lower()
+    if kind == "validation" and (
+        "tres destinos" in low
+        or "menos de tres" in low
+        or ("mapping" in low and "places" in low)
+    ):
+        st.info(
+            "El modelo no encontró tres destinos distintos que encajen con estos "
+            "filtros. Prueba a ampliar el rango (menos restricciones de región, "
+            "clima o popularidad) para obtener más opciones. Si aun así solo hay "
+            "una o dos, se mostrarán igualmente."
+        )
+        return
+
     if kind == "validation":
         st.warning(message)
     elif kind == "not_configured":
@@ -462,11 +617,7 @@ def _run(payload: dict, is_custom: bool) -> dict:
     """Llama a la API, guarda el resultado en sesión y registra el evento."""
     # El modelo corre en la nube con arranque en frío: la primera consulta del
     # día puede tardar. Se avisa para que la espera no parezca un cuelgue.
-    with st.spinner(
-        "Consultando el modelo de recomendaciones… "
-        "La primera consulta puede tardar unos segundos mientras el servicio "
-        "despierta."
-    ):
+    with st.spinner("Consultando el modelo…"):
         result = reco.fetch_recommendations(payload)
     st.session_state[STATE_KEY] = result
     st.session_state[STATE_PAYLOAD] = payload
@@ -491,24 +642,12 @@ def _run(payload: dict, is_custom: bool) -> dict:
 
 
 def _autorun_if_needed() -> None:
-    """Pide una recomendación por defecto la primera vez que se abre la vista."""
+    """Pide una recomendación la primera vez que se abre la vista, usando el
+    escenario de redistribución activo (por defecto, «Equilibrado»)."""
     if st.session_state.get(STATE_AUTORUN):
         return
     st.session_state[STATE_AUTORUN] = True
-    defaults = reco.default_request()
-    _run(
-        reco.build_payload(
-            month=defaults["month"],
-            trip_length_days=defaults["trip_length_days"],
-            interests=defaults["interests"],
-            temperature_preference=defaults["temperature_preference"],
-            minimum_sunny_days=defaults["minimum_sunny_days"],
-            maximum_precipitation_days=defaults["maximum_precipitation_days"],
-            popularity_target=defaults["popularity_target"],
-            accommodation_type=defaults["accommodation_type"],
-        ),
-        is_custom=False,
-    )
+    _run(_policy_to_payload(_current_policy_name()), is_custom=False)
 
 
 def _render_advanced_form() -> None:
@@ -518,27 +657,28 @@ def _render_advanced_form() -> None:
     petición real contra el motor y refresca el ranking mostrado debajo.
     """
     if not reco.is_configured():
-        with st.expander("🔍 Ajustar filtros a mano", expanded=False):
-            _render_error({
-                "error_kind": "not_configured",
-                "error": "El recomendador no está conectado.",
-            })
-            st.caption("Este es el contrato que se enviaría al motor:")
-            _render_form()
+        st.markdown("### Ajustar filtros")
+        _render_error({
+            "error_kind": "not_configured",
+            "error": "El recomendador no está conectado.",
+        })
+        st.caption("Este es el contrato que se enviaría al motor:")
+        _render_form()
         return
 
-    with st.expander("🔍 Ajustar filtros y recalcular el ranking", expanded=False):
-        st.caption(
-            "¿Prefieres afinar a mano? Ajusta mes, intereses y clima y el motor "
-            "vuelve a proponerte destinos."
-        )
+    # Una vez que ya hay una recomendación en pantalla, los filtros se colapsan
+    # para dar protagonismo al resultado. Mientras no hay resultado, el expander
+    # arranca abierto para invitar a ajustar la búsqueda.
+    result = st.session_state.get(STATE_KEY) or {}
+    has_recommendation = bool(result.get("ok") and (result.get("ranking") or []))
+    with st.expander("🔍 Ajustar filtros", expanded=not has_recommendation):
         new_payload = _render_form()
-        if new_payload is not None:
-            _run(new_payload, is_custom=True)
-            st.rerun()
+    if new_payload is not None:
+        _run(new_payload, is_custom=True)
+        st.rerun()
 
 
-def _render_featured(result: dict) -> None:
+def _render_featured(result: dict, compact: bool = False) -> None:
     """Recomendación destacada (hero) para la columna junto al chat."""
     ranking = result.get("ranking") or []
     if not (result.get("ok") and ranking):
@@ -550,26 +690,102 @@ def _render_featured(result: dict) -> None:
                 "destacada y sus alternativas."
             )
         return
-    if not st.session_state.get(STATE_CUSTOM):
+    if not st.session_state.get(STATE_CUSTOM) and not compact:
         st.caption(
             "Propuesta con preferencias por defecto. Ajusta los filtros de "
             "arriba para adaptarla a tu viaje."
         )
-    _render_hero(ranking[0], payload=st.session_state.get(STATE_PAYLOAD) or {})
+    _render_hero(
+        ranking[0],
+        payload=st.session_state.get(STATE_PAYLOAD) or {},
+        compact=compact,
+    )
+
+
+def render_assistant_chat_view() -> None:
+    """Vista «Asistente de viajes»: chat a la izquierda, recomendación a la derecha.
+
+    Disposición en dos columnas: el copiloto conversacional
+    (``render_recommender_chat``) a la izquierda y la recomendación destacada
+    (opción 1) a la derecha. Debajo, a lo ancho y en formato compacto, las
+    alternativas (opciones 2 y 3).
+    """
+    st.markdown(
+        '<div class="reco-header">'
+        '<div class="reco-kicker reco-kicker--title">TUI Travel Assistant</div>'
+        '<p class="reco-hero-lead">Cuéntale al asistente cómo te gusta viajar '
+        '—el ambiente, las fechas, con quién vas— y te irá orientando hacia '
+        'destinos que encajan contigo, con el motivo de cada elección.</p>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    # Precalcula una recomendación por defecto (autorun) para que el asistente
+    # pueda citar destinos verosímiles del último ranking en sesión.
+    if reco.is_configured():
+        _autorun_if_needed()
+
+    result = st.session_state.get(STATE_KEY) or {}
+    ranking = result.get("ranking") or []
+
+    # Layout de dos columnas: a la IZQUIERDA la conversación (chat) y a la
+    # DERECHA la recomendación destacada (opción 1). Las alternativas (opciones
+    # 2 y 3) van DEBAJO, a lo ancho y más compactas.
+    col_chat, col_reco = st.columns([1.35, 1], gap="large")
+
+    with col_chat:
+        render_recommender_chat()
+
+    with col_reco:
+        _render_featured(result, compact=True)
+
+    # Opciones 2 y 3, a lo ancho y en formato compacto (tarjetas más pequeñas
+    # para que la opción 1 siga siendo la protagonista).
+    if result.get("ok") and len(ranking) > 1:
+        _render_alternatives(result, compact=True)
+
+
+def _render_policy_selector() -> None:
+    """Selector de escenario de redistribución (Tradicional / Equilibrado /
+    Redistribuido). Al cambiar de escenario, relanza la recomendación contra el
+    modelo con el ``popularity_target`` e intereses de ese escenario."""
+    current = _current_policy_name()
+    with st.container(border=True):
+        cols = st.columns(3, gap="medium")
+        for idx, name in enumerate(POLICIES):
+            icon_url = SCENARIO_ICON_URLS.get(POLICY_ICON_BY_NAME[name], "")
+            cols[idx].markdown(
+                f'<div class="scenario-icon-wrap">'
+                f'<img class="scenario-icon" src="{escape(icon_url, quote=True)}" '
+                f'alt="{escape(name, quote=True)}"></div>',
+                unsafe_allow_html=True,
+            )
+            clicked = cols[idx].button(
+                name,
+                key=f"reco_policy_btn_{name}",
+                width="stretch",
+                type="primary" if current == name else "secondary",
+            )
+            if clicked and current != name:
+                st.session_state[STATE_POLICY] = name
+                _run(_policy_to_payload(name), is_custom=False)
+                st.rerun()
+
+
 
 
 def render_recommender() -> None:
     st.markdown(
         '<div class="reco-header">'
-        '<div class="reco-kicker">España</div>'
-        '<h2 class="reco-hero-title"><em>Recomendador</em> de viajes '
-        'por España</h2>'
-        '<p class="reco-hero-lead">Cuéntale al asistente cómo te gusta viajar '
-        '—el ambiente, las fechas, con quién vas— y te irá enseñando destinos '
-        'que encajan contigo, con el motivo de cada elección.</p>'
+        '<div class="reco-kicker">TUI Travel Assistant</div>'
+        '<p class="reco-hero-lead">Elige un escenario de reparto de la demanda '
+        '—o ajusta tus filtros— y el motor te propone los destinos que mejor '
+        'encajan, con el motivo de cada elección.</p>'
         '</div>',
         unsafe_allow_html=True,
     )
+
+    _render_policy_selector()
 
     # Precalcula una recomendación por defecto (autorun) para que la vista tenga
     # contenido en cuanto se abre, sin pantallas vacías. Sin API no se lanza el
@@ -580,26 +796,9 @@ def render_recommender() -> None:
     result = st.session_state.get(STATE_KEY) or {}
     ranking = result.get("ranking") or []
 
-    # Fila superior: dos columnas a la vista, sin scroll largo.
-    #   · Izquierda: el copiloto de viaje (chat maqueta).
-    #   · Derecha: la recomendación destacada del modelo + filtros.
-    # No se envuelven los widgets en <div> propios: hacerlo rompe el árbol DOM
-    # de React que gestiona Streamlit (error removeChild). El estilo compacto se
-    # aplica por clase directamente en el HTML de cada bloque.
-    # Disposición VERTICAL: primero el copiloto de viaje (chat), y DEBAJO toda
-    # la sección "Recomendación del modelo" (filtros + destacada + alternativas)
-    # a todo el ancho.
-    render_recommender_chat()
-
-    # Separador visual entre la conversación (arriba) y la recomendación del
-    # modelo (abajo), para que el paso de una zona a otra sea claro.
-    st.markdown('<div class="reco-section-sep"></div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="reco-results-title">Recomendación del modelo</div>'
-        '<div class="reco-results-sub">La propuesta destacada del motor para tu '
-        'perfil, con dos alternativas que también encajan.</div>',
-        unsafe_allow_html=True,
-    )
+    # Filtros (fijos) + destacada + alternativas. El chat conversacional vive en
+    # la vista «Asistente de viajes». No se envuelven los widgets en <div>
+    # propios: hacerlo rompe el árbol DOM de React de Streamlit (removeChild).
     _render_advanced_form()
     _render_featured(result)
     if result.get("ok") and len(ranking) > 1:

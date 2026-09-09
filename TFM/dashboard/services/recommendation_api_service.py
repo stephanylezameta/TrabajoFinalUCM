@@ -1,32 +1,5 @@
 from __future__ import annotations
 
-"""Cliente del recomendador externo de destinos de España (Azure Functions).
-
-Este servicio consume un motor de recomendación independiente del TDRS. No lo
-sustituye: el TDRS ranquea el catálogo internacional de TUI a partir del SQLite
-local, mientras que esta API ranquea municipios españoles combinando catálogo
-turístico, OpenStreetMap, señales de YouTube y clima histórico de AEMET.
-
-El motor en producción es ``tui_hybrid_mapped`` (modelo entrenado): mapea el
-ranking del modelo a municipios de ``dbo.places``. El contrato de respuesta es
-compatible con el motor heurístico anterior, así que el cliente sirve a ambos
-sin cambios: solo varían ``engine`` y algún ``reason_code``.
-
-Configuración por entorno (o ``.streamlit/secrets.toml``):
-
-- ``TUI_RECO_API_BASE`` + ``TUI_RECO_API_KEY``: opción recomendada. La clave
-  viaja en la cabecera ``x-functions-key`` y no queda en el querystring.
-- ``TUI_RECO_API_URL``: alternativa con la URL completa, incluido ``?code=``.
-- ``TUI_RECO_API_TIMEOUT``: segundos de espera (30 por defecto, la Function
-  tiene arranque en frío).
-
-El módulo nunca lanza excepciones hacia la interfaz: devuelve siempre un
-diccionario con ``ok`` y, si algo falla, un ``error`` legible. Igual que el
-resto de la app, degrada en lugar de romper.
-
-El contrato aquí declarado se ha verificado contra la API real. La validación se
-replica en cliente para no gastar una llamada de red en un error evitable.
-"""
 
 import json
 import os
@@ -93,8 +66,10 @@ POPULARITY_RANGE = (0.0, 1.0)
 SUNNY_DAYS_RANGE = (0, 31)
 PRECIPITATION_DAYS_RANGE = (0, 31)
 
-# La API devuelve siempre tres destinos: ignora top_n, limit y max_results.
 RESULTS_PER_CALL = 3
+# Mínimo de destinos con el que la vista se considera utilizable. Con 1 basta
+# para pintar la recomendación destacada.
+MIN_RESULTS_USABLE = 1
 
 MONTH_NAMES = (
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",

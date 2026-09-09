@@ -137,7 +137,7 @@ st.sidebar.markdown("""
 <div style="text-align:center;padding:12px 0 16px;border-bottom:1px solid rgba(255,255,255,0.1);margin-bottom:16px">
     <div style="display:inline-flex;align-items:center;gap:8px">
         <div style="width:36px;height:36px;background:#d40e14;border-radius:8px;display:flex;align-items:center;justify-content:center;color:white;font-weight:900;font-size:11px">TUI</div>
-        <span style="font-size:14px;font-weight:800;color:white">Redistribucion TDRS</span>
+        <span style="font-size:14px;font-weight:800;color:white">TUI Travel Assistant</span>
     </div>
 </div>
 """, unsafe_allow_html=True)

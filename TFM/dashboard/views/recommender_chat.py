@@ -1,33 +1,5 @@
 from __future__ import annotations
 
-"""Maqueta visual del «Asistente de viaje» del Recomendador España.
-
-Esto es SOLO una vista previa (demo). No llama a ninguna API real: ni al
-endpoint ``/chat`` del backend ``api/app.py`` (Claude + tool-use) ni a la
-Function de Azure del modo filtros. Todo se simula en cliente para enseñar
-cómo se vería la conversación.
-
-El objetivo es mostrar el producto: burbujas de chat con estética TUI y
-tarjetas de destino compactas embebidas en la respuesta del asistente. Para
-que las tarjetas se vean con datos verosímiles, se reutiliza el último
-resultado del modo filtros si está en ``st.session_state``; si no lo hay, se
-usa un pequeño catálogo de ejemplo.
-
-GANCHO PARA CONECTAR EL /chat REAL (más adelante):
-    Cuando se quiera que el asistente responda de verdad, sustituir la llamada
-    a ``_simular_respuesta_asistente(...)`` dentro de ``render_recommender_chat``
-    por una petición al backend. El contrato de ``api/app.py`` es:
-
-        POST {BACKEND_URL}/chat
-        body: {"mensaje": str, "historial": list[dict], "session_id": str | None}
-        resp: {"respuesta": str, "historial": list[dict], "session_id": str}
-
-    El ``historial`` que devuelve el backend ya viene en el formato de mensajes
-    de Anthropic; para pintarlo en Streamlit basta con quedarse con ``respuesta``
-    (texto del asistente) y, opcionalmente, mapear los destinos citados a
-    tarjetas con ``_tarjetas_desde_session_state()``. No añadir dependencia de
-    ``ANTHROPIC_API_KEY`` en el dashboard: la clave vive solo en el backend.
-"""
 
 from html import escape
 

@@ -96,7 +96,7 @@ span[class*="material-symbols"], span[class*="material-icons"] {
     background-color:#FFFFFF;
     background-image:none;
 }
-/* Fondo principal blanco, limpio. */
+/* Fondo principal blanco (el degradado celeste vive en el sidebar). */
 [data-testid="stAppViewContainer"] > .main .block-container {
     position:relative;
     background:#FFFFFF;
@@ -119,7 +119,7 @@ p,label,span,div { text-rendering:optimizeLegibility; }
 
 /* SIDEBAR */
 [data-testid="stSidebar"] {
-    background:linear-gradient(180deg,rgba(224,239,248,.56) 0%,rgba(232,244,251,.52) 100%);
+    background:linear-gradient(180deg,#6EC1F0 0%,#AEE0F7 45%,#DCF0FB 100%);
     border-right:1px solid rgba(17,24,39,.08);
     box-shadow:10px 0 28px rgba(17,24,39,.035);
     backdrop-filter:blur(6px);
@@ -128,10 +128,10 @@ p,label,span,div { text-rendering:optimizeLegibility; }
 [data-testid="stSidebar"] > div:first-child { padding-top:1rem; }
 [data-testid="stSidebar"] .block-container { padding-top:.8rem; }
 .tui-brand { display:flex; gap:.78rem; align-items:center; padding:.15rem .05rem .9rem .05rem; animation:fadeSlide .45s ease both; }
-.tui-logo-wrap { display:flex; align-items:center; justify-content:center; padding:.42rem .5rem; border-radius:20px; background:rgba(255,255,255,.62); border:1px solid rgba(17,24,39,.08); box-shadow:var(--shadow-soft); backdrop-filter:blur(5px); }
+.tui-logo-wrap { display:flex; align-items:center; justify-content:center; padding:.1rem .1rem; border-radius:0; background:transparent; border:none; box-shadow:none; }
 .tui-logo-img { width:130px; height:auto; display:block; }
-.tui-brand-title { font-size:.98rem; color:var(--tui-dark); font-weight:900; line-height:1.05; }
-.tui-brand-sub { color:var(--muted); font-size:.68rem; font-weight:750; margin-top:.17rem; }
+.tui-brand-title { font-size:.98rem; color:rgb(27 17 92); font-weight:900; line-height:1.05; }
+.tui-brand-sub { color:rgb(27 17 92); font-size:.68rem; font-weight:750; margin-top:.17rem; }
 .sidebar-status { border:1px solid rgba(17,24,39,.09); border-radius:16px; padding:.72rem .8rem; margin:.15rem 0 .85rem 0; background:linear-gradient(180deg,rgba(234,244,251,.52),rgba(247,251,253,.48)); box-shadow:var(--shadow-soft); backdrop-filter:blur(5px); }
 .sidebar-status-row { display:flex; align-items:center; gap:.45rem; color:var(--tui-dark); font-size:.79rem; font-weight:900; }
 .status-dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
@@ -142,11 +142,15 @@ p,label,span,div { text-rendering:optimizeLegibility; }
 
 /* radio Vista / Escenario */
 [data-testid="stSidebar"] div[data-testid="stRadio"] > label { color:var(--tui-dark)!important; font-weight:900; font-size:.78rem; margin-bottom:.2rem; }
-[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] { gap:.04rem; }
+[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] { gap:.35rem; }
 [data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] label {
-    padding:.26rem .25rem; border-radius:10px; transition:.18s ease; font-weight:700;
+    padding:.6rem .4rem; border-radius:12px; transition:.18s ease; font-weight:800;
 }
-[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] label:hover { background:rgba(17,24,39,.05); }
+[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] label,
+[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] label p {
+    color:rgb(27 17 92 / var(--tw-bg-opacity, 1))!important; font-size:1.08rem!important;
+}
+[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] label:hover { background:rgba(27,17,92,.06); }
 
 /* expanders de filtros */
 [data-testid="stSidebar"] [data-testid="stExpander"] { background:linear-gradient(180deg,rgba(234,244,251,.50),rgba(247,251,253,.46)); border:1px solid rgba(17,24,39,.09); border-radius:16px; box-shadow:var(--shadow-soft); margin:.42rem 0; overflow:hidden; backdrop-filter:blur(5px); }
@@ -215,6 +219,15 @@ hr { border-color:rgba(17,24,39,.10)!important; }
 .chat-main{margin:.35rem 0 .75rem}.chat-main-title{font-size:.96rem;font-weight:900;color:var(--tui-dark);margin-bottom:.15rem}.chat-main-sub{font-size:.74rem;color:var(--muted);margin-bottom:.45rem}
 .map-note{font-size:.70rem;color:var(--muted);margin:.25rem 0 .6rem}.map-kpi{font-weight:900;color:var(--tui-dark)}
 .selector-title{font-size:.98rem;font-weight:900;color:var(--tui-dark);margin-bottom:.15rem}.selector-sub{font-size:.74rem;color:var(--muted);margin-bottom:.55rem}.selector-active{font-size:.72rem;color:var(--muted);margin-top:.35rem}.selector-active strong{color:var(--tui-dark)}
+/* Aparición fluida y simultánea de los escenarios (evita la sensación de que
+   primero carga uno y luego el resto). El icono entra con un leve zoom y el
+   texto activo con un fundido suave; ambos usan la misma curva de easing. */
+.scenario-icon-wrap{animation:scenPop .42s cubic-bezier(.16,1,.3,1) both}
+.scenario-icon{transition:transform .25s cubic-bezier(.16,1,.3,1)}
+.scenario-icon-wrap:hover .scenario-icon{transform:scale(1.08)}
+.selector-active{animation:scenFade .5s ease both}
+@keyframes scenPop{from{opacity:0;transform:scale(.82) translateY(4px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes scenFade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 
 /* ==========================================================================
    Recomendador España (API). Diseño "portada de viaje": una recomendación
@@ -228,9 +241,13 @@ hr { border-color:rgba(17,24,39,.10)!important; }
 .reco-kicker{display:inline-flex;align-items:center;gap:.5rem;font-size:.66rem;font-weight:700;
   letter-spacing:.16em;text-transform:uppercase;color:var(--tui-red);margin-bottom:.55rem}
 .reco-kicker:before{content:"";width:22px;height:2px;border-radius:2px;background:var(--tui-red)}
-.reco-hero-title{font-size:2.55rem;font-weight:700;color:var(--tui-dark);line-height:1.06;letter-spacing:-.035em;
+/* Variante grande: cuando el kicker actúa como título de la vista. */
+.reco-kicker--title{font-size:1.9rem;letter-spacing:-.01em;text-transform:none;
+  color:rgb(27 17 92 / var(--tw-bg-opacity, 1));margin-bottom:.4rem}
+.reco-kicker--title:before{width:6px;height:26px;border-radius:3px}
+.reco-hero-title{font-size:3.55rem;font-weight:700;color:rgb(27 17 92 / var(--tw-bg-opacity, 1));line-height:1.06;letter-spacing:-.035em;
   margin:0 0 .55rem}
-.reco-hero-title em{font-style:normal;color:var(--tui-red)}
+.reco-hero-title em{font-style:normal;color:rgb(27 17 92 / var(--tw-bg-opacity, 1))}
 .reco-hero-lead{font-size:1.05rem;color:var(--muted);line-height:1.55;font-weight:400;margin:0;max-width:620px}
 
 /* --- Oferta destacada (opción 1): tarjeta comercial estilo TUI ---
@@ -240,33 +257,39 @@ hr { border-color:rgba(17,24,39,.10)!important; }
   border:1px solid rgba(17,24,39,.07);
   box-shadow:0 4px 16px rgba(17,24,39,.05),0 34px 70px -28px rgba(17,24,39,.36);
   animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both}
-/* Banner: la imagen llena todo el ancho, sin franjas, esquinas superiores redondeadas. */
-.offer-media{position:relative;width:100%;height:380px;background-size:cover;background-position:center 42%;
-  border-radius:24px 24px 0 0;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
+/* Banner: imagen a todo el ancho, esquinas superiores redondeadas. El título ya
+   NO va montado sobre la imagen; baja al cuerpo en azul, como las ofertas TUI. */
+.offer-media{position:relative;width:100%;height:220px;background-size:cover;background-position:center 42%;
+  border-radius:24px 24px 0 0;overflow:hidden}
 .offer-media--empty{background:linear-gradient(135deg,#1B2432,#3A4657)}
-.offer-media-veil{position:absolute;inset:0;z-index:1;pointer-events:none;
-  background:linear-gradient(180deg,rgba(17,24,39,0) 40%,rgba(17,24,39,.34) 66%,rgba(17,24,39,.86) 100%)}
-.offer-flag{position:absolute;top:1.2rem;left:1.2rem;z-index:2;display:inline-flex;align-items:center;gap:.4rem;
-  font-size:.66rem;font-weight:700;letter-spacing:.04em;color:#fff;background:var(--tui-red);
-  padding:.42rem .85rem;border-radius:999px;box-shadow:0 8px 20px rgba(212,14,20,.42)}
-.offer-media-caption{position:relative;z-index:2;padding:1.7rem 1.9rem}
-.offer-name{font-size:2.9rem;font-weight:700;line-height:1;letter-spacing:-.04em;margin:0;color:#fff;
-  text-shadow:0 5px 30px rgba(0,0,0,.55)}
-.offer-place{font-size:.92rem;color:rgba(255,255,255,.94);margin-top:.5rem;font-weight:500;
-  display:flex;align-items:center;gap:.3rem;text-shadow:0 2px 14px rgba(0,0,0,.45)}
-/* Panel claro */
-.offer-body{padding:1.6rem 1.9rem 1.8rem;display:flex;flex-direction:column}
+/* Badge «Oferta TUI»: pastilla blanca con texto rojo, arriba-izquierda. */
+.offer-flag{position:absolute;top:1.1rem;left:1.1rem;z-index:2;display:inline-flex;align-items:center;
+  font-size:.72rem;font-weight:800;letter-spacing:.01em;color:var(--tui-red);background:#fff;
+  padding:.4rem .9rem;border-radius:999px;box-shadow:0 8px 20px rgba(17,24,39,.18)}
+/* Panel claro: título azul, duración/precio, motivo, lugares y datos. */
+.offer-body{padding:1.1rem 1.3rem 1.25rem;display:flex;flex-direction:column}
+.offer-name{font-size:1.5rem;font-weight:400;line-height:1.12;letter-spacing:-.01em;margin:0;
+  color:rgb(27 17 92)}
+.offer-place{font-size:.86rem;color:var(--muted);margin-top:.35rem;font-weight:400;
+  display:flex;align-items:center;gap:.3rem}
+.offer-trip{font-size:1.02rem;color:var(--tui-dark);font-weight:700;margin-top:.7rem}
+.offer-trip strong{font-weight:900}
+.offer-price-note{font-size:.66rem;color:var(--muted);font-weight:600;margin-top:.15rem;font-style:italic}
 .offer-typology{align-self:flex-start;font-size:.62rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
-  border-radius:999px;padding:.26rem .68rem;background:var(--tui-red-soft);color:var(--tui-red-deep)}
-.offer-why{font-size:1.14rem;line-height:1.5;color:var(--tui-dark);font-weight:500;margin:.9rem 0 0;max-width:760px}
-.offer-chips{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:1.1rem}
-.offer-chip{font-size:.72rem;font-weight:600;border-radius:999px;padding:.34rem .78rem;
-  background:#F1F4F8;color:#475467;border:1px solid rgba(17,24,39,.06)}
-.offer-chip.warn{background:#FFF3D6;color:#8D5D00;border-color:rgba(141,93,0,.16)}
-.offer-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:.7rem;margin-top:1.4rem;
-  padding-top:1.35rem;border-top:1px solid rgba(17,24,39,.08)}
+  border-radius:999px;padding:.26rem .68rem;background:var(--tui-red-soft);color:var(--tui-red-deep);margin-top:.9rem}
+.offer-why{font-size:1.05rem;line-height:1.5;color:var(--tui-dark);font-weight:400;margin:.8rem 0 0;max-width:760px}
+/* Lista de "lugares"/fortalezas del modelo, en azul, estilo itinerario TUI. */
+.offer-places{margin-top:.7rem;font-size:.86rem;color:rgb(27 17 92);font-weight:400;line-height:1.5}
+.offer-place-item:not(:last-child):after{content:", ";color:var(--muted)}
+.offer-tradeoff{font-size:.78rem;color:#8D5D00;background:#FFF3D6;border:1px solid rgba(141,93,0,.16);
+  border-radius:10px;padding:.35rem .6rem;margin-top:.7rem;align-self:flex-start}
+/* CTA decorativo estilo TUI (deshabilitado: es demostración). */
+.offer-cta{margin-top:1.1rem;align-self:flex-start;font-size:.82rem;font-weight:800;color:var(--tui-red);
+  background:#fff;border:1px solid var(--tui-red);border-radius:999px;padding:.6rem 1.5rem;cursor:default}
+.offer-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:.7rem;margin-top:1.2rem;
+  padding-top:1.15rem;border-top:1px solid rgba(17,24,39,.08)}
 .offer-fact{background:#F7F9FB;border:1px solid rgba(17,24,39,.05);border-radius:16px;padding:.85rem .6rem;text-align:center}
-.offer-fact-value{font-size:1.55rem;font-weight:700;color:var(--tui-dark);line-height:1;letter-spacing:-.02em}
+.offer-fact-value{font-size:1.55rem;font-weight:500;color:var(--tui-dark);line-height:1;letter-spacing:-.02em}
 .offer-fact-label{font-size:.58rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
   color:var(--muted);margin-top:.35rem}
 
@@ -277,6 +300,22 @@ hr { border-color:rgba(17,24,39,.10)!important; }
 /* Rejilla de alternativas: un único bloque CSS grid (no st.columns) para no
    romper el DOM de React con un número variable de columnas. */
 .alt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;align-items:stretch}
+
+/* --- Modo compacto de las alternativas (opciones 2 y 3 en la vista del
+   asistente): tarjetas más pequeñas y contenido reducido, para que la opción 1
+   siga siendo la protagonista. Las clases modificadoras las emite el mismo
+   bloque HTML que la rejilla, así que el escalado por descendencia es fiable. */
+.alt-title--compact{font-size:1rem;margin:1.1rem 0 .7rem}
+.alt-grid--compact{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.7rem}
+.alt-grid--compact .reco-photo-wrap{height:110px}
+.alt-grid--compact .reco-name{font-size:1rem}
+.alt-grid--compact .reco-place{font-size:.68rem}
+/* Cuerpo muy contenido: solo tipología + los tres datos, sin bloques extra. */
+.alt-grid--compact .reco-body{padding:.7rem .85rem .8rem;gap:.5rem}
+.alt-grid--compact .reco-typology{font-size:.55rem;padding:.18rem .48rem}
+.alt-grid--compact .reco-facts{gap:.3rem}
+.alt-grid--compact .reco-fact-value{font-size:1rem}
+.alt-grid--compact .reco-fact-label{font-size:.5rem}
 .reco-card{position:relative;overflow:hidden;border-radius:22px;background:#fff;padding:0;
   border:1px solid rgba(17,24,39,.07);
   box-shadow:0 4px 14px rgba(17,24,39,.04),0 16px 36px -16px rgba(17,24,39,.16);
@@ -291,21 +330,22 @@ hr { border-color:rgba(17,24,39,.10)!important; }
 .reco-photo{width:100%;height:100%;object-fit:cover;object-position:center center;display:block;
   margin:0;background:#EEF2F6;transition:transform .55s cubic-bezier(.16,1,.3,1)}
 .reco-card:hover .reco-photo{transform:scale(1.08)}
-.reco-photo-veil{position:absolute;inset:0;pointer-events:none;
-  background:linear-gradient(180deg,rgba(17,24,39,0) 34%,rgba(17,24,39,.72) 100%)}
 .reco-photo-fallback{width:100%;height:100%;display:flex;align-items:center;justify-content:center;
   background:linear-gradient(135deg,#243244,#3B4A5E);color:#fff;font-weight:700;font-size:1.3rem;letter-spacing:.02em}
-.reco-rank-badge{position:absolute;top:.9rem;left:.9rem;z-index:2;font-size:.58rem;font-weight:700;
-  letter-spacing:.08em;text-transform:uppercase;color:var(--tui-dark);background:rgba(255,255,255,.95);
-  border-radius:999px;padding:.3rem .68rem;box-shadow:0 6px 16px rgba(17,24,39,.22);backdrop-filter:blur(4px)}
-/* Nombre y lugar montados sobre la foto, estilo tarjeta de viaje. */
-.reco-photo-caption{position:absolute;left:1.1rem;right:1.1rem;bottom:1rem;z-index:2;line-height:1.1}
-.reco-name{font-size:1.5rem;font-weight:700;color:#fff;line-height:1.06;letter-spacing:-.025em;
-  text-shadow:0 3px 18px rgba(0,0,0,.5)}
-.reco-place{font-size:.76rem;color:rgba(255,255,255,.92);font-weight:500;margin-top:.28rem;
+/* Badge «Oferta TUI»: pastilla blanca con texto rojo, sobre la imagen. */
+.reco-flag{position:absolute;top:.8rem;left:.8rem;z-index:2;font-size:.64rem;font-weight:800;
+  color:var(--tui-red);background:#fff;border-radius:999px;padding:.3rem .7rem;
+  box-shadow:0 6px 16px rgba(17,24,39,.18)}
+/* Cuerpo: título azul debajo de la imagen (estilo oferta TUI). */
+.reco-body{padding:1.1rem 1.2rem 1.25rem;display:flex;flex-direction:column;gap:.5rem;flex:1}
+.reco-name{font-size:1.25rem;font-weight:700;color:rgb(27 17 92);line-height:1.1;letter-spacing:-.015em}
+.reco-place{font-size:.74rem;color:var(--muted);font-weight:500;
   display:inline-flex;align-items:center;gap:.28rem}
-/* Cuerpo: todo visible, sin desplegables, para comparar de un vistazo. */
-.reco-body{padding:1.2rem 1.3rem 1.35rem;display:flex;flex-direction:column;gap:.78rem;flex:1}
+.reco-trip{font-size:.9rem;color:var(--tui-dark);font-weight:700;margin-top:.1rem}
+.reco-places{font-size:.78rem;color:rgb(27 17 92);font-weight:600;line-height:1.45}
+.reco-place-item:not(:last-child):after{content:", ";color:var(--muted)}
+.reco-cta{margin-top:.5rem;align-self:flex-start;font-size:.74rem;font-weight:800;color:var(--tui-red);
+  background:#fff;border:1px solid var(--tui-red);border-radius:999px;padding:.42rem 1.1rem;cursor:default}
 .reco-typology{align-self:flex-start;font-size:.6rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
   border-radius:999px;padding:.24rem .62rem;background:var(--tui-red-soft);color:var(--tui-red-deep)}
 .reco-headline{font-size:.86rem;color:#5B6472;line-height:1.5;font-weight:400;margin:0}
@@ -463,38 +503,6 @@ hr { border-color:rgba(17,24,39,.10)!important; }
 }
 
 /* ==========================================================================
-   Panel de redistribución (TDRS): banda de política + etiqueta de popularidad
-   ========================================================================== */
-.redist-band{margin:.9rem 0 1.1rem;padding:1.1rem 1.25rem;border-radius:20px;
-  background:linear-gradient(135deg,#FFFFFF 0%,#FBF4F4 100%);
-  border:1px solid rgba(212,14,20,.16);box-shadow:var(--shadow-soft)}
-.redist-head{display:flex;flex-direction:column;gap:.15rem;margin-bottom:.85rem}
-.redist-stance{font-size:1.02rem;font-weight:900;color:var(--tui-red);letter-spacing:-.01em}
-.redist-note{font-size:.76rem;color:var(--muted);line-height:1.4}
-.redist-gauge{margin:.15rem 0 .95rem}
-.redist-gauge-track{position:relative;height:9px;border-radius:999px;
-  background:linear-gradient(90deg,#19865E 0%,#E7C24B 50%,var(--tui-red) 100%);opacity:.28}
-.redist-gauge-fill{position:absolute;left:0;top:0;height:100%;border-radius:999px;
-  background:linear-gradient(90deg,#19865E 0%,#E7C24B 50%,var(--tui-red) 100%)}
-.redist-gauge-knob{position:absolute;top:50%;width:18px;height:18px;border-radius:50%;
-  background:#fff;border:3px solid var(--tui-red);transform:translate(-50%,-50%);
-  box-shadow:0 4px 12px rgba(212,14,20,.4)}
-.redist-gauge-legend{display:flex;justify-content:space-between;margin-top:.5rem;
-  font-size:.62rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
-.redist-gauge-legend span:nth-child(2){color:var(--tui-dark)}
-.redist-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:.7rem}
-.redist-stat{background:rgba(255,255,255,.7);border:1px solid rgba(17,24,39,.06);
-  border-radius:14px;padding:.65rem .55rem;text-align:center}
-.redist-stat-value{font-size:1.4rem;font-weight:900;color:var(--tui-dark);line-height:1}
-.redist-stat-label{font-size:.56rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
-  color:var(--muted);margin-top:.32rem}
-/* Etiqueta que reemplaza al precio en el podio: popularidad/tipología. */
-.redist-poptag{font-size:.66rem!important;font-weight:700!important;color:var(--tui-red)!important;
-  text-transform:uppercase;letter-spacing:.04em;line-height:1.25!important;
-  max-width:9rem;white-space:normal!important;text-align:right}
-@media(max-width:900px){.redist-stats{grid-template-columns:1fr}}
-
-/* ==========================================================================
    España — Copiloto de viaje al LADO de la recomendación (dos columnas).
    Izquierda: la ventana de chat (caja definida). Derecha: los resultados del
    modelo, visibles sin scroll largo. El formulario de filtros vive en un
@@ -520,7 +528,24 @@ hr { border-color:rgba(17,24,39,.10)!important; }
 /* La sección "Recomendación del modelo" va DEBAJO del chat, a todo el ancho.
    El hero destacado se compacta ligeramente para no ocupar de más. */
 .reco-results-title + div .offer{margin:.15rem 0 1rem}
-.reco-results-title + div .offer-media{height:260px}
+.reco-results-title + div .offer-media{height:200px}
+
+/* --- Hero compacto (columna derecha de la vista del asistente): imagen más
+   baja y contenido apretado para que quepa la opción 1 completa y asomen las
+   opciones 2 y 3 sin scroll largo. --- */
+.offer--compact{margin:.1rem 0 1rem;border-radius:18px}
+.offer--compact .offer-media{height:190px;border-radius:18px 18px 0 0}
+.offer--compact .offer-media-caption{padding:1rem 1.1rem}
+.offer--compact .offer-name{font-size:1.7rem}
+.offer--compact .offer-place{font-size:.78rem;margin-top:.3rem}
+.offer--compact .offer-body{padding:1rem 1.1rem 1.15rem}
+.offer--compact .offer-why{font-size:.92rem;line-height:1.45;margin:.6rem 0 0}
+.offer--compact .offer-chips{margin-top:.7rem;gap:.35rem}
+.offer--compact .offer-chip{font-size:.64rem;padding:.26rem .6rem}
+.offer--compact .offer-facts{margin-top:.9rem;padding-top:.9rem;gap:.5rem;
+  grid-template-columns:repeat(auto-fit,minmax(78px,1fr))}
+.offer--compact .offer-fact{padding:.6rem .45rem}
+.offer--compact .offer-fact-value{font-size:1.2rem}
 
 </style>
 """

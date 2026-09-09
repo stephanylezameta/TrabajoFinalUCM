@@ -1,28 +1,21 @@
 from __future__ import annotations
 
-"""Punto de entrada de TUI Data Intelligence."""
+"""Cargando..."""
 
 import os
-from html import escape
 
 import streamlit as st
 
 st.set_page_config(
     page_title="TUI Data Intelligence",
-    page_icon="✈️",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 
 def _bridge_secrets_to_env() -> None:
-    """Publica los secretos de Streamlit como variables de entorno.
-
-    Los servicios se configuran con ``os.getenv`` para poder usarse sin
-    Streamlit (tests, notebook, scripts). En Streamlit Community Cloud la
-    configuración llega por ``st.secrets``, así que aquí se tiende el puente.
-    Las variables de entorno ya definidas tienen prioridad.
-    """
+   
     keys = (
         "TUI_RECO_API_URL",
         "TUI_RECO_API_BASE",
@@ -56,24 +49,21 @@ _bridge_secrets_to_env()
 
 from components.assets import LOGO_DATA_URI  # noqa: E402
 from components.styles import inject_styles  # noqa: E402
-from components.ui import fmt_ts, status_copy  # noqa: E402
 from database.init_db import init_db  # noqa: E402
-from services.alert_service import get_system_status  # noqa: E402
 from services.data_control_service import (  # noqa: E402
     bootstrap_missing_sources,
     seed_data_sources,
 )
 from services.tracking_service import create_session, register_event  # noqa: E402
 from views.control_web import render_control_web  # noqa: E402
-from views.recommender import render_recommender  # noqa: E402
-from views.tdrs import render_tdrs, render_tdrs_sidebar_controls  # noqa: E402
+from views.recommender import render_assistant_chat_view, render_recommender  # noqa: E402
 
 inject_styles()
 
-NAV_TDRS = "Panel de redistribución"
-NAV_RECO = "Recomendador"
-NAV_CONTROL = "Control Web"
-NAV = [NAV_TDRS, NAV_RECO, NAV_CONTROL]
+NAV_ASSISTANT = "TUI Travel Assistant"
+NAV_RECO = "Explora"
+NAV_CONTROL = "Monitor performance "
+NAV = [NAV_ASSISTANT, NAV_RECO, NAV_CONTROL]
 
 
 @st.cache_resource(show_spinner=False)
@@ -94,21 +84,7 @@ def render_sidebar_brand() -> None:
         f"""
         <div class="tui-brand">
           <div class="tui-logo-wrap"><img class="tui-logo-img" src="{LOGO_DATA_URI}" alt="TUI logo"></div>
-          <div><div class="tui-brand-title">Data Intelligence</div><div class="tui-brand-sub">Madrid UI · Operations</div></div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
-def render_sidebar_status() -> None:
-    system = get_system_status()
-    status_text, status_css = status_copy(system["status"])
-    st.sidebar.markdown(
-        f"""
-        <div class="sidebar-status">
-          <div class="sidebar-status-row"><span class="status-dot dot-{status_css}"></span>{escape(status_text)}</div>
-          <div class="sidebar-time">Última actualización · {escape(fmt_ts(system.get('last_update')))}</div>
+          <div><div class="tui-brand-title">TUI Travel</div><div class="tui-brand-sub">Assistant</div></div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -123,16 +99,9 @@ def main() -> None:
         st.session_state.page_views = set()
 
     render_sidebar_brand()
-    view = st.sidebar.radio("Vista", NAV, index=0, key="sidebar_view")
-
-    # El sidebar del simulador solo existe dentro de su propia vista.
-    tdrs_controls = None
-    if view == NAV_TDRS:
-        if "tdrs_policy" not in st.session_state:
-            st.session_state.tdrs_policy = "Equilibrado"
-        tdrs_controls = render_tdrs_sidebar_controls()
-
-    render_sidebar_status()
+    view = st.sidebar.radio(
+        "Vista", NAV, index=0, key="sidebar_view", label_visibility="collapsed"
+    )
 
     # La app se instrumenta a sí misma: cada vista visitada queda registrada.
     if view not in st.session_state.page_views:
@@ -144,8 +113,8 @@ def main() -> None:
         )
         st.session_state.page_views.add(view)
 
-    if view == NAV_TDRS:
-        render_tdrs(tdrs_controls)
+    if view == NAV_ASSISTANT:
+        render_assistant_chat_view()
     elif view == NAV_RECO:
         render_recommender()
     else:
