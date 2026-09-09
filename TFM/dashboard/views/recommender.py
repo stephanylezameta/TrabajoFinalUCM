@@ -8,12 +8,22 @@ from components.assets import get_local_destination_image
 from services import recommendation_api_service as reco
 from services.destination_image_service import resolve_destination_image
 from services.tracking_service import register_event
+from views.recommender_chat import render_recommender_chat
 
-VIEW_LABEL = "Recomendador España"
+# Etiqueta interna para el tracking. La vista se llama «España» en el menú, pero
+# el evento mantiene un identificador descriptivo y estable.
+VIEW_LABEL = "España"
 STATE_KEY = "reco_result"
 STATE_PAYLOAD = "reco_payload"
 STATE_AUTORUN = "reco_autorun_done"
 STATE_CUSTOM = "reco_is_custom"
+
+# El asistente de viaje está INTEGRADO en la vista como un copiloto único, al
+# estilo de los agentes de viaje conversacionales (Layla, Mindtrip): la
+# conversación es la columna protagonista y las tarjetas de destino se muestran
+# EMBEBIDAS dentro de la respuesta del asistente (ver ``recommender_chat.py``).
+# El formulario de filtros (modo real contra Azure) queda como búsqueda avanzada
+# secundaria, en un expander discreto.
 
 
 # --------------------------------------------------------------------------
@@ -226,12 +236,10 @@ def _hero_facts(row: dict) -> list[tuple[str, str]]:
     climate = row.get("climate_profile") or {}
     offers = row.get("what_it_offers") or {}
     popularity = row.get("popularity_profile") or {}
-    confidence = row.get("confidence") or {}
     facts = [
         (_fmt(climate.get("sunny_days"), decimals=0), "Días de sol"),
         (_fmt(climate.get("temperature_mean_c"), "°", 0), "Temp. media"),
         (_fmt(offers.get("poi_count"), decimals=0), "Puntos de interés"),
-        (reco.confidence_label(confidence.get("level")), "Confianza"),
     ]
     if popularity.get("index") is not None:
         facts.append((_fmt(popularity.get("index"), decimals=2), "Popularidad"))
@@ -309,7 +317,14 @@ def _render_hero(row: dict, payload: dict) -> None:
 # Tarjeta galería: cada una de las otras opciones
 # --------------------------------------------------------------------------
 
-def _render_card(row: dict, idx: int) -> None:
+def _card_html(row: dict, idx: int) -> str:
+    """Devuelve el HTML de una tarjeta de alternativa (no la renderiza).
+
+    Se construye como string para poder concatenar todas las tarjetas en un
+    único ``st.markdown`` (rejilla CSS), en vez de usar ``st.columns`` con un
+    número variable de columnas: ese patrón disparaba el error removeChild de
+    React al repintar tras un rerun.
+    """
     destination = row.get("destination") or {}
     climate = row.get("climate_profile") or {}
     offers = row.get("what_it_offers") or {}
@@ -378,13 +393,8 @@ def _render_card(row: dict, idx: int) -> None:
             + '</ul>'
         )
 
-    # Desglose del score, siempre visible (es la comparativa que interesa ver).
-    breakdown = reco.breakdown_rows(row.get("score_breakdown"))
-    if breakdown:
-        parts.append('<div class="reco-block-title">Desglose del score</div>')
-        parts.append('<div class="reco-bars">')
-        parts.append("".join(_bar(str(i["Dimensión"]), i["Valor"]) for i in breakdown))
-        parts.append('</div>')
+    # (El desglose del score no se muestra en las opciones 2 y 3: recarga la
+    # tarjeta y no aporta a la decisión rápida. Queda solo en la destacada.)
 
     # Concesiones: lo que el destino no cumple del todo.
     tradeoffs = [str(s) for s in (row.get("tradeoffs") or [])]
@@ -402,7 +412,7 @@ def _render_card(row: dict, idx: int) -> None:
 
     parts.append('</div>')  # cierra body
     parts.append('</div>')  # cierra card
-    st.markdown("".join(parts), unsafe_allow_html=True)
+    return "".join(parts)
 
 
 # --------------------------------------------------------------------------
@@ -414,17 +424,15 @@ def _render_alternatives(result: dict) -> None:
     cards = ranking[1:]
     if not cards:
         return
-    st.markdown('<div class="alt-title">Otras opciones que encajan</div>', unsafe_allow_html=True)
-    cols = st.columns(len(cards), gap="medium")
-    for position, row in enumerate(cards):
-        with cols[position]:
-            _render_card(row, position + 1)
-
-    warnings = result.get("warnings") or []
-    if warnings:
-        with st.expander("Notas del motor sobre estos datos", expanded=False):
-            for warning in warnings:
-                st.caption(f"· {warning}")
+    # Todas las tarjetas en UN SOLO bloque HTML (rejilla CSS), no en st.columns
+    # de número variable: ese patrón rompía el DOM de React (removeChild).
+    grid = '<div class="alt-grid">' + "".join(
+        _card_html(row, position + 1) for position, row in enumerate(cards)
+    ) + "</div>"
+    st.markdown(
+        '<div class="alt-title">Otras opciones que encajan</div>' + grid,
+        unsafe_allow_html=True,
+    )
 
     footer_bits = []
     if result.get("recommendation_id"):
@@ -509,57 +517,96 @@ def _autorun_if_needed() -> None:
     )
 
 
+def _render_advanced_form() -> None:
+    """Expander compacto con el formulario de filtros (modelo real Azure).
+
+    Vive ENCIMA de los resultados, en la columna derecha. Al enviar, corre la
+    petición real contra el motor y refresca el ranking mostrado debajo.
+    """
+    if not reco.is_configured():
+        with st.expander("🔍 Ajustar filtros a mano", expanded=False):
+            _render_error({
+                "error_kind": "not_configured",
+                "error": "El recomendador no está conectado.",
+            })
+            st.caption("Este es el contrato que se enviaría al motor:")
+            _render_form()
+        return
+
+    with st.expander("🔍 Ajustar filtros y recalcular el ranking", expanded=False):
+        st.caption(
+            "¿Prefieres afinar a mano? Ajusta mes, intereses y clima y el motor "
+            "vuelve a proponerte destinos."
+        )
+        new_payload = _render_form()
+        if new_payload is not None:
+            _run(new_payload, is_custom=True)
+            st.rerun()
+
+
+def _render_featured(result: dict) -> None:
+    """Recomendación destacada (hero) para la columna junto al chat."""
+    ranking = result.get("ranking") or []
+    if not (result.get("ok") and ranking):
+        if result and not result.get("ok"):
+            _render_error(result)
+        elif not reco.is_configured():
+            st.info(
+                "Conecta el modelo para ver aquí, junto al chat, la recomendación "
+                "destacada y sus alternativas."
+            )
+        return
+    if not st.session_state.get(STATE_CUSTOM):
+        st.caption(
+            "Propuesta con preferencias por defecto. Ajusta los filtros de "
+            "arriba para adaptarla a tu viaje."
+        )
+    _render_hero(ranking[0], payload=st.session_state.get(STATE_PAYLOAD) or {})
+
+
 def render_recommender() -> None:
     st.markdown(
         '<div class="reco-header">'
-        '<div class="reco-kicker">Recomendador España</div>'
-        '<h2 class="reco-hero-title">Tu próximo viaje por España, '
-        '<em>hecho a tu medida</em></h2>'
-        '<p class="reco-hero-lead">Cuéntanos cómo te gusta viajar y te proponemos '
-        'tres destinos que encajan contigo, con el motivo de cada elección.</p>'
+        '<div class="reco-kicker">España</div>'
+        '<h2 class="reco-hero-title"><em>Recomendador</em> de viajes '
+        'por España</h2>'
+        '<p class="reco-hero-lead">Cuéntale al asistente cómo te gusta viajar '
+        '—el ambiente, las fechas, con quién vas— y te irá enseñando destinos '
+        'que encajan contigo, con el motivo de cada elección.</p>'
         '</div>',
         unsafe_allow_html=True,
     )
 
-    if not reco.is_configured():
-        st.caption("Recomendador sin conectar · la vista queda en modo informativo")
-        _render_error({
-            "error_kind": "not_configured",
-            "error": "El recomendador no está conectado.",
-        })
-        with st.expander("Ver el contrato que se enviaría", expanded=False):
-            _render_form()
-        return
+    # Precalcula una recomendación por defecto (autorun) para que la vista tenga
+    # contenido en cuanto se abre, sin pantallas vacías. Sin API no se lanza el
+    # modelo real (se informa).
+    if reco.is_configured():
+        _autorun_if_needed()
 
-    # La recomendación se calcula sin pedirla la primera vez, para no mostrar
-    # una pantalla vacía al entrar.
-    _autorun_if_needed()
-
-    # Primero se elige: el formulario va arriba. Queda abierto solo si aún no
-    # hay resultados; una vez hay recomendación, se pliega para dar protagonismo
-    # al resultado, pero sigue siendo lo primero que se ve.
     result = st.session_state.get(STATE_KEY) or {}
     ranking = result.get("ranking") or []
 
-    with st.expander("Ajusta tu viaje", expanded=not ranking):
-        new_payload = _render_form()
-    if new_payload is not None:
-        _run(new_payload, is_custom=True)
-        st.rerun()
+    # Fila superior: dos columnas a la vista, sin scroll largo.
+    #   · Izquierda: el copiloto de viaje (chat maqueta).
+    #   · Derecha: la recomendación destacada del modelo + filtros.
+    # No se envuelven los widgets en <div> propios: hacerlo rompe el árbol DOM
+    # de React que gestiona Streamlit (error removeChild). El estilo compacto se
+    # aplica por clase directamente en el HTML de cada bloque.
+    # Disposición VERTICAL: primero el copiloto de viaje (chat), y DEBAJO toda
+    # la sección "Recomendación del modelo" (filtros + destacada + alternativas)
+    # a todo el ancho.
+    render_recommender_chat()
 
-    # Después, las tres recomendaciones juntas, sin nada que las separe.
-    result = st.session_state.get(STATE_KEY) or {}
-    payload = st.session_state.get(STATE_PAYLOAD) or {}
-    ranking = result.get("ranking") or []
-
-    if result.get("ok") and ranking:
-        if not st.session_state.get(STATE_CUSTOM):
-            st.caption(
-                "Recomendación con preferencias por defecto. Abre «Ajusta tu viaje» "
-                "arriba para adaptarla."
-            )
-        _render_hero(ranking[0], payload)
-        if len(ranking) > 1:
-            _render_alternatives(result)
-    elif result and not result.get("ok"):
-        _render_error(result)
+    # Separador visual entre la conversación (arriba) y la recomendación del
+    # modelo (abajo), para que el paso de una zona a otra sea claro.
+    st.markdown('<div class="reco-section-sep"></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="reco-results-title">Recomendación del modelo</div>'
+        '<div class="reco-results-sub">La propuesta destacada del motor para tu '
+        'perfil, con dos alternativas que también encajan.</div>',
+        unsafe_allow_html=True,
+    )
+    _render_advanced_form()
+    _render_featured(result)
+    if result.get("ok") and len(ranking) > 1:
+        _render_alternatives(result)

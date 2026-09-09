@@ -34,6 +34,8 @@ def _bridge_secrets_to_env() -> None:
         "TUI_IMAGE_USER_AGENT",
         "TUI_IMAGE_TIMEOUT_SECONDS",
         "TUI_DB_PATH",
+        "TUI_MODEL_BACKEND",
+        "TUI_MODELO_API_BASE",
     )
     try:
         secrets = st.secrets
@@ -68,8 +70,8 @@ from views.tdrs import render_tdrs, render_tdrs_sidebar_controls  # noqa: E402
 
 inject_styles()
 
-NAV_TDRS = "Simulador TDRS"
-NAV_RECO = "Recomendador España"
+NAV_TDRS = "Panel de redistribución"
+NAV_RECO = "Recomendador"
 NAV_CONTROL = "Control Web"
 NAV = [NAV_TDRS, NAV_RECO, NAV_CONTROL]
 
@@ -126,8 +128,8 @@ def main() -> None:
     # El sidebar del simulador solo existe dentro de su propia vista.
     tdrs_controls = None
     if view == NAV_TDRS:
-        if "tdrs_scenario" not in st.session_state:
-            st.session_state.tdrs_scenario = "Equilibrado"
+        if "tdrs_policy" not in st.session_state:
+            st.session_state.tdrs_policy = "Equilibrado"
         tdrs_controls = render_tdrs_sidebar_controls()
 
     render_sidebar_status()

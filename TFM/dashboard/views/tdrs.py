@@ -1,10 +1,23 @@
 from __future__ import annotations
 
-"""Vista Simulador TDRS: escenarios, pesos, restricciones y asistente lateral."""
+"""Panel «Descubre destinos» (antes «Simulador TDRS»).
+
+Tercera forma de consumir el MISMO modelo de recomendación. En lugar de un
+formulario de viaje (Recomendador España) o un asistente conversacional, aquí un
+VIAJERO ajusta una sola palanca sencilla —destinos populares ↔ joyas menos
+concurridas— y ve destinos que encajan, con lo que necesita para decidir:
+precio, sol, satisfacción y cuántas alternativas con menos gente hay.
+
+Por debajo sigue siendo la tesis del TDRS (Tourism Demand Redistribution Score):
+el dial mueve el objetivo de popularidad del modelo (0 = destinos menos
+saturados · 1 = muy visitados), pero la vista lo presenta en lenguaje de viajero,
+sin tecnicismos. El resultado NO se calcula aquí; sale del modelo real a través
+de ``services.model_gateway`` (hoy, la Function de Azure). Si el modelo no
+responde, la vista degrada con un mensaje claro.
+"""
 
 from html import escape
 
-import pandas as pd
 import streamlit as st
 
 from components.assets import (
@@ -12,402 +25,440 @@ from components.assets import (
     get_local_destination_image,
 )
 from components.ui import render_metric_rows
-from services.assistant_service import (
-    ai_connection_status,
-    build_weights as build_assistant_weights,
-    converse as assistant_converse,
-    initial_message as assistant_initial_message,
-    normalize_preferences as normalize_assistant_preferences,
-)
+from services import model_gateway
+from services import recommendation_api_service as reco
 from services.destination_image_service import get_destination_image
-from services.tdrs_service import PRESETS, SCENARIO_META, compute_scores, scenario_metrics
+from services.tdrs_service import (
+    POLICY_ICON_BY_NAME,
+    POLICY_META,
+    POLICY_PRESETS,
+    recommend_policy,
+    traveler_metrics,
+)
 from services.tracking_service import register_event
 
-SCENARIOS = ("Popular", "Equilibrado", "Explorador")
+VIEW_LABEL = "Panel de redistribución"
 
-MODEL_SLIDER_SUFFIX = {
-    "sunny_days_pct": "sunny",
-    "low_precipitation_pct": "precip",
-    "popularity": "popular",
-    "hospital_beds": "beds",
-    "safety": "safety",
-    "satisfaction": "satisf",
-    "impacto_local": "impacto",
-    "diversificacion": "diversif",
-    "temporada_baja": "tempbaja",
+POLICIES = ("Tradicional", "Equilibrado", "Redistribuido")
+
+# Intereses de política que el gestor puede ponderar. Se mapean 1:1 al contrato
+# del modelo en model_gateway.POLICY_INTEREST_MAP.
+POLICY_INTEREST_LABELS = {
+    "coast_beach": "Costa y playa",
+    "nature_mountains": "Naturaleza y montaña",
+    "rural": "Rural e interior",
+    "history_culture": "Historia y cultura",
+    "gastronomy_wine": "Gastronomía y vino",
+    "wellness": "Bienestar",
+    "sports_outdoors": "Deporte y aire libre",
+}
+
+INTEREST_SLIDER_SUFFIX = {
+    "coast_beach": "coast",
+    "nature_mountains": "nature",
+    "rural": "rural",
+    "history_culture": "culture",
+    "gastronomy_wine": "gastro",
+    "wellness": "wellness",
+    "sports_outdoors": "sports",
 }
 
 
-def _ensure_tdrs_assistant_state(scenario: str) -> None:
-    if "tdrs_assistant_messages" not in st.session_state:
-        st.session_state.tdrs_assistant_messages = [
-            {"role": "assistant", "content": assistant_initial_message()}
-        ]
-    if "tdrs_assistant_preferences" not in st.session_state:
-        st.session_state.tdrs_assistant_preferences = normalize_assistant_preferences({})
-    if "tdrs_assistant_focus" not in st.session_state:
-        st.session_state.tdrs_assistant_focus = None
-    if "tdrs_assistant_source" not in st.session_state:
-        st.session_state.tdrs_assistant_source = "local"
+# --------------------------------------------------------------------------
+# Estado y selección de escenario de política
+# --------------------------------------------------------------------------
 
-    # Los criterios que aún no se han hablado conservan el preset del escenario
-    # activo. Así la conversación puede continuar aunque el usuario cambie de
-    # Popular a Equilibrado o Explorador.
-    st.session_state.tdrs_assistant_proposal = build_assistant_weights(
-        st.session_state.tdrs_assistant_preferences,
-        PRESETS[scenario],
-    )
+def _current_policy_name() -> str:
+    name = st.session_state.get("tdrs_policy", "Equilibrado")
+    if name not in POLICIES:
+        name = "Equilibrado"
+        st.session_state.tdrs_policy = name
+    return name
 
 
-def _reset_tdrs_assistant() -> None:
-    st.session_state.tdrs_assistant_messages = [
-        {"role": "assistant", "content": assistant_initial_message()}
-    ]
-    st.session_state.tdrs_assistant_preferences = normalize_assistant_preferences({})
-    st.session_state.tdrs_assistant_focus = None
-    st.session_state.tdrs_assistant_proposal = None
-    st.session_state.tdrs_assistant_applied = None
-    st.session_state.tdrs_assistant_source = "local"
-
-
-def _apply_assistant_weights(scenario: str) -> None:
-    recommended = st.session_state.get("tdrs_assistant_proposal") or {}
-    if not recommended:
-        return
-    for field, value in recommended.items():
-        suffix = MODEL_SLIDER_SUFFIX[field]
-        st.session_state[f"sb_{scenario}_{suffix}"] = int(value)
-    st.session_state.tdrs_assistant_applied = {
-        "scenario": scenario,
-        "weights": dict(recommended),
-    }
-    register_event(
-        st.session_state.session_id,
-        "assistant_weights_applied",
-        "Simulador TDRS · Asistente IA",
-        metadata={
-            "scenario": scenario,
-            "preferences": st.session_state.get("tdrs_assistant_preferences", {}),
-            "weights": recommended,
-            "assistant_source": st.session_state.get("tdrs_assistant_source", "local"),
-        },
-    )
-
-
-def _process_assistant_message(prompt: str, scenario: str) -> None:
-    prompt = prompt.strip()
-    if not prompt:
-        return
-
-    messages = list(st.session_state.get("tdrs_assistant_messages", []))
-    messages.append({"role": "user", "content": prompt})
-    result = assistant_converse(
-        prompt=prompt,
-        messages=messages,
-        preferences=st.session_state.get("tdrs_assistant_preferences", {}),
-        scenario=scenario,
-        scenario_defaults=PRESETS[scenario],
-        focus_field=st.session_state.get("tdrs_assistant_focus"),
-    )
-    messages.append({"role": "assistant", "content": result["reply"]})
-
-    st.session_state.tdrs_assistant_messages = messages[-14:]
-    st.session_state.tdrs_assistant_preferences = result["preferences"]
-    st.session_state.tdrs_assistant_proposal = result["weights"]
-    st.session_state.tdrs_assistant_focus = result.get("focus_field")
-    st.session_state.tdrs_assistant_source = result.get("source", "local")
-    st.session_state.tdrs_assistant_applied = None
-
-    register_event(
-        st.session_state.session_id,
-        "assistant_message",
-        "Simulador TDRS · Asistente IA",
-        metadata={
-            "scenario": scenario,
-            "assistant_source": result.get("source", "local"),
-            "missing_preferences": result.get("missing", []),
-        },
-    )
-
-
-def render_tdrs_assistant(scenario: str) -> None:
-    _ensure_tdrs_assistant_state(scenario)
-
-    with st.sidebar.expander("Asistente IA", expanded=False):
-        st.caption(
-            "Cuéntame con tus propias palabras qué buscas. El asistente irá "
-            "recogiendo tus preferencias y propondrá pesos para el TDRS."
-        )
-        connection = ai_connection_status()
-        messages = st.session_state.get("tdrs_assistant_messages", [])
-        has_user_turn = any(m.get("role") == "user" for m in messages)
-        last_source = st.session_state.get("tdrs_assistant_source", "local")
-        if connection == "connected" and (not has_user_turn or last_source == "ai"):
-            st.markdown("🟢 **IA conectada**")
-        elif connection == "connected":
-            st.markdown("🟠 **IA configurada · último turno resuelto con fallback local**")
-        else:
-            st.markdown("⚪ **Conector IA preparado · modo local de demostración**")
-
-        # Mostramos los últimos turnos para mantener el lateral compacto.
-        for item in messages[-8:]:
-            with st.chat_message(item.get("role", "assistant")):
-                st.markdown(item.get("content", ""))
-
-        with st.form(f"assistant_chat_form_{scenario}", clear_on_submit=True):
-            prompt = st.text_input(
-                "Mensaje",
-                placeholder="Ej.: quiero sol, seguridad y lugares tranquilos…",
-                label_visibility="collapsed",
-            )
-            submitted = st.form_submit_button("Enviar", width="stretch")
-
-        if submitted and prompt.strip():
-            _process_assistant_message(prompt, scenario)
-            st.rerun()
-
-        # No enseñamos una propuesta antes de que el usuario haya conversado.
-        proposal = st.session_state.get("tdrs_assistant_proposal") or {}
-        if proposal and has_user_turn:
-            st.markdown(
-                '<div class="assistant-summary"><strong>Propuesta actual</strong><br>'
-                f'Sol <strong>{proposal["sunny_days_pct"]}</strong> · '
-                f'precipitación <strong>{proposal["low_precipitation_pct"]}</strong> · '
-                f'popularidad <strong>{proposal["popularity"]}</strong> · '
-                f'sanidad <strong>{proposal["hospital_beds"]}</strong> · '
-                f'seguridad <strong>{proposal["safety"]}</strong> · '
-                f'satisfacción <strong>{proposal["satisfaction"]}</strong>'
-                '</div>',
-                unsafe_allow_html=True,
-            )
-            st.button(
-                "Aplicar propuesta al modelo",
-                key=f"assistant_apply_{scenario}",
-                width="stretch",
-                type="primary",
-                on_click=_apply_assistant_weights,
-                args=(scenario,),
-            )
-
-        st.button(
-            "Nueva conversación",
-            key=f"assistant_reset_{scenario}",
-            width="stretch",
-            on_click=_reset_tdrs_assistant,
-        )
-
-        applied = st.session_state.get("tdrs_assistant_applied")
-        if applied and applied.get("scenario") == scenario:
-            st.success("La propuesta del asistente ya está aplicada a los pesos del modelo.")
-
+# --------------------------------------------------------------------------
+# Controles laterales: política de redistribución
+# --------------------------------------------------------------------------
 
 def render_tdrs_sidebar_controls() -> dict:
-    """Controles laterales del TDRS, incluido el asistente de personalización."""
-    scenario = st.session_state.get("tdrs_scenario", "Equilibrado")
-    if scenario not in SCENARIOS:
-        scenario = "Equilibrado"
-        st.session_state.tdrs_scenario = scenario
-    defaults = PRESETS[scenario]
+    """Controles de política del panel experto.
 
-    # El asistente aparece primero y solo existe dentro de la vista Simulador TDRS.
-    render_tdrs_assistant(scenario)
+    Devuelve la política ya lista para el gateway: dial de popularidad, pesos de
+    interés (0-100), preferencia de temperatura y restricciones.
+    """
+    policy_name = _current_policy_name()
+    defaults = POLICY_PRESETS[policy_name]
 
-    with st.sidebar.expander("Pesos del modelo", expanded=True):
-        weights = {
-            "sunny_days_pct": st.slider("% días soleados / año", 0, 100, int(defaults["sunny_days_pct"]), key=f"sb_{scenario}_sunny"),
-            "low_precipitation_pct": st.slider("% precipitación · menos es mejor", 0, 100, int(defaults["low_precipitation_pct"]), key=f"sb_{scenario}_precip"),
-            "popularity": st.slider("Más visitado", 0, 100, int(defaults["popularity"]), key=f"sb_{scenario}_popular"),
-            "hospital_beds": st.slider("Capacidad sanitaria", 0, 100, int(defaults["hospital_beds"]), key=f"sb_{scenario}_beds"),
-            "safety": st.slider("Seguridad", 0, 100, int(defaults["safety"]), key=f"sb_{scenario}_safety"),
-            "satisfaction": st.slider(
-                "Satisfacción de viajeros", 0, 100, int(defaults["satisfaction"]),
-                key=f"sb_{scenario}_satisf",
-                help="Sentimiento medio de reseñas reales analizadas por el pipeline.",
-            ),
-            "impacto_local": st.slider(
-                "Impacto económico local", 0, 100, int(defaults["impacto_local"]),
-                key=f"sb_{scenario}_impacto",
-                help="Ingresos reales generados en el destino (reservas historicas).",
-            ),
-            "diversificacion": st.slider(
-                "Diversificación de visitantes", 0, 100, int(defaults["diversificacion"]),
-                key=f"sb_{scenario}_diversif",
-                help="Que tan variado es el origen de los viajeros reales del destino.",
-            ),
-            "temporada_baja": st.slider(
-                "Favorecer temporada baja", 0, 100, int(defaults["temporada_baja"]),
-                key=f"sb_{scenario}_tempbaja",
-                help="Prioriza destinos con demanda mas repartida a lo largo del año.",
-            ),
-        }
+    with st.sidebar.expander("¿Cómo quieres que sea el viaje?", expanded=True):
+        st.caption(
+            "¿Prefieres destinos populares o joyas menos concurridas? Muévelo "
+            "hacia la izquierda para descubrir sitios con menos gente."
+        )
+        popularity_target = st.slider(
+            "Populares ↔ menos concurridos",
+            0.0, 1.0, float(defaults["popularity_target"]), 0.05,
+            key=f"tdrs_{policy_name}_poptarget",
+            help="Izquierda = joyas tranquilas con menos turistas · "
+                 "derecha = destinos famosos y muy visitados.",
+        )
 
-    with st.sidebar.expander("Restricciones", expanded=True):
-        max_price = st.slider("Precio máximo (€)", 400, 2500, 2500, 50, key=f"sb_{scenario}_price")
-        max_stay_days = st.slider("Máx. días hospedados", 1, 365, 365, 1, key=f"sb_{scenario}_stay")
+    with st.sidebar.expander("¿Qué te apetece hacer?", expanded=True):
+        st.caption(
+            "Marca lo que más te gusta y ajustamos las propuestas a tu tipo de "
+            "viaje."
+        )
+        interests: dict[str, int] = {}
+        for code, label in POLICY_INTEREST_LABELS.items():
+            suffix = INTEREST_SLIDER_SUFFIX[code]
+            interests[code] = st.slider(
+                label, 0, 100, int(defaults["interests"].get(code, 40)),
+                key=f"tdrs_{policy_name}_{suffix}",
+            )
+
+    with st.sidebar.expander("Clima y fechas", expanded=False):
+        temp_options = list(reco.TEMPERATURE_PREFERENCES)
+        default_temp = defaults.get("temperature_preference", "mild")
+        temperature = st.selectbox(
+            "Preferencia de temperatura",
+            temp_options,
+            index=temp_options.index(default_temp) if default_temp in temp_options else 0,
+            format_func=lambda code: reco.TEMPERATURE_LABELS[code],
+            key=f"tdrs_{policy_name}_temp",
+        )
+        month = st.slider(
+            "Mes de referencia", 1, 12, 7, 1,
+            key=f"tdrs_{policy_name}_month",
+            format="%d",
+        )
 
     return {
-        "scenario": scenario,
-        "weights": weights,
-        "max_price": max_price,
-        "max_stay_days": max_stay_days,
+        "policy_name": policy_name,
+        "popularity_target": popularity_target,
+        "interests": interests,
+        "temperature_preference": temperature,
+        "month": int(month),
     }
 
 
-def render_tdrs_scenario_selector() -> None:
-    current = st.session_state.get("tdrs_scenario", "Equilibrado")
-    if current not in SCENARIOS:
-        current = "Equilibrado"
-        st.session_state.tdrs_scenario = current
+# --------------------------------------------------------------------------
+# Selector de escenario de política (área principal)
+# --------------------------------------------------------------------------
 
+def render_policy_selector() -> None:
+    current = _current_policy_name()
     with st.container(border=True):
         cols = st.columns(3, gap="medium")
-        for idx, name in enumerate(SCENARIOS):
-            icon_url = SCENARIO_ICON_URLS[name]
+        for idx, name in enumerate(POLICIES):
+            icon_url = SCENARIO_ICON_URLS[POLICY_ICON_BY_NAME[name]]
             cols[idx].markdown(
-                f'<div class="scenario-icon-wrap"><img class="scenario-icon" src="{escape(icon_url, quote=True)}" alt="{escape(name, quote=True)}"></div>',
+                f'<div class="scenario-icon-wrap">'
+                f'<img class="scenario-icon" src="{escape(icon_url, quote=True)}" '
+                f'alt="{escape(name, quote=True)}"></div>',
                 unsafe_allow_html=True,
             )
             clicked = cols[idx].button(
                 name,
-                key=f"tdrs_top_scenario_{name}",
+                key=f"tdrs_policy_btn_{name}",
                 width="stretch",
                 type="primary" if current == name else "secondary",
             )
             if clicked and current != name:
-                st.session_state.tdrs_scenario = name
+                st.session_state.tdrs_policy = name
                 st.rerun()
-        meta = SCENARIO_META[current]
-        active_icon = SCENARIO_ICON_URLS[current]
+        meta = POLICY_META[current]
+        icon = SCENARIO_ICON_URLS[POLICY_ICON_BY_NAME[current]]
         st.markdown(
-            f'<div class="selector-active"><strong><img class="scenario-active-icon" src="{escape(active_icon, quote=True)}" alt="">{escape(current)}</strong> · {escape(meta["description"])}</div>',
+            f'<div class="selector-active">'
+            f'<strong><img class="scenario-active-icon" src="{escape(icon, quote=True)}" alt="">'
+            f'{escape(current)} · {escape(meta["tagline"])}</strong> · '
+            f'{escape(meta["description"])}</div>',
             unsafe_allow_html=True,
         )
 
 
-def render_tdrs(controls: dict) -> None:
-    weights = controls["weights"]
+# --------------------------------------------------------------------------
+# Ángulo de redistribución: cómo el dial mueve la demanda
+# --------------------------------------------------------------------------
 
-    render_tdrs_scenario_selector()
+def _fmt(value, suffix: str = "", decimals: int = 0) -> str:
+    if value is None:
+        return "—"
+    if isinstance(value, float) and value != value:  # NaN
+        return "—"
+    if isinstance(value, (int, float)):
+        return f"{value:,.{decimals}f}{suffix}"
+    return escape(str(value))
 
-    scenario = controls["scenario"]
-    res = compute_scores(
-        weights,
-        max_price=controls["max_price"],
-        max_stay_days=controls["max_stay_days"],
-    )
 
-    # Instrumentación: se registra la impresión de los tres destinos del podio.
-    # Es interacción real y trazable (el usuario los está viendo recomendados) y
-    # alimenta el mapa y los KPIs de Control Web, que sin esto quedaban a cero.
-    # El dedupe por escenario evita duplicar en cada rerun.
-    for pos, r in enumerate(res["ranked"][:3], 1):
-        register_event(
-            st.session_state.session_id,
-            "product_impression",
-            "Simulador TDRS",
-            destination=r["name"],
-            metadata={"scenario": scenario, "position": pos, "score": round(r["score"], 3)},
-            dedupe_key=f"tdrs_impression:{scenario}:{r['name']}",
+def _price_txt(value) -> str:
+    if value is None:
+        return "—"
+    try:
+        return f"{float(value):,.0f} €".replace(",", ".")
+    except (TypeError, ValueError):
+        return "—"
+
+
+def render_redistribution_band(popularity_target: float, metrics: dict) -> None:
+    """Banda-resumen orientada al viajero.
+
+    Traduce el dial en una frase útil (qué tipo de viaje va a proponer) y muestra
+    lo que ayuda a decidir: desde cuánto cuesta, cuánto sol hay y cuántas
+    alternativas con menos gente se han encontrado. Sin tecnicismos.
+    """
+    pct = max(0.0, min(1.0, float(popularity_target))) * 100
+    less_crowded = metrics.get("less_crowded_count") or 0
+    eligible = metrics.get("eligible") or 0
+
+    if popularity_target <= 0.35:
+        stance = "Joyas con menos gente"
+        note = (
+            "Priorizamos destinos poco masificados: buen ambiente sin las "
+            "aglomeraciones de los clásicos."
+        )
+    elif popularity_target >= 0.65:
+        stance = "Los grandes clásicos"
+        note = (
+            "Priorizamos los destinos más famosos y visitados de España, con "
+            "toda su oferta consolidada."
+        )
+    else:
+        stance = "Lo mejor de los dos mundos"
+        note = (
+            "Mezclamos destinos conocidos con alternativas más tranquilas para "
+            "que elijas con calma."
         )
 
-    # Primero se prepara el ranking para mostrar las tres opciones principales
-    # inmediatamente después del selector, sin alterar cálculos, datos ni controles.
-    rank_rows = []
-    for pos, r in enumerate(res["ranked"], 1):
-        model = r.get("model_values") or {}
-        raw = r.get("model_raw_values") or {}
-        rank_rows.append({
-            "Opción": pos,
-            "Destino": r["name"],
-            "Días soleados %": model.get("sunny_days_pct"),
-            "Precipitación %": model.get("precipitation_days_pct"),
-            "Pasajeros/año": model.get("annual_passengers"),
-            # Se muestra el valor REAL, no el imputado: un destino sin reseñas
-            # aparece como `—` aunque el KNN le haya estimado un valor para
-            # calcular el score. Es la regla de dato ausente ≠ dato estimado.
-            "Satisfacción": raw.get("sentiment_score"),
-            "Precio €": r.get("reference_price_eur"),
-        })
+    from_txt = _price_txt(metrics.get("from_price"))
+    sun = metrics.get("avg_sunny_days")
+    sun_txt = "—" if sun is None else f"{sun:.0f} días"
+    if eligible:
+        crowd_txt = f"{less_crowded} de {eligible}"
+    else:
+        crowd_txt = "—"
 
-    # Las tres opciones principales se muestran directamente tras el selector, sin título adicional.
-    # El precio queda destacado en la esquina superior derecha del área informativa.
+    st.markdown(
+        f'<div class="redist-band">'
+        f'<div class="redist-head">'
+        f'<div class="redist-stance">{escape(stance)}</div>'
+        f'<div class="redist-note">{escape(note)}</div>'
+        f'</div>'
+        f'<div class="redist-stats">'
+        f'<div class="redist-stat"><div class="redist-stat-value">{escape(from_txt)}</div>'
+        f'<div class="redist-stat-label">Precio desde</div></div>'
+        f'<div class="redist-stat"><div class="redist-stat-value">{escape(sun_txt)}</div>'
+        f'<div class="redist-stat-label">Sol al mes</div></div>'
+        f'<div class="redist-stat"><div class="redist-stat-value">{escape(crowd_txt)}</div>'
+        f'<div class="redist-stat-label">Con menos gente</div></div>'
+        f'</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+
+# --------------------------------------------------------------------------
+# Podio de destinos redistribuidos
+# --------------------------------------------------------------------------
+
+def _place(destination: dict) -> str:
+    """Ubicación sin repetir el nombre del municipio (mismo criterio que la
+    vista Recomendador España)."""
+    name = str(destination.get("name") or "").strip()
+    province = str(destination.get("province") or "").strip()
+    community = str(destination.get("autonomous_community") or "").strip()
+    seen = {name.lower()}
+    bits: list[str] = []
+    for value in (province, community):
+        key = value.lower()
+        if value and key not in seen:
+            bits.append(value)
+            seen.add(key)
+    return " · ".join(bits)
+
+
+def _destination_photo(name: str, destination: dict) -> dict | None:
+    image = get_local_destination_image(name)
+    if image:
+        return image
+    return get_destination_image(name) or None
+
+
+def _crowd_tag(row: dict) -> str:
+    """Etiqueta de nivel de gente en lenguaje de viajero (no un número técnico)."""
+    popularity = (row.get("popularity_profile") or {}).get("index")
+    if popularity is None:
+        return ""
+    try:
+        idx = float(popularity)
+    except (TypeError, ValueError):
+        return ""
+    if idx <= 0.4:
+        return "Menos concurrido"
+    if idx >= 0.7:
+        return "Muy popular"
+    return "Ambiente equilibrado"
+
+
+def render_podium(ranking: list[dict]) -> None:
     podium = []
-    for idx, row in enumerate(rank_rows[:3]):
-        visitors = row.get("Pasajeros/año")
-        visitors_text = "—" if visitors is None else f"{int(round(visitors)):,} pasajeros/año"
-        price_text = "—" if row.get("Precio €") is None else f"{float(row['Precio €']):,.0f} €"
-        destination = str(row["Destino"])
-        # Prioridad: fotografía descargada a local (rápida y sin red). Si el
-        # destino no la tiene, se busca en Wikipedia y se cachea por proceso.
-        image = get_local_destination_image(destination) or get_destination_image(destination)
+    for idx, row in enumerate(ranking[:3]):
+        destination = row.get("destination") or {}
+        name = str(destination.get("name") or "Destino")
+        place = _place(destination)
+        crowd_txt = _crowd_tag(row)
+        typology = destination.get("primary_typology")
+
+        image = _destination_photo(name, destination)
         if image:
             image_html = (
                 f'<img class="podium-image" src="{escape(image["url"], quote=True)}" '
-                f'alt="{escape(image.get("alt", f"Imagen de {destination}"), quote=True)}" loading="lazy">'
+                f'alt="{escape(image.get("alt", f"Imagen de {name}"), quote=True)}" loading="lazy">'
             )
         else:
-            image_html = f'<div class="podium-image-fallback">{escape(destination)}</div>'
+            image_html = f'<div class="podium-image-fallback">{escape(name)}</div>'
+
+        tag = escape(str(typology)) if typology else escape(crowd_txt)
         podium.append(
             f'<div class="podium-card {"first" if idx == 0 else ""}">'
             f'{image_html}'
             f'<div class="podium-head">'
             f'<div class="podium-head-main">'
-            f'<div class="podium-rank">opción {idx+1}</div>'
-            f'<div class="podium-name">{escape(destination)}</div>'
+            f'<div class="podium-rank">opción {idx + 1}</div>'
+            f'<div class="podium-name">{escape(name)}</div>'
             f'</div>'
-            f'<div class="podium-price">{escape(price_text)}</div>'
+            f'<div class="podium-price redist-poptag">{tag}</div>'
             f'</div>'
-            f'<div class="podium-meta">{escape(visitors_text)}</div>'
+            f'<div class="podium-meta">{escape(place or crowd_txt)}</div>'
             '</div>'
         )
     if podium:
         st.markdown('<div class="podium-grid">' + ''.join(podium) + '</div>', unsafe_allow_html=True)
 
-    # Los KPIs se mantienen exactamente iguales y aparecen debajo de las tres opciones.
-    metrics = scenario_metrics(res["ranked"])
-    if metrics:
-        def fmt(v, suffix="", decimals=1):
-            return "—" if v is None else f"{v:.{decimals}f}{suffix}"
 
-        visitors = metrics.get("avg_top5_annual_passengers")
-        visitors_text = "—" if visitors is None else (
-            f"{visitors/1_000_000:.1f} M/año" if visitors >= 1_000_000 else f"{visitors/1_000:.0f} k/año"
+# --------------------------------------------------------------------------
+# Degradación elegante cuando el modelo no responde
+# --------------------------------------------------------------------------
+
+def _render_unavailable(result: dict | None) -> None:
+    kind = (result or {}).get("error_kind")
+    message = (result or {}).get("error") or "El modelo no está disponible ahora mismo."
+    if kind == "not_configured" or not model_gateway.is_configured():
+        st.info(
+            "Las propuestas se calculan con nuestro motor de recomendación en la "
+            "nube, que ahora mismo no está conectado. En cuanto esté disponible "
+            "verás aquí los destinos que encajan con lo que buscas."
         )
-        # La satisfacción se acompaña de cuántos del Top 5 tienen reseñas reales,
-        # para que la media no se lea como si toda ella fuese dato observado.
-        real = metrics.get("top5_sentiment_real")
-        satisfaction = metrics.get("avg_top5_sentiment")
-        satisfaction_text = "—" if satisfaction is None else f"{satisfaction:.2f}"
-        render_metric_rows([
-            ("Elegibles", metrics["eligible"]),
-            ("Días soleados Top 5", fmt(metrics.get("avg_top5_sunny_days_pct"), "%", 0)),
-            ("Visitantes Top 5", visitors_text),
-            ("Satisfacción Top 5", satisfaction_text),
-            ("Con reseñas reales", f"{real}/5" if real is not None else "—"),
-        ], columns=5)
-
-    remaining_rows = rank_rows[3:] if len(rank_rows) > 3 else rank_rows
-    if remaining_rows:
-        display = pd.DataFrame(remaining_rows)[[
-            "Opción",
-            "Destino",
-            "Días soleados %",
-            "Precipitación %",
-            "Pasajeros/año",
-            "Satisfacción",
-            "Precio €",
-        ]]
-        # La tabla visible se limita a variables comerciales y de clima.
-        # Score, cobertura, sanidad, seguridad y trazabilidad KNN siguen
-        # disponibles internamente para el cálculo, pero no se muestran aquí.
-        for col in ["Días soleados %", "Precipitación %", "Pasajeros/año", "Satisfacción", "Precio €"]:
-            display[col] = display[col].map(
-                lambda v, col=col: "—" if pd.isna(v) else (
-                    f"{v:,.0f}" if col in {"Pasajeros/año", "Precio €"} else f"{v:.2f}"
-                )
-            )
-        st.dataframe(display, width="stretch", hide_index=True, height=500)
-    if res["excluded"]:
+    elif kind in {"network", "cooldown"}:
         st.warning(
-            f"{len(res['excluded'])} destinos quedan fuera por precio o duración conocida del catálogo."
+            "No hemos podido traer las propuestas ahora mismo (el servicio puede "
+            "estar despertando). Ajusta lo que buscas y vuelve a intentarlo en "
+            "unos segundos."
         )
+    else:
+        st.error(escape(str(message)))
+
+
+# --------------------------------------------------------------------------
+# Orquestación
+# --------------------------------------------------------------------------
+
+def _run_policy(controls: dict) -> dict:
+    policy = {
+        "popularity_target": controls["popularity_target"],
+        "interests": controls["interests"],
+        "temperature_preference": controls["temperature_preference"],
+        "month": controls["month"],
+    }
+    with st.spinner(
+        "Consultando el modelo… La primera consulta puede tardar mientras el "
+        "servicio despierta."
+    ):
+        result = recommend_policy(policy)
+
+    register_event(
+        st.session_state.session_id,
+        "policy_recommendation",
+        VIEW_LABEL,
+        metadata={
+            "policy": controls["policy_name"],
+            "popularity_target": controls["popularity_target"],
+            "ok": bool(result.get("ok")),
+            "error_kind": result.get("error_kind"),
+            "backend": result.get("backend"),
+        },
+    )
+    return result
+
+
+def render_tdrs(controls: dict) -> None:
+    st.markdown(
+        '<div class="reco-header">'
+        '<div class="reco-kicker">Descubre destinos</div>'
+        '<h2 class="reco-hero-title">Encuentra tu viaje, '
+        '<em>con más o menos gente</em></h2>'
+        '<p class="reco-hero-lead">Dinos si buscas los grandes clásicos o joyas '
+        'menos concurridas y te proponemos destinos que encajan, con lo que '
+        'necesitas para decidir: precio, sol y ambiente.</p>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+
+    render_policy_selector()
+
+    if controls is None:
+        controls = render_tdrs_sidebar_controls()
+
+    result = _run_policy(controls)
+    ranking = result.get("ranking") or [] if result.get("ok") else []
+
+    if not (result.get("ok") and ranking):
+        _render_unavailable(result)
+        return
+
+    metrics = traveler_metrics(ranking) or {}
+
+    # Impresión de los destinos del podio (interacción trazable para Control Web).
+    for pos, row in enumerate(ranking[:3], 1):
+        name = (row.get("destination") or {}).get("name") or ""
+        register_event(
+            st.session_state.session_id,
+            "product_impression",
+            VIEW_LABEL,
+            destination=name,
+            metadata={
+                "policy": controls["policy_name"],
+                "position": pos,
+                "score": round(float(row.get("recommendation_score") or 0), 3),
+            },
+            dedupe_key=f"tdrs_impression:{controls['policy_name']}:{name}",
+        )
+
+    render_redistribution_band(controls["popularity_target"], metrics)
+    render_podium(ranking)
+
+    # Métricas pensadas para que un VIAJERO decida. Las de precio solo aparecen
+    # si el modelo envía precio; si no, se omiten con elegancia.
+    eligible = metrics.get("eligible", 0)
+    less_crowded = metrics.get("less_crowded_count", 0)
+    metric_cards: list[tuple[str, object]] = []
+    if metrics.get("from_price") is not None:
+        metric_cards.append(("Precio desde", _price_txt(metrics.get("from_price"))))
+    if metrics.get("avg_price") is not None:
+        metric_cards.append(("Precio medio", _price_txt(metrics.get("avg_price"))))
+    metric_cards.append(("Días de sol", _fmt(metrics.get("avg_sunny_days"), decimals=0)))
+    metric_cards.append(("Satisfacción", _fmt(metrics.get("avg_satisfaction"), decimals=0)))
+    metric_cards.append((
+        "Alternativas con menos gente",
+        f"{less_crowded} destino{'s' if less_crowded != 1 else ''}",
+    ))
+    # Número FIJO de columnas (5) aunque el nº de métricas varíe entre 3 y 5
+    # según haya precio: un st.columns de tamaño cambiante entre reruns rompe
+    # el DOM de React (removeChild).
+    render_metric_rows(metric_cards, columns=5)
+
+    # Trazabilidad de la llamada al modelo.
+    footer = []
+    if result.get("recommendation_id"):
+        footer.append(f"ID de recomendación: {result['recommendation_id']}")
+    footer.append(f"modelo consumido vía backend «{result.get('backend', 'azure')}»")
+    st.caption(" · ".join(footer))
