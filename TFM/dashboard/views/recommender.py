@@ -183,17 +183,27 @@ def _bar(label: str, value: float | None) -> str:
 
 
 def _photo(row: dict) -> dict | None:
-    """Fotografía del destino, ajustada a la tarjeta como banner.
+    """Fotografía del destino para el banner de la tarjeta.
 
-    Solo se usan las imágenes locales (``assets/destinations/*.jpg``). No se
-    consultan URLs externas ni Wikipedia: si no existe el archivo local, la
-    tarjeta cae al fondo/placeholder sólido.
+    Solo imágenes locales (``assets/destinations/*.jpg``). Se prueba por nombre,
+    provincia y comunidad, porque el nombre del municipio no siempre coincide con
+    el archivo pero la provincia (p. ej. «Málaga») suele existir. No se consultan
+    URLs externas ni Wikipedia: si no hay archivo local, la tarjeta cae al
+    placeholder sólido.
     """
     destination = row.get("destination") or {}
-    name = destination.get("name")
-    if not name:
-        return None
-    return get_local_destination_image(name)
+    for candidate in (
+        destination.get("name"),
+        destination.get("province"),
+        destination.get("autonomous_community"),
+    ):
+        candidate = str(candidate or "").strip()
+        if not candidate:
+            continue
+        local = get_local_destination_image(candidate)
+        if local:
+            return local
+    return None
 
 
 def _place(destination: dict) -> str:
