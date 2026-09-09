@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from html import escape
 
 import streamlit as st
@@ -100,13 +101,17 @@ def _policy_to_payload(policy_name: str) -> dict:
     if temperature not in reco.TEMPERATURE_LABELS:
         temperature = defaults["temperature_preference"]
 
+    # Los escenarios no imponen exigencia de clima: el objetivo es explorar el
+    # reparto de demanda (popularidad), no filtrar por sol/lluvia. Arrancar sin
+    # mínimos de clima maximiza los candidatos y evita el rechazo del modelo por
+    # «menos de tres destinos».
     return reco.build_payload(
         month=defaults["month"],
         trip_length_days=defaults["trip_length_days"],
         interests=interests,
         temperature_preference=temperature,
-        minimum_sunny_days=defaults["minimum_sunny_days"],
-        maximum_precipitation_days=defaults["maximum_precipitation_days"],
+        minimum_sunny_days=reco.SUNNY_DAYS_RANGE[0],
+        maximum_precipitation_days=reco.PRECIPITATION_DAYS_RANGE[1],
         popularity_target=max(0.0, min(1.0, float(preset["popularity_target"]))),
         accommodation_type=defaults["accommodation_type"],
         include_regions=[],
@@ -613,12 +618,55 @@ def _render_error(result: dict) -> None:
         )
 
 
+def _is_too_few_destinations(result: dict) -> bool:
+    """Detecta el rechazo del modelo por no mapear tres destinos distintos."""
+    if result.get("ok") or result.get("error_kind") != "validation":
+        return False
+    low = str(result.get("error") or "").lower()
+    return (
+        "tres destinos" in low
+        or "menos de tres" in low
+        or ("mapping" in low and "places" in low)
+    )
+
+
+def _relax_payload(payload: dict) -> dict:
+    """Afloja la petición para maximizar candidatos: sin exigencia de clima ni
+    filtros de región, y temperatura indiferente. Conserva mes, duración e
+    intereses (lo que da sentido a la recomendación). Sirve para reintentar
+    cuando el modelo rechaza por «menos de tres destinos»."""
+    relaxed = json.loads(json.dumps(payload))  # copia profunda simple
+    prefs = relaxed.setdefault("preferences", {})
+    climate = prefs.setdefault("climate", {})
+    climate["minimum_sunny_days"] = float(reco.SUNNY_DAYS_RANGE[0])
+    climate["maximum_precipitation_days"] = float(reco.PRECIPITATION_DAYS_RANGE[1])
+    climate["temperature_preference"] = "any"
+    relaxed["filters"] = {
+        "include_regions": [],
+        "exclude_regions": [],
+        "exclude_destinations": [],
+    }
+    return relaxed
+
+
 def _run(payload: dict, is_custom: bool) -> dict:
-    """Llama a la API, guarda el resultado en sesión y registra el evento."""
+    """Llama a la API, guarda el resultado en sesión y registra el evento.
+
+    Si el modelo rechaza la petición por no encontrar tres destinos, se reintenta
+    UNA vez con los filtros relajados (clima indiferente, sin restricciones de
+    región). El contrato admite de 1 a 3 destinos, así que basta con que el
+    reintento devuelva al menos uno para no mostrar el error al usuario.
+    """
     # El modelo corre en la nube con arranque en frío: la primera consulta del
     # día puede tardar. Se avisa para que la espera no parezca un cuelgue.
     with st.spinner("Consultando el modelo…"):
         result = reco.fetch_recommendations(payload)
+        if _is_too_few_destinations(result):
+            relaxed = _relax_payload(payload)
+            retry = reco.fetch_recommendations(relaxed)
+            if retry.get("ok"):
+                payload = relaxed
+                result = retry
     st.session_state[STATE_KEY] = result
     st.session_state[STATE_PAYLOAD] = payload
     st.session_state[STATE_CUSTOM] = is_custom
