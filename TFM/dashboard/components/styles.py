@@ -259,8 +259,9 @@ hr { border-color:rgba(17,24,39,.10)!important; }
   animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both}
 /* Banner: imagen a todo el ancho, esquinas superiores redondeadas. El título ya
    NO va montado sobre la imagen; baja al cuerpo en azul, como las ofertas TUI. */
-.offer-media{position:relative;width:100%;height:220px;background-size:cover;background-position:center 42%;
-  border-radius:24px 24px 0 0;overflow:hidden}
+.offer-media{position:relative;width:100%;height:220px;overflow:hidden;
+  border-radius:24px 24px 0 0;background:#EEF2F6}
+.offer-media-img{width:100%;height:100%;object-fit:cover;object-position:center 42%;display:block}
 .offer-media--empty{background:linear-gradient(135deg,#1B2432,#3A4657)}
 /* Badge «Oferta TUI»: pastilla blanca con texto rojo, arriba-izquierda. */
 .offer-flag{position:absolute;top:1.1rem;left:1.1rem;z-index:2;display:inline-flex;align-items:center;

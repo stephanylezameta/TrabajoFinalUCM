@@ -387,8 +387,12 @@ def _hero_facts(row: dict) -> list[tuple[str, str]]:
         (_fmt(climate.get("temperature_mean_c"), "°", 0), "Temp. media"),
         (_fmt(offers.get("poi_count"), decimals=0), "Puntos de interés"),
     ]
-    if popularity.get("index") is not None:
-        facts.append((_fmt(popularity.get("index"), decimals=2), "Popularidad"))
+    index = popularity.get("index")
+    if index is not None:
+        try:
+            facts.append((f"{float(index) * 100:.0f}%", "Popularidad"))
+        except (TypeError, ValueError):
+            pass
     return facts
 
 
@@ -412,11 +416,15 @@ def _render_hero(row: dict, payload: dict, compact: bool = False) -> None:
     offer_cls = "offer offer--compact" if compact else "offer"
     parts = [f'<div class="{offer_cls}">']
 
-    # --- Banner: imagen a todo el ancho con el badge «Oferta TUI» ---
+    # --- Banner: imagen a todo el ancho con el badge «Oferta TUI». Se usa un
+    # <img> real (no background-image inline): con data URIs largas el
+    # background-image con comillas escapadas no cargaba. ---
     if photo:
+        alt = photo.get("alt") or f"Imagen de {name}"
         parts.append(
-            f'<div class="offer-media" style="background-image:'
-            f'url(&quot;{escape(photo["url"], quote=True)}&quot;)">'
+            '<div class="offer-media">'
+            f'<img class="offer-media-img" src="{escape(photo["url"], quote=True)}" '
+            f'alt="{escape(alt, quote=True)}">'
         )
     else:
         parts.append('<div class="offer-media offer-media--empty">')
