@@ -1,32 +1,5 @@
 from __future__ import annotations
 
-"""Cliente del recomendador externo de destinos de España (Azure Functions).
-
-Este servicio consume un motor de recomendación independiente del TDRS. No lo
-sustituye: el TDRS ranquea el catálogo internacional de TUI a partir del SQLite
-local, mientras que esta API ranquea municipios españoles combinando catálogo
-turístico, OpenStreetMap, señales de YouTube y clima histórico de AEMET.
-
-El motor en producción es ``tui_hybrid_mapped`` (modelo entrenado): mapea el
-ranking del modelo a municipios de ``dbo.places``. El contrato de respuesta es
-compatible con el motor heurístico anterior, así que el cliente sirve a ambos
-sin cambios: solo varían ``engine`` y algún ``reason_code``.
-
-Configuración por entorno (o ``.streamlit/secrets.toml``):
-
-- ``TUI_RECO_API_BASE`` + ``TUI_RECO_API_KEY``: opción recomendada. La clave
-  viaja en la cabecera ``x-functions-key`` y no queda en el querystring.
-- ``TUI_RECO_API_URL``: alternativa con la URL completa, incluido ``?code=``.
-- ``TUI_RECO_API_TIMEOUT``: segundos de espera (30 por defecto, la Function
-  tiene arranque en frío).
-
-El módulo nunca lanza excepciones hacia la interfaz: devuelve siempre un
-diccionario con ``ok`` y, si algo falla, un ``error`` legible. Igual que el
-resto de la app, degrada en lugar de romper.
-
-El contrato aquí declarado se ha verificado contra la API real. La validación se
-replica en cliente para no gastar una llamada de red en un error evitable.
-"""
 
 import json
 import os
@@ -93,8 +66,10 @@ POPULARITY_RANGE = (0.0, 1.0)
 SUNNY_DAYS_RANGE = (0, 31)
 PRECIPITATION_DAYS_RANGE = (0, 31)
 
-# La API devuelve siempre tres destinos: ignora top_n, limit y max_results.
 RESULTS_PER_CALL = 3
+# Mínimo de destinos con el que la vista se considera utilizable. Con 1 basta
+# para pintar la recomendación destacada.
+MIN_RESULTS_USABLE = 1
 
 MONTH_NAMES = (
     "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
@@ -136,8 +111,15 @@ CONFIDENCE_LABELS: dict[str, str] = {
 
 # Cortacircuitos: tras un fallo de red se evita reintentar durante unos segundos
 # para que la interfaz no acumule timeouts en reruns sucesivos.
-_NETWORK_COOLDOWN_SECONDS = 20.0
+_NETWORK_COOLDOWN_SECONDS = 8.0
 _network_disabled_until = 0.0
+
+# Reintentos automáticos ante fallo de red / arranque en frío del motor. Se
+# reintenta dentro de la misma llamada para que el arranque en frío (que puede
+# tardar ~60 s en Container Apps) sea transparente y no dependa de que el
+# usuario pulse "reintentar" una y otra vez.
+_MAX_NETWORK_ATTEMPTS = 3
+_RETRY_WAIT_SECONDS = 3.0
 
 # Caché en proceso para no repetir la misma consulta en cada rerun de Streamlit.
 _CACHE_MAX_ENTRIES = 32
@@ -363,38 +345,57 @@ def fetch_recommendations(
     except ValueError:
         timeout = 30.0
 
-    request = urllib.request.Request(
-        endpoint,
-        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
-        headers=headers,
-        method="POST",
-    )
+    body_bytes = json.dumps(payload, ensure_ascii=False).encode("utf-8")
 
-    try:
-        with urllib.request.urlopen(request, timeout=timeout) as response:
-            raw = response.read().decode("utf-8")
-        data = json.loads(raw)
-    except urllib.error.HTTPError as exc:
-        # 400/422 son respuestas de negocio: la API está viva y ha rechazado la
-        # petición. No activan el cortacircuitos.
+    # El motor entrenado corre en Container Apps con arranque en frío: la primera
+    # petición del día puede tardar ~60 s o fallar con URLError mientras el
+    # servicio despierta. Se reintenta automáticamente unas cuantas veces con una
+    # breve espera entre intentos, de modo que ese arranque sea transparente para
+    # el usuario y no dependa de que él pulse "reintentar".
+    data: dict[str, Any] | None = None
+    last_network_exc: Exception | None = None
+    for attempt in range(_MAX_NETWORK_ATTEMPTS):
+        request = urllib.request.Request(
+            endpoint, data=body_bytes, headers=headers, method="POST",
+        )
         try:
-            body = exc.read().decode("utf-8", errors="replace")
-        except Exception:  # noqa: BLE001
-            body = ""
-        message = _extract_api_error(body, exc.code)
-        kind = "validation" if exc.code in {400, 422} else "http"
-        if exc.code >= 500:
-            _network_disabled_until = time.monotonic() + _NETWORK_COOLDOWN_SECONDS
-        return _error(kind, message, status_code=exc.code)
-    except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            with urllib.request.urlopen(request, timeout=timeout) as response:
+                raw = response.read().decode("utf-8")
+            data = json.loads(raw)
+            break
+        except urllib.error.HTTPError as exc:
+            # 400/422 son respuestas de negocio: la API está viva y ha rechazado
+            # la petición. No se reintenta ni activa el cortacircuitos.
+            try:
+                body = exc.read().decode("utf-8", errors="replace")
+            except Exception:  # noqa: BLE001
+                body = ""
+            message = _extract_api_error(body, exc.code)
+            kind = "validation" if exc.code in {400, 422} else "http"
+            if exc.code >= 500 and attempt < _MAX_NETWORK_ATTEMPTS - 1:
+                # Error de servidor: puede ser transitorio, se reintenta.
+                time.sleep(_RETRY_WAIT_SECONDS)
+                continue
+            return _error(kind, message, status_code=exc.code)
+        except (urllib.error.URLError, TimeoutError, OSError) as exc:
+            # Fallo de red / arranque en frío: reintentar tras una espera.
+            last_network_exc = exc
+            if attempt < _MAX_NETWORK_ATTEMPTS - 1:
+                time.sleep(_RETRY_WAIT_SECONDS)
+                continue
+        except (ValueError, json.JSONDecodeError):
+            return _error("payload", "La API devolvió una respuesta que no es JSON válido.")
+
+    if data is None:
+        # Agotados los reintentos sin respuesta. Ahora sí se activa el
+        # cortacircuitos para no acumular esperas en reruns inmediatos.
         _network_disabled_until = time.monotonic() + _NETWORK_COOLDOWN_SECONDS
+        name = last_network_exc.__class__.__name__ if last_network_exc else "URLError"
         return _error(
             "network",
-            f"No se pudo contactar con la API de recomendaciones ({exc.__class__.__name__}). "
-            "La Function puede estar arrancando en frío: vuelve a intentarlo.",
+            f"No se pudo contactar con el modelo tras varios intentos ({name}). "
+            "El servicio puede estar arrancando; espera unos segundos y reintenta.",
         )
-    except (ValueError, json.JSONDecodeError):
-        return _error("payload", "La API devolvió una respuesta que no es JSON válido.")
 
     if not isinstance(data, dict) or "ranking" not in data:
         return _error("payload", "La respuesta de la API no contiene un ranking.")

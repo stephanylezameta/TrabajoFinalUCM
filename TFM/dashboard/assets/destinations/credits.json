@@ -1,114 +1,44 @@
 {
-  "Algarve": {
-    "file": "algarve.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Mallorca": {
-    "file": "mallorca.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Menorca": {
-    "file": "menorca.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Split": {
-    "file": "split.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Dubrovnik": {
-    "file": "dubrovnik.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Zadar": {
-    "file": "zadar.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Creta": {
-    "file": "creta.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Naxos": {
-    "file": "naxos.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Maldivas": {
-    "file": "maldivas.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Cabo Verde": {
-    "file": "cabo-verde.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Madrid": {
-    "file": "madrid.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Barcelona": {
-    "file": "barcelona.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Granada": {
-    "file": "granada.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Sevilla": {
-    "file": "sevilla.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Córdoba": {
-    "file": "cordoba.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Marbella": {
-    "file": "marbella.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Cartagena": {
-    "file": "cartagena.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Benidorm": {
-    "file": "benidorm.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Níjar": {
-    "file": "nijar.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Benasque": {
-    "file": "benasque.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Santiago de Compostela": {
-    "file": "santiago-de-compostela.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Málaga": {
-    "file": "malaga.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Donostia/San Sebastián": {
-    "file": "donostia-san-sebastian.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Palma": {
-    "file": "palma.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Vigo": {
-    "file": "vigo.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Murcia": {
-    "file": "murcia.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Bilbao": {
-    "file": "bilbao.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  },
-  "Toledo": {
-    "file": "toledo.jpg",
-    "credit": "Wikipedia / Wikimedia Commons"
-  }
+  "Algarve": { "file": "algarve.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Alicante": { "file": "alicante.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Antalya": { "file": "antalya.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Bali": { "file": "bali.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Barcelona": { "file": "barcelona.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Bilbao": { "file": "bilbao.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Cabo Verde": { "file": "cabo-verde.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Cancún": { "file": "cancun.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Cerdeña": { "file": "cerdena.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Costa Amalfitana": { "file": "costa-amalfitana.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Costa del Sol": { "file": "costa-del-sol.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Creta": { "file": "creta.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Cádiz": { "file": "cadiz.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Córdoba": { "file": "cordoba.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Dubái": { "file": "dubai.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Fuerteventura": { "file": "fuerteventura.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Gran Canaria": { "file": "gran-canaria.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Granada": { "file": "granada.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Hurghada": { "file": "hurghada.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Ibiza": { "file": "ibiza.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Lanzarote": { "file": "lanzarote.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Madrid": { "file": "madrid.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Maldivas": { "file": "maldivas.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Mallorca": { "file": "mallorca.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Marrakech": { "file": "marrakech.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Menorca": { "file": "menorca.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Málaga": { "file": "malaga.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Phuket": { "file": "phuket.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Punta Cana": { "file": "punta-cana.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Riviera Maya": { "file": "riviera-maya.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Rodas": { "file": "rodas.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "San Sebastián": { "file": "san-sebastian.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Santorini": { "file": "santorini.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Sevilla": { "file": "sevilla.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Sicilia": { "file": "sicilia.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Split": { "file": "split.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Tenerife": { "file": "tenerife.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Túnez": { "file": "tunez.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Valencia": { "file": "valencia.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Naxos": { "file": "naxos.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Zadar": { "file": "zadar.jpg", "credit": "Wikipedia / Wikimedia Commons" },
+  "Dubrovnik": { "file": "dubrovnik.jpg", "credit": "Wikipedia / Wikimedia Commons" }
 }

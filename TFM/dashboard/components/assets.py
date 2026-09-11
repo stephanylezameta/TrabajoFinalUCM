@@ -61,12 +61,35 @@ def _normalize_key(text: str) -> str:
     return "".join(c if c.isalnum() else " " for c in plain).strip()
 
 
+# Alias de nombres: el motor devuelve municipios con nombres que no coinciden
+# con el archivo local (nombre oficial, cooficial en catalán/euskera, provincia
+# en vez de isla…). Se mapea la clave normalizada del nombre entrante al SLUG
+# del archivo .jpg que sí existe, para reutilizar la foto sin duplicarla.
+# Clave: nombre normalizado (minúsculas, sin acentos). Valor: slug del archivo.
+_DESTINATION_ALIASES: dict[str, str] = {
+    "eivissa": "ibiza",
+    "santa cruz de tenerife": "tenerife",
+    "palma": "mallorca",
+    "palma de mallorca": "mallorca",
+    "donostia san sebastian": "san-sebastian",
+    "san sebastian": "san-sebastian",
+    "las palmas de gran canaria": "gran-canaria",
+    # Nombres cooficiales (catalán/valenciano/gallego) que el motor devuelve con
+    # barra: se mapean al slug del archivo local existente.
+    "alicante alacant": "alicante",
+    "alacant": "alicante",
+    "castello de la plana castellon de la plana": "castellon",
+    "a coruna": "a-coruna",
+}
+
+
 @lru_cache(maxsize=64)
 def get_local_destination_image(destination: str) -> dict | None:
     """Devuelve la foto local embebida de un destino, si existe en assets/."""
     if not destination:
         return None
-    slug = _normalize_key(destination).replace(" ", "-")
+    key = _normalize_key(destination)
+    slug = _DESTINATION_ALIASES.get(key, key.replace(" ", "-"))
     path = DESTINATIONS_DIR / f"{slug}.jpg"
     if not path.exists():
         return None

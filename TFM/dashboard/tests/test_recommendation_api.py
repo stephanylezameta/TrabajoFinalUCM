@@ -303,6 +303,7 @@ def test_api_422_is_surfaced_as_validation(monkeypatch):
 
 
 def test_network_error_degrades_without_raising(monkeypatch):
+    monkeypatch.setattr(reco, "_RETRY_WAIT_SECONDS", 0)  # sin esperas en test
     def handler():
         raise urllib.error.URLError("sin conexión")
 
@@ -313,7 +314,11 @@ def test_network_error_degrades_without_raising(monkeypatch):
     assert result["ranking"] == []
 
 
-def test_circuit_breaker_blocks_immediate_retry(monkeypatch):
+def test_network_retries_then_activates_circuit_breaker(monkeypatch):
+    """Ante fallo de red, el cliente reintenta unas cuantas veces (para absorber
+    el arranque en frío del motor) y, si agota los intentos, activa el
+    cortacircuitos: la siguiente llamada inmediata no vuelve a salir a la red."""
+    monkeypatch.setattr(reco, "_RETRY_WAIT_SECONDS", 0)  # sin esperas en test
     calls = {"n": 0}
 
     def handler():
@@ -322,11 +327,14 @@ def test_circuit_breaker_blocks_immediate_retry(monkeypatch):
 
     _patch_urlopen(monkeypatch, handler)
     first = reco.recommend(month=7, trip_length_days=7, interests=["coast_beach"])
+    intentos_primera = calls["n"]
     second = reco.recommend(month=8, trip_length_days=7, interests=["rural"])
     assert first["error_kind"] == "network"
     assert second["error_kind"] == "cooldown"
-    # El segundo intento no ha vuelto a salir a la red.
-    assert calls["n"] == 1
+    # La primera llamada reintentó (más de una salida a red), la segunda quedó
+    # bloqueada por el cortacircuitos (sin nuevas salidas a red).
+    assert intentos_primera == reco._MAX_NETWORK_ATTEMPTS
+    assert calls["n"] == intentos_primera
 
 
 def test_non_json_response_is_reported(monkeypatch):

@@ -22,7 +22,11 @@ APP = Path(__file__).resolve().parents[1] / "streamlit_app.py"
 # margen suficiente para evitar falsos negativos por timeout.
 TIMEOUT = 120
 
-NAV_OPTIONS = ["Simulador TDRS", "Recomendador España", "Control Web"]
+NAV_OPTIONS = [
+    "Asistente de viajes",
+    "Recomendaciones España",
+    "Control Web",
+]
 
 
 def _run(view: str | None = None) -> AppTest:
@@ -41,7 +45,7 @@ def test_app_starts_without_exception():
     assert not app.exception, [str(e) for e in app.exception]
 
 
-def test_sidebar_exposes_the_three_views():
+def test_sidebar_exposes_the_nav_views():
     app = _run()
     assert app.sidebar.radio[0].options == NAV_OPTIONS
 
@@ -50,19 +54,6 @@ def test_sidebar_exposes_the_three_views():
 def test_every_view_renders_without_exception(view):
     app = _run(view)
     assert not app.exception, f"{view}: {[str(e) for e in app.exception]}"
-
-
-def test_tdrs_view_shows_weight_sliders():
-    app = _run("Simulador TDRS")
-    assert not app.exception
-    # Cinco pesos del modelo más las dos restricciones.
-    assert len(app.sidebar.slider) >= 7
-
-
-def test_tdrs_view_renders_metrics():
-    app = _run("Simulador TDRS")
-    labels = [m.label for m in app.metric]
-    assert "Elegibles" in labels
 
 
 def test_control_web_shows_commercial_kpis():
@@ -74,7 +65,7 @@ def test_control_web_shows_commercial_kpis():
 
 def test_recommender_view_degrades_without_endpoint():
     """Sin API configurada la vista informa, no rompe ni inventa resultados."""
-    app = _run("Recomendador España")
+    app = _run("Recomendaciones España")
     assert not app.exception
     # El formulario sigue disponible para que el usuario vea el contrato.
     assert app.multiselect, "debería existir el selector de intereses"
@@ -106,12 +97,12 @@ def test_recommender_shows_visible_recommendation(monkeypatch):
         },
     )
 
-    app = _run("Recomendador España")
+    app = _run("Recomendaciones España")
     assert not app.exception, [str(e) for e in app.exception]
 
     # El nombre del destino recomendado aparece en el bloque destacado.
     rendered = " ".join(block.value for block in app.markdown)
-    assert "hero-reco" in rendered, "falta el bloque de recomendación destacada"
+    assert "offer-media" in rendered, "falta el bloque de recomendación destacada"
     assert "Níjar" in rendered, "el destino recomendado no se muestra"
     reco.reset_state()
 
@@ -120,8 +111,9 @@ def test_recommender_form_offers_documented_vocabulary():
     """El selector ofrece exactamente los siete intereses que acepta la API."""
     from services.recommendation_api_service import INTEREST_LABELS
 
-    app = _run("Recomendador España")
+    app = _run("Recomendaciones España")
     interests = app.multiselect[0]
     # AppTest expone las opciones ya formateadas con `format_func`.
     assert set(interests.options) == set(INTEREST_LABELS.values())
     assert len(interests.options) == 7
+

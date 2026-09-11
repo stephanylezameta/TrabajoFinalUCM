@@ -5,13 +5,58 @@ from __future__ import annotations
 Todo el CSS vive aquí en lugar de estar embebido en ``streamlit_app.py``. El
 tema de ``.streamlit/config.toml`` solo gobierna de facto el color primario de
 los widgets: el resto lo define esta hoja.
+
+La tipografía de marca es **Gotham**. Streamlit no sirve fuentes locales por
+ruta (``url(assets/...)`` no resuelve desde el CSS inyectado), así que los .otf
+se embeben en base64 dentro de bloques ``@font-face``. Si algún .otf falta o no
+se puede leer, se degrada limpiamente al fallback (Poppins/Arial) sin romper.
 """
+
+import base64
+from functools import lru_cache
+from pathlib import Path
 
 import streamlit as st
 
-CSS = """
-<style>
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&display=swap');
+# Directorio de fuentes: dashboard/assets/fonts (relativo a este módulo).
+_FONTS_DIR = Path(__file__).resolve().parents[1] / "assets" / "fonts"
+
+# Mapa fichero .otf -> peso CSS. Book=400, Medium=500, Bold=700, Black=900.
+_GOTHAM_FACES = (
+    ("Gotham-Book.otf", 400),
+    ("Gotham-Medium.otf", 500),
+    ("Gotham-Bold.otf", 700),
+    ("Gotham-Black.otf", 900),
+)
+
+
+@lru_cache(maxsize=1)
+def _gotham_font_faces() -> str:
+    """Construye los ``@font-face`` de Gotham embebidos en base64.
+
+    Lee los .otf una sola vez (cacheado) y los codifica a data URI. Cualquier
+    fichero ausente o ilegible se omite sin romper: el CSS seguirá teniendo un
+    fallback tipográfico válido.
+    """
+    faces: list[str] = []
+    for filename, weight in _GOTHAM_FACES:
+        path = _FONTS_DIR / filename
+        try:
+            encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+        except (OSError, ValueError):
+            # Fuente no disponible: se degrada al fallback silenciosamente.
+            continue
+        faces.append(
+            "@font-face{"
+            "font-family:'Gotham';"
+            f"src:url(data:font/otf;base64,{encoded}) format('opentype');"
+            f"font-weight:{weight};font-style:normal;font-display:swap;"
+            "}"
+        )
+    return "".join(faces)
+
+
+CSS = "<style>" + _gotham_font_faces() + """
 :root {
     --tui-red:#D40E14;
     --tui-red-soft:rgba(212,14,20,.12);
@@ -34,13 +79,24 @@ CSS = """
     --shadow:0 18px 46px rgba(17,24,39,.08);
     --shadow-soft:0 10px 28px rgba(17,24,39,.06);
 }
-html, body, [class*="css"] { font-family:'Poppins', Arial, sans-serif; }
+html, body, [class*="css"] { font-family:'Gotham','Poppins', Arial, sans-serif; }
+/* Gotham en todo MENOS los iconos: los Material Symbols de Streamlit necesitan
+   su propia fuente; forzarles Gotham hacía que se viera el texto del icono
+   (p. ej. "keyboard_arrow_down") en vez del símbolo. */
+.stApp, .stApp *:not([class*="material"]):not([data-testid="stIconMaterial"]):not(.material-icons):not(.material-symbols-outlined) {
+    font-family:'Gotham','Poppins', Arial, sans-serif;
+}
+/* Restaura la fuente de iconos de Streamlit explícitamente. */
+[data-testid="stIconMaterial"], .material-icons, .material-symbols-outlined,
+span[class*="material-symbols"], span[class*="material-icons"] {
+    font-family:'Material Symbols Outlined','Material Symbols Rounded','Material Icons' !important;
+}
 .stApp {
     color:var(--text);
     background-color:#FFFFFF;
     background-image:none;
 }
-/* Fondo principal blanco, limpio. */
+/* Fondo principal blanco (el degradado celeste vive en el sidebar). */
 [data-testid="stAppViewContainer"] > .main .block-container {
     position:relative;
     background:#FFFFFF;
@@ -58,12 +114,12 @@ html, body, [class*="css"] { font-family:'Poppins', Arial, sans-serif; }
 h1,h2,h3,h4 { color:var(--tui-dark); letter-spacing:-.03em; }
 h1 { font-size:2.05rem !important; font-weight:900 !important; }
 h2 { font-size:1.3rem !important; font-weight:900 !important; }
-h3 { font-size:1.03rem !important; font-weight:850 !important; }
+h3 { font-size:1.03rem !important; font-weight:900 !important; }
 p,label,span,div { text-rendering:optimizeLegibility; }
 
 /* SIDEBAR */
 [data-testid="stSidebar"] {
-    background:linear-gradient(180deg,rgba(224,239,248,.56) 0%,rgba(232,244,251,.52) 100%);
+    background:linear-gradient(180deg,#6EC1F0 0%,#AEE0F7 45%,#DCF0FB 100%);
     border-right:1px solid rgba(17,24,39,.08);
     box-shadow:10px 0 28px rgba(17,24,39,.035);
     backdrop-filter:blur(6px);
@@ -72,12 +128,12 @@ p,label,span,div { text-rendering:optimizeLegibility; }
 [data-testid="stSidebar"] > div:first-child { padding-top:1rem; }
 [data-testid="stSidebar"] .block-container { padding-top:.8rem; }
 .tui-brand { display:flex; gap:.78rem; align-items:center; padding:.15rem .05rem .9rem .05rem; animation:fadeSlide .45s ease both; }
-.tui-logo-wrap { display:flex; align-items:center; justify-content:center; padding:.42rem .5rem; border-radius:20px; background:rgba(255,255,255,.62); border:1px solid rgba(17,24,39,.08); box-shadow:var(--shadow-soft); backdrop-filter:blur(5px); }
+.tui-logo-wrap { display:flex; align-items:center; justify-content:center; padding:.1rem .1rem; border-radius:0; background:transparent; border:none; box-shadow:none; }
 .tui-logo-img { width:130px; height:auto; display:block; }
-.tui-brand-title { font-size:.98rem; color:var(--tui-dark); font-weight:900; line-height:1.05; }
-.tui-brand-sub { color:var(--muted); font-size:.68rem; font-weight:750; margin-top:.17rem; }
+.tui-brand-title { font-size:.98rem; color:rgb(27 17 92); font-weight:900; line-height:1.05; }
+.tui-brand-sub { color:rgb(27 17 92); font-size:.68rem; font-weight:750; margin-top:.17rem; }
 .sidebar-status { border:1px solid rgba(17,24,39,.09); border-radius:16px; padding:.72rem .8rem; margin:.15rem 0 .85rem 0; background:linear-gradient(180deg,rgba(234,244,251,.52),rgba(247,251,253,.48)); box-shadow:var(--shadow-soft); backdrop-filter:blur(5px); }
-.sidebar-status-row { display:flex; align-items:center; gap:.45rem; color:var(--tui-dark); font-size:.79rem; font-weight:850; }
+.sidebar-status-row { display:flex; align-items:center; gap:.45rem; color:var(--tui-dark); font-size:.79rem; font-weight:900; }
 .status-dot { width:8px; height:8px; border-radius:50%; display:inline-block; }
 .dot-ok{background:var(--success);box-shadow:0 0 0 4px rgba(25,134,94,.09)} .dot-warning{background:var(--warning)} .dot-critical{background:var(--error)}
 .sidebar-time { color:var(--muted); font-size:.68rem; margin-top:.32rem; }
@@ -86,15 +142,19 @@ p,label,span,div { text-rendering:optimizeLegibility; }
 
 /* radio Vista / Escenario */
 [data-testid="stSidebar"] div[data-testid="stRadio"] > label { color:var(--tui-dark)!important; font-weight:900; font-size:.78rem; margin-bottom:.2rem; }
-[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] { gap:.04rem; }
+[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] { gap:.35rem; }
 [data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] label {
-    padding:.26rem .25rem; border-radius:10px; transition:.18s ease; font-weight:700;
+    padding:.6rem .4rem; border-radius:12px; transition:.18s ease; font-weight:800;
 }
-[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] label:hover { background:rgba(17,24,39,.05); }
+[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] label,
+[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] label p {
+    color:rgb(27 17 92 / var(--tw-bg-opacity, 1))!important; font-size:1.08rem!important;
+}
+[data-testid="stSidebar"] div[data-testid="stRadio"] [role="radiogroup"] label:hover { background:rgba(27,17,92,.06); }
 
 /* expanders de filtros */
 [data-testid="stSidebar"] [data-testid="stExpander"] { background:linear-gradient(180deg,rgba(234,244,251,.50),rgba(247,251,253,.46)); border:1px solid rgba(17,24,39,.09); border-radius:16px; box-shadow:var(--shadow-soft); margin:.42rem 0; overflow:hidden; backdrop-filter:blur(5px); }
-[data-testid="stSidebar"] [data-testid="stExpander"] summary { color:var(--tui-dark); font-weight:850; }
+[data-testid="stSidebar"] [data-testid="stExpander"] summary { color:var(--tui-dark); font-weight:900; }
 [data-testid="stSidebar"] [data-testid="stSlider"] { margin-bottom:.35rem; }
 [data-testid="stSidebar"] [data-testid="stSlider"] label, [data-testid="stSidebar"] [data-testid="stSelectbox"] label { color:#334155!important; font-weight:750; font-size:.80rem; }
 
@@ -105,7 +165,7 @@ p,label,span,div { text-rendering:optimizeLegibility; }
 .hero h1 { color:var(--tui-dark) !important; margin:0 0 .3rem 0; position:relative; z-index:2; }
 .hero p { margin:0; color:#475467; font-size:.93rem; max-width:900px; position:relative; z-index:2; }
 .hero-kicker { text-transform:uppercase; letter-spacing:.11em; font-weight:900; font-size:.66rem; color:#6B7280; margin-bottom:.42rem; position:relative; z-index:2; }
-.hero-status { display:inline-flex; align-items:center; gap:.45rem; background:rgba(17,24,39,.05); border:1px solid rgba(17,24,39,.08); border-radius:999px; padding:.33rem .65rem; font-size:.72rem; font-weight:850; margin-top:.85rem; position:relative; z-index:2; color:var(--tui-dark); }
+.hero-status { display:inline-flex; align-items:center; gap:.45rem; background:rgba(17,24,39,.05); border:1px solid rgba(17,24,39,.08); border-radius:999px; padding:.33rem .65rem; font-size:.72rem; font-weight:900; margin-top:.85rem; position:relative; z-index:2; color:var(--tui-dark); }
 
 .section-card,[data-testid="stMetric"],[data-testid="stDataFrame"] { background:linear-gradient(180deg,rgba(255,255,255,.84),rgba(248,251,253,.78)); border:1px solid rgba(17,24,39,.10); box-shadow:var(--shadow-soft); backdrop-filter:blur(3px); }
 .section-card { border-radius:20px; padding:1rem 1.05rem; animation:fadeUp .48s ease both; }
@@ -119,11 +179,11 @@ p,label,span,div { text-rendering:optimizeLegibility; }
 .alert-card { border-radius:14px; padding:.82rem .9rem; margin-bottom:.58rem; border:1px solid rgba(17,24,39,.08); background:linear-gradient(180deg,rgba(255,255,255,.80),rgba(244,249,252,.76)); box-shadow:0 10px 24px rgba(17,24,39,.04); backdrop-filter:blur(3px); }
 .alert-critical { border-left:4px solid var(--error); background:#FFF8F8; }.alert-warning { border-left:4px solid var(--warning); background:#FFFBF3; }.alert-info { border-left:4px solid #667085; background:#F7F7F8; }.alert-ok { border-left:4px solid var(--success); background:#F5FBF8; }
 .alert-head { display:flex; justify-content:space-between; gap:.7rem; align-items:flex-start; }.alert-title { font-weight:900; color:var(--text); font-size:.84rem; }.alert-badge { font-size:.61rem; font-weight:900; letter-spacing:.06em; border-radius:999px; padding:.18rem .45rem; white-space:nowrap; }
-.badge-critical{background:#FBE1E1;color:#9C2020}.badge-warning{background:#FFF0CC;color:#8D5D00}.badge-info{background:#EAECF0;color:#344054}.badge-ok{background:#DDF3E9;color:#116947}.alert-message { color:var(--muted); font-size:.76rem; line-height:1.45; margin-top:.28rem; }.alert-action { color:#344054; font-size:.71rem; font-weight:800; margin-top:.35rem; }
+.badge-critical{background:#FBE1E1;color:#9C2020}.badge-warning{background:#FFF0CC;color:#8D5D00}.badge-info{background:#EAECF0;color:#344054}.badge-ok{background:#DDF3E9;color:#116947}.alert-message { color:var(--muted); font-size:.76rem; line-height:1.45; margin-top:.28rem; }.alert-action { color:#344054; font-size:.71rem; font-weight:700; margin-top:.35rem; }
 
 [data-testid="stChatMessage"] { background:linear-gradient(180deg,rgba(255,255,255,.78),rgba(246,250,253,.74)); border:1px solid rgba(17,24,39,.10); border-radius:15px; padding:.25rem .35rem; backdrop-filter:blur(3px); }
 [data-testid="stChatInput"] { border-color:var(--border); }
-div.stButton > button { min-height:3rem; padding:.58rem 1rem; border-radius:999px; border:1px solid rgba(17,24,39,.16); background:linear-gradient(180deg,#FFFFFF 0%,#F2F4F7 100%); color:var(--tui-dark); font-weight:850; transition:.18s ease; box-shadow:inset 0 1px 0 rgba(255,255,255,.92), 0 8px 18px rgba(17,24,39,.06); }
+div.stButton > button { min-height:3rem; padding:.58rem 1rem; border-radius:999px; border:1px solid rgba(17,24,39,.16); background:linear-gradient(180deg,#FFFFFF 0%,#F2F4F7 100%); color:var(--tui-dark); font-weight:900; transition:.18s ease; box-shadow:inset 0 1px 0 rgba(255,255,255,.92), 0 8px 18px rgba(17,24,39,.06); }
 div.stButton > button:hover { border-color:rgba(17,24,39,.32); background:linear-gradient(180deg,#FFFFFF 0%,#ECEFF3 100%); color:var(--tui-dark); transform:translateY(-1px); box-shadow:0 12px 22px rgba(17,24,39,.09); }
 div.stButton > button[kind="primary"] { background:linear-gradient(180deg,#111827 0%,#2B3340 100%); color:#fff; border-color:#111827; box-shadow:0 12px 28px rgba(17,24,39,.18), inset 0 1px 0 rgba(255,255,255,.08); }
 div.stButton > button[kind="primary"]:hover { background:linear-gradient(180deg,#0F172A 0%,#1F2937 100%); color:#fff; border-color:#0F172A; }
@@ -159,6 +219,15 @@ hr { border-color:rgba(17,24,39,.10)!important; }
 .chat-main{margin:.35rem 0 .75rem}.chat-main-title{font-size:.96rem;font-weight:900;color:var(--tui-dark);margin-bottom:.15rem}.chat-main-sub{font-size:.74rem;color:var(--muted);margin-bottom:.45rem}
 .map-note{font-size:.70rem;color:var(--muted);margin:.25rem 0 .6rem}.map-kpi{font-weight:900;color:var(--tui-dark)}
 .selector-title{font-size:.98rem;font-weight:900;color:var(--tui-dark);margin-bottom:.15rem}.selector-sub{font-size:.74rem;color:var(--muted);margin-bottom:.55rem}.selector-active{font-size:.72rem;color:var(--muted);margin-top:.35rem}.selector-active strong{color:var(--tui-dark)}
+/* Aparición fluida y simultánea de los escenarios (evita la sensación de que
+   primero carga uno y luego el resto). El icono entra con un leve zoom y el
+   texto activo con un fundido suave; ambos usan la misma curva de easing. */
+.scenario-icon-wrap{animation:scenPop .42s cubic-bezier(.16,1,.3,1) both}
+.scenario-icon{transition:transform .25s cubic-bezier(.16,1,.3,1)}
+.scenario-icon-wrap:hover .scenario-icon{transform:scale(1.08)}
+.selector-active{animation:scenFade .5s ease both}
+@keyframes scenPop{from{opacity:0;transform:scale(.82) translateY(4px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes scenFade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 
 /* ==========================================================================
    Recomendador España (API). Diseño "portada de viaje": una recomendación
@@ -169,12 +238,16 @@ hr { border-color:rgba(17,24,39,.10)!important; }
 
 /* --- Cabecera comercial del recomendador, tono editorial de viajes --- */
 .reco-header{margin:.3rem 0 1.3rem;animation:fadeUp .4s ease both}
-.reco-kicker{display:inline-flex;align-items:center;gap:.5rem;font-size:.66rem;font-weight:800;
+.reco-kicker{display:inline-flex;align-items:center;gap:.5rem;font-size:.66rem;font-weight:700;
   letter-spacing:.16em;text-transform:uppercase;color:var(--tui-red);margin-bottom:.55rem}
 .reco-kicker:before{content:"";width:22px;height:2px;border-radius:2px;background:var(--tui-red)}
-.reco-hero-title{font-size:2.55rem;font-weight:800;color:var(--tui-dark);line-height:1.06;letter-spacing:-.035em;
+/* Variante grande: cuando el kicker actúa como título de la vista. */
+.reco-kicker--title{font-size:1.9rem;letter-spacing:-.01em;text-transform:none;
+  color:rgb(27 17 92 / var(--tw-bg-opacity, 1));margin-bottom:.4rem}
+.reco-kicker--title:before{width:6px;height:26px;border-radius:3px}
+.reco-hero-title{font-size:3.55rem;font-weight:700;color:rgb(27 17 92 / var(--tw-bg-opacity, 1));line-height:1.06;letter-spacing:-.035em;
   margin:0 0 .55rem}
-.reco-hero-title em{font-style:normal;color:var(--tui-red)}
+.reco-hero-title em{font-style:normal;color:rgb(27 17 92 / var(--tw-bg-opacity, 1))}
 .reco-hero-lead{font-size:1.05rem;color:var(--muted);line-height:1.55;font-weight:400;margin:0;max-width:620px}
 
 /* --- Oferta destacada (opción 1): tarjeta comercial estilo TUI ---
@@ -184,40 +257,67 @@ hr { border-color:rgba(17,24,39,.10)!important; }
   border:1px solid rgba(17,24,39,.07);
   box-shadow:0 4px 16px rgba(17,24,39,.05),0 34px 70px -28px rgba(17,24,39,.36);
   animation:fadeUp .55s cubic-bezier(.16,1,.3,1) both}
-/* Banner: la imagen llena todo el ancho, sin franjas, esquinas superiores redondeadas. */
-.offer-media{position:relative;width:100%;height:380px;background-size:cover;background-position:center 42%;
-  border-radius:24px 24px 0 0;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end}
+/* Banner: imagen a todo el ancho, esquinas superiores redondeadas. El título ya
+   NO va montado sobre la imagen; baja al cuerpo en azul, como las ofertas TUI. */
+.offer-media{position:relative;width:100%;height:220px;overflow:hidden;
+  border-radius:24px 24px 0 0;background:#EEF2F6}
+.offer-media-img{width:100%!important;height:100%!important;max-width:none!important;
+  object-fit:cover!important;object-position:center 42%;display:block!important;margin:0!important;border-radius:0!important}
 .offer-media--empty{background:linear-gradient(135deg,#1B2432,#3A4657)}
-.offer-media-veil{position:absolute;inset:0;z-index:1;pointer-events:none;
-  background:linear-gradient(180deg,rgba(17,24,39,0) 40%,rgba(17,24,39,.34) 66%,rgba(17,24,39,.86) 100%)}
-.offer-flag{position:absolute;top:1.2rem;left:1.2rem;z-index:2;display:inline-flex;align-items:center;gap:.4rem;
-  font-size:.66rem;font-weight:700;letter-spacing:.04em;color:#fff;background:var(--tui-red);
-  padding:.42rem .85rem;border-radius:999px;box-shadow:0 8px 20px rgba(212,14,20,.42)}
-.offer-media-caption{position:relative;z-index:2;padding:1.7rem 1.9rem}
-.offer-name{font-size:2.9rem;font-weight:800;line-height:1;letter-spacing:-.04em;margin:0;color:#fff;
-  text-shadow:0 5px 30px rgba(0,0,0,.55)}
-.offer-place{font-size:.92rem;color:rgba(255,255,255,.94);margin-top:.5rem;font-weight:500;
-  display:flex;align-items:center;gap:.3rem;text-shadow:0 2px 14px rgba(0,0,0,.45)}
-/* Panel claro */
-.offer-body{padding:1.6rem 1.9rem 1.8rem;display:flex;flex-direction:column}
+/* Badge «Oferta TUI»: pastilla blanca con texto rojo, arriba-izquierda. */
+.offer-flag{position:absolute;top:1.1rem;left:1.1rem;z-index:2;display:inline-flex;align-items:center;
+  font-size:.72rem;font-weight:800;letter-spacing:.01em;color:var(--tui-red);background:#fff;
+  padding:.4rem .9rem;border-radius:999px;box-shadow:0 8px 20px rgba(17,24,39,.18)}
+/* Panel claro: título azul, duración/precio, motivo, lugares y datos. */
+.offer-body{padding:1.1rem 1.3rem 1.25rem;display:flex;flex-direction:column}
+.offer-name{font-size:1.5rem;font-weight:400;line-height:1.12;letter-spacing:-.01em;margin:0;
+  color:rgb(27 17 92)}
+.offer-place{font-size:.86rem;color:var(--muted);margin-top:.35rem;font-weight:400;
+  display:flex;align-items:center;gap:.3rem}
+.offer-trip{font-size:1.02rem;color:var(--tui-dark);font-weight:700;margin-top:.7rem}
+.offer-trip strong{font-weight:900}
+.offer-price-note{font-size:.66rem;color:var(--muted);font-weight:600;margin-top:.15rem;font-style:italic}
 .offer-typology{align-self:flex-start;font-size:.62rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
-  border-radius:999px;padding:.26rem .68rem;background:var(--tui-red-soft);color:var(--tui-red-deep)}
-.offer-why{font-size:1.14rem;line-height:1.5;color:var(--tui-dark);font-weight:500;margin:.9rem 0 0;max-width:760px}
-.offer-chips{display:flex;flex-wrap:wrap;gap:.45rem;margin-top:1.1rem}
-.offer-chip{font-size:.72rem;font-weight:600;border-radius:999px;padding:.34rem .78rem;
-  background:#F1F4F8;color:#475467;border:1px solid rgba(17,24,39,.06)}
-.offer-chip.warn{background:#FFF3D6;color:#8D5D00;border-color:rgba(141,93,0,.16)}
-.offer-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:.7rem;margin-top:1.4rem;
-  padding-top:1.35rem;border-top:1px solid rgba(17,24,39,.08)}
+  border-radius:999px;padding:.26rem .68rem;background:var(--tui-red-soft);color:var(--tui-red-deep);margin-top:.9rem}
+.offer-why{font-size:1.05rem;line-height:1.5;color:var(--tui-dark);font-weight:400;margin:.8rem 0 0;max-width:760px}
+/* Lista de "lugares"/fortalezas del modelo, en azul, estilo itinerario TUI. */
+.offer-places{margin-top:.7rem;font-size:.86rem;color:rgb(27 17 92);font-weight:400;line-height:1.5}
+.offer-place-item:not(:last-child):after{content:", ";color:var(--muted)}
+.offer-tradeoff{font-size:.78rem;color:#8D5D00;background:#FFF3D6;border:1px solid rgba(141,93,0,.16);
+  border-radius:10px;padding:.35rem .6rem;margin-top:.7rem;align-self:flex-start}
+/* CTA decorativo estilo TUI (deshabilitado: es demostración). */
+.offer-cta{margin-top:1.1rem;align-self:flex-start;font-size:.82rem;font-weight:800;color:var(--tui-red);
+  background:#fff;border:1px solid var(--tui-red);border-radius:999px;padding:.6rem 1.5rem;cursor:default}
+.offer-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:.7rem;margin-top:1.2rem;
+  padding-top:1.15rem;border-top:1px solid rgba(17,24,39,.08)}
 .offer-fact{background:#F7F9FB;border:1px solid rgba(17,24,39,.05);border-radius:16px;padding:.85rem .6rem;text-align:center}
-.offer-fact-value{font-size:1.55rem;font-weight:800;color:var(--tui-dark);line-height:1;letter-spacing:-.02em}
+.offer-fact-value{font-size:1.55rem;font-weight:500;color:var(--tui-dark);line-height:1;letter-spacing:-.02em}
 .offer-fact-label{font-size:.58rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
   color:var(--muted);margin-top:.35rem}
 
 /* --- Tarjetas de alternativas: editorial, imagen banner + datos limpios --- */
-.alt-title{font-size:1.2rem;font-weight:800;color:var(--tui-dark);letter-spacing:-.015em;
+.alt-title{font-size:1.2rem;font-weight:700;color:var(--tui-dark);letter-spacing:-.015em;
   margin:1.6rem 0 1rem;display:flex;align-items:center;gap:.6rem}
 .alt-title:before{content:"";width:4px;height:22px;background:var(--tui-red);border-radius:3px}
+/* Rejilla de alternativas: un único bloque CSS grid (no st.columns) para no
+   romper el DOM de React con un número variable de columnas. */
+.alt-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;align-items:stretch}
+
+/* --- Modo compacto de las alternativas (opciones 2 y 3 en la vista del
+   asistente): tarjetas más pequeñas y contenido reducido, para que la opción 1
+   siga siendo la protagonista. Las clases modificadoras las emite el mismo
+   bloque HTML que la rejilla, así que el escalado por descendencia es fiable. */
+.alt-title--compact{font-size:1rem;margin:1.1rem 0 .7rem}
+.alt-grid--compact{grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.7rem}
+.alt-grid--compact .reco-photo-wrap{height:110px}
+.alt-grid--compact .reco-name{font-size:1rem}
+.alt-grid--compact .reco-place{font-size:.68rem}
+/* Cuerpo muy contenido: solo tipología + los tres datos, sin bloques extra. */
+.alt-grid--compact .reco-body{padding:.7rem .85rem .8rem;gap:.5rem}
+.alt-grid--compact .reco-typology{font-size:.55rem;padding:.18rem .48rem}
+.alt-grid--compact .reco-facts{gap:.3rem}
+.alt-grid--compact .reco-fact-value{font-size:1rem}
+.alt-grid--compact .reco-fact-label{font-size:.5rem}
 .reco-card{position:relative;overflow:hidden;border-radius:22px;background:#fff;padding:0;
   border:1px solid rgba(17,24,39,.07);
   box-shadow:0 4px 14px rgba(17,24,39,.04),0 16px 36px -16px rgba(17,24,39,.16);
@@ -229,28 +329,30 @@ hr { border-color:rgba(17,24,39,.10)!important; }
    Ocupa todo el ancho y redondea las esquinas superiores igual que la tarjeta. */
 .reco-photo-wrap{position:relative;width:100%;aspect-ratio:16/10;overflow:hidden;background:#EEF2F6;
   display:block;margin:0;line-height:0;border-radius:21px 21px 0 0}
-.reco-photo{width:100%;height:100%;object-fit:cover;object-position:center center;display:block;
-  margin:0;background:#EEF2F6;transition:transform .55s cubic-bezier(.16,1,.3,1)}
+.reco-photo{width:100%!important;height:100%!important;max-width:none!important;object-fit:cover!important;
+  object-position:center center;display:block!important;margin:0!important;border-radius:0!important;
+  background:#EEF2F6;transition:transform .55s cubic-bezier(.16,1,.3,1)}
 .reco-card:hover .reco-photo{transform:scale(1.08)}
-.reco-photo-veil{position:absolute;inset:0;pointer-events:none;
-  background:linear-gradient(180deg,rgba(17,24,39,0) 34%,rgba(17,24,39,.72) 100%)}
 .reco-photo-fallback{width:100%;height:100%;display:flex;align-items:center;justify-content:center;
   background:linear-gradient(135deg,#243244,#3B4A5E);color:#fff;font-weight:700;font-size:1.3rem;letter-spacing:.02em}
-.reco-rank-badge{position:absolute;top:.9rem;left:.9rem;z-index:2;font-size:.58rem;font-weight:800;
-  letter-spacing:.08em;text-transform:uppercase;color:var(--tui-dark);background:rgba(255,255,255,.95);
-  border-radius:999px;padding:.3rem .68rem;box-shadow:0 6px 16px rgba(17,24,39,.22);backdrop-filter:blur(4px)}
-/* Nombre y lugar montados sobre la foto, estilo tarjeta de viaje. */
-.reco-photo-caption{position:absolute;left:1.1rem;right:1.1rem;bottom:1rem;z-index:2;line-height:1.1}
-.reco-name{font-size:1.5rem;font-weight:800;color:#fff;line-height:1.06;letter-spacing:-.025em;
-  text-shadow:0 3px 18px rgba(0,0,0,.5)}
-.reco-place{font-size:.76rem;color:rgba(255,255,255,.92);font-weight:500;margin-top:.28rem;
+/* Badge «Oferta TUI»: pastilla blanca con texto rojo, sobre la imagen. */
+.reco-flag{position:absolute;top:.8rem;left:.8rem;z-index:2;font-size:.64rem;font-weight:800;
+  color:var(--tui-red);background:#fff;border-radius:999px;padding:.3rem .7rem;
+  box-shadow:0 6px 16px rgba(17,24,39,.18)}
+/* Cuerpo: título azul debajo de la imagen (estilo oferta TUI). */
+.reco-body{padding:1.1rem 1.2rem 1.25rem;display:flex;flex-direction:column;gap:.5rem;flex:1}
+.reco-name{font-size:1.25rem;font-weight:700;color:rgb(27 17 92);line-height:1.1;letter-spacing:-.015em}
+.reco-place{font-size:.74rem;color:var(--muted);font-weight:500;
   display:inline-flex;align-items:center;gap:.28rem}
-/* Cuerpo: todo visible, sin desplegables, para comparar de un vistazo. */
-.reco-body{padding:1.2rem 1.3rem 1.35rem;display:flex;flex-direction:column;gap:.78rem;flex:1}
+.reco-trip{font-size:.9rem;color:var(--tui-dark);font-weight:700;margin-top:.1rem}
+.reco-places{font-size:.78rem;color:rgb(27 17 92);font-weight:600;line-height:1.45}
+.reco-place-item:not(:last-child):after{content:", ";color:var(--muted)}
+.reco-cta{margin-top:.5rem;align-self:flex-start;font-size:.74rem;font-weight:800;color:var(--tui-red);
+  background:#fff;border:1px solid var(--tui-red);border-radius:999px;padding:.42rem 1.1rem;cursor:default}
 .reco-typology{align-self:flex-start;font-size:.6rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
   border-radius:999px;padding:.24rem .62rem;background:var(--tui-red-soft);color:var(--tui-red-deep)}
 .reco-headline{font-size:.86rem;color:#5B6472;line-height:1.5;font-weight:400;margin:0}
-.reco-block-title{font-size:.6rem;font-weight:800;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);
+.reco-block-title{font-size:.6rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);
   margin:.15rem 0 .1rem}
 .reco-list{margin:0;padding-left:1.05rem;font-size:.79rem;color:#5B6472;line-height:1.55}
 .reco-list li{margin-bottom:.15rem}
@@ -269,7 +371,7 @@ hr { border-color:rgba(17,24,39,.10)!important; }
 /* Rejilla de datos objetivos, tono producto. */
 .reco-facts{display:grid;grid-template-columns:repeat(3,1fr);gap:.55rem;margin-top:.1rem}
 .reco-fact{background:#F7F9FB;border:1px solid rgba(17,24,39,.05);border-radius:14px;padding:.62rem .5rem;text-align:center}
-.reco-fact-value{font-size:1.08rem;font-weight:800;color:var(--tui-dark);line-height:1}
+.reco-fact-value{font-size:1.08rem;font-weight:700;color:var(--tui-dark);line-height:1}
 .reco-fact-label{font-size:.55rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-top:.3rem}
 
 @media(max-width:900px){
@@ -281,10 +383,195 @@ hr { border-color:rgba(17,24,39,.10)!important; }
   .reco-facts{grid-template-columns:repeat(3,1fr)}
 }
 
+/* ==========================================================================
+   Recomendador España — Asistente de viaje (MAQUETA del chat).
+   Estética producto de viajes: burbujas con acento TUI, tarjetas de destino
+   compactas embebidas en la respuesta del asistente. Reutiliza las variables
+   de marca (rojo TUI, oscuro TUI, muted) y radios/sombras del resto de la app.
+   ========================================================================== */
+
+/* Aviso de vista previa (demo). Sutil, no intrusivo. */
+.chatreco-preview-note{display:inline-flex;align-items:center;gap:.5rem;
+  font-size:.7rem;font-weight:700;letter-spacing:.02em;color:var(--tui-red-deep);
+  background:var(--tui-red-soft);border:1px solid rgba(212,14,20,.16);
+  border-radius:999px;padding:.34rem .8rem;margin:.1rem 0 1rem}
+/* Indicador rectangular (sin puntos circulares): una barrita de acento TUI. */
+.chatreco-preview-mark{width:14px;height:4px;border-radius:2px;background:var(--tui-red)}
+
+/* Sugerencias de arranque (chips no clicables dentro del HTML de la ventana). */
+.chatreco-suggest-title{font-size:.74rem;font-weight:700;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--muted);margin:.15rem 0 .5rem}
+.chatreco-suggest-chips{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.6rem}
+.chatreco-suggest-chip{font-size:.72rem;font-weight:500;color:var(--tui-dark);
+  background:#fff;border:1px solid rgba(17,24,39,.14);border-radius:12px;padding:.4rem .7rem;
+  box-shadow:0 2px 6px rgba(17,24,39,.05)}
+
+/* Ventana de chat: un contenedor VISIBLE que enmarca la conversación como un
+   módulo aparte del resto de la página (fondo muy sutil, borde y sombra). Así
+   el chat «se nota» como una caja propia y no queda flotando sin marco. */
+.chatreco-window{border:1px solid rgba(17,24,39,.12);border-radius:16px;
+  background:linear-gradient(180deg,#FBFCFE 0%,#F4F7FA 100%);
+  box-shadow:0 2px 8px rgba(17,24,39,.04),0 18px 40px -26px rgba(17,24,39,.30);
+  padding:1rem 1.05rem 1.1rem}
+.chatreco-window-head{display:flex;align-items:center;gap:.55rem;
+  padding-bottom:.7rem;margin-bottom:.55rem;border-bottom:1px solid rgba(17,24,39,.08)}
+.chatreco-window-dot{width:9px;height:9px;border-radius:3px;background:var(--tui-red);
+  box-shadow:0 0 0 4px rgba(212,14,20,.10)}
+.chatreco-window-title{font-size:.82rem;font-weight:700;color:var(--tui-dark);letter-spacing:-.01em}
+.chatreco-window-sub{font-size:.68rem;color:var(--muted);margin-left:auto}
+
+/* Filas de conversación con avatar CUADRADO (esquinas suaves, NUNCA círculos).
+   El asistente a la izquierda, el usuario a la derecha. Margen amplio entre
+   mensajes para que cada caja se lea separada de la anterior. */
+.chatreco-row{display:flex;align-items:flex-start;gap:.6rem;margin:.85rem 0}
+.chatreco-row--bot{justify-content:flex-start}
+.chatreco-row--user{justify-content:flex-end}
+.chatreco-avatar{flex:0 0 auto;width:34px;height:34px;border-radius:11px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:.6rem;font-weight:700;letter-spacing:.02em;line-height:1;
+  box-shadow:0 6px 16px -8px rgba(17,24,39,.4)}
+.chatreco-avatar--bot{background:linear-gradient(180deg,var(--tui-red),var(--tui-red-deep));
+  color:#fff}
+.chatreco-avatar--user{background:#EEF1F5;color:var(--tui-dark);
+  border:1px solid rgba(17,24,39,.10)}
+/* La burbuja no debe estirarse a todo el ancho: se ajusta a su contenido. */
+.chatreco-row .chatreco-bubble{max-width:min(680px,88%)}
+
+/* Burbujas de chat como CAJAS bien definidas: borde visible, sombra clara y
+   esquinas redondeadas PARCIALES (14px, nunca píldora total). Asistente a la
+   izquierda (fondo blanco, acento TUI), usuario a la derecha (rojo TUI). */
+.chatreco-bubble{display:inline-block;max-width:100%;padding:.82rem 1.05rem;
+  font-size:.92rem;line-height:1.55;border-radius:14px;
+  border:1px solid rgba(17,24,39,.12);
+  box-shadow:0 2px 6px rgba(17,24,39,.05),0 12px 26px -16px rgba(17,24,39,.32);
+  animation:fadeUp .3s ease both}
+.chatreco-bubble--bot{background:#fff;color:var(--tui-dark);
+  border-color:rgba(17,24,39,.12);border-top-left-radius:6px}
+.chatreco-bubble--user{background:linear-gradient(180deg,var(--tui-red),var(--tui-red-deep));
+  color:#fff;border-color:rgba(184,11,16,.55);border-top-right-radius:6px;
+  box-shadow:0 3px 8px rgba(212,14,20,.16),0 12px 26px -14px rgba(212,14,20,.5)}
+
+/* Rejilla de tarjetas EMBEBIDAS en la respuesta del asistente. Un único bloque
+   CSS grid (no st.columns) para no romper el DOM de React. Sangrada a la altura
+   de la burbuja para leerse como parte de la respuesta. */
+.chatreco-cards-grid{margin:.55rem 0 .3rem;padding-left:2.6rem;
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.6rem}
+
+/* Tarjeta de destino compacta embebida en el chat: CAJA definida con borde
+   visible, sombra y esquinas parciales (16px). */
+.chatreco-card{position:relative;overflow:hidden;border-radius:16px;background:#fff;
+  border:1px solid rgba(17,24,39,.12);
+  box-shadow:0 2px 8px rgba(17,24,39,.05),0 18px 38px -22px rgba(17,24,39,.32);
+  display:flex;flex-direction:column;height:100%;
+  transition:transform .3s cubic-bezier(.16,1,.3,1),box-shadow .3s ease;
+  animation:fadeUp .38s ease both}
+.chatreco-card:hover{transform:translateY(-4px);
+  box-shadow:0 10px 22px rgba(17,24,39,.08),0 26px 48px -18px rgba(17,24,39,.32)}
+/* Banner: imagen a todo el ancho, pegada a los bordes, esquinas superiores. */
+.chatreco-media-wrap{position:relative;width:100%;aspect-ratio:16/10;overflow:hidden;
+  background:#EEF2F6;border-radius:15px 15px 0 0;line-height:0}
+.chatreco-media{width:100%;height:100%;object-fit:cover;object-position:center;display:block;
+  transition:transform .55s cubic-bezier(.16,1,.3,1)}
+.chatreco-card:hover .chatreco-media{transform:scale(1.07)}
+.chatreco-media-fallback{width:100%;height:100%;display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(135deg,#243244,#3B4A5E);color:#fff;font-weight:700;font-size:1.1rem}
+.chatreco-media-veil{position:absolute;inset:0;pointer-events:none;
+  background:linear-gradient(180deg,rgba(17,24,39,0) 38%,rgba(17,24,39,.72) 100%)}
+.chatreco-media-caption{position:absolute;left:.85rem;right:.85rem;bottom:.7rem;z-index:2;line-height:1.1}
+.chatreco-name{font-size:1.15rem;font-weight:700;color:#fff;line-height:1.08;letter-spacing:-.02em;
+  text-shadow:0 3px 16px rgba(0,0,0,.5)}
+.chatreco-place{font-size:.68rem;color:rgba(255,255,255,.92);font-weight:500;margin-top:.2rem;
+  display:inline-flex;align-items:center;gap:.24rem;text-shadow:0 2px 12px rgba(0,0,0,.45)}
+.chatreco-body{padding:.85rem .95rem 1rem;display:flex;flex-direction:column;gap:.55rem;flex:1}
+.chatreco-typology{align-self:flex-start;font-size:.56rem;font-weight:700;letter-spacing:.05em;
+  text-transform:uppercase;border-radius:999px;padding:.22rem .56rem;
+  background:var(--tui-red-soft);color:var(--tui-red-deep)}
+.chatreco-headline{font-size:.79rem;color:#5B6472;line-height:1.5;font-weight:400;margin:0}
+.chatreco-facts{display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;margin-top:.05rem}
+.chatreco-fact{background:#F7F9FB;border:1px solid rgba(17,24,39,.05);border-radius:12px;
+  padding:.5rem .35rem;text-align:center}
+.chatreco-fact-value{font-size:.98rem;font-weight:700;color:var(--tui-dark);line-height:1}
+.chatreco-fact-label{font-size:.5rem;font-weight:700;letter-spacing:.045em;text-transform:uppercase;
+  color:var(--muted);margin-top:.28rem}
+/* CTA de la maqueta: deshabilitado a propósito (es demostración). */
+.chatreco-cta{margin-top:.35rem;align-self:stretch;border:none;cursor:default;
+  border-radius:999px;padding:.55rem .9rem;font-family:inherit;font-weight:700;font-size:.78rem;
+  color:#fff;background:linear-gradient(180deg,var(--tui-red),var(--tui-red-deep));
+  box-shadow:0 8px 18px -8px rgba(212,14,20,.55);opacity:.92}
+
+@media(max-width:900px){
+  .chatreco-bubble{font-size:.88rem}
+  .chatreco-cards-grid{padding-left:0}
+  .chatreco-row .chatreco-bubble{max-width:82%}
+}
+
+/* ==========================================================================
+   España — Copiloto de viaje al LADO de la recomendación (dos columnas).
+   Izquierda: la ventana de chat (caja definida). Derecha: los resultados del
+   modelo, visibles sin scroll largo. El formulario de filtros vive en un
+   expander compacto encima de los resultados.
+   ========================================================================== */
+
+/* Panel contenedor del copiloto: define la columna del chat como módulo. */
+.reco-copilot-pane{position:relative;border-radius:16px;padding:.1rem 0 .2rem;
+  background:transparent}
+
+/* Separador entre la zona de chat y la de recomendación (layout vertical). */
+.reco-section-sep{height:1px;background:linear-gradient(90deg,rgba(17,24,39,.12),rgba(17,24,39,.02));
+  margin:1.8rem 0 1.3rem}
+/* Título de la sección de resultados, para separarla visualmente del chat. */
+.reco-results-title{font-size:1.35rem;font-weight:700;color:var(--tui-dark);
+  letter-spacing:-.02em;margin:.1rem 0 .3rem;display:flex;align-items:center;gap:.6rem}
+.reco-results-title:before{content:"";width:4px;height:24px;background:var(--tui-red);border-radius:3px}
+.reco-results-sub{font-size:.9rem;color:var(--muted);line-height:1.5;margin:0 0 1rem;max-width:620px}
+
+/* En la vista España el hero destacado va en una columna junto al chat: se
+   compacta un poco (banner más bajo) para que ambos quepan sin scroll largo.
+   Se aplica directamente a .offer para no envolver widgets en <div> propios. */
+/* La sección "Recomendación del modelo" va DEBAJO del chat, a todo el ancho.
+   El hero destacado se compacta ligeramente para no ocupar de más. */
+.reco-results-title + div .offer{margin:.15rem 0 1rem}
+.reco-results-title + div .offer-media{height:200px}
+
+/* --- Hero compacto (columna derecha de la vista del asistente): imagen más
+   baja y contenido apretado para que quepa la opción 1 completa y asomen las
+   opciones 2 y 3 sin scroll largo. --- */
+.offer--compact{margin:.1rem 0 1rem;border-radius:18px}
+.offer--compact .offer-media{height:190px;border-radius:18px 18px 0 0}
+.offer--compact .offer-media-caption{padding:1rem 1.1rem}
+.offer--compact .offer-name{font-size:1.7rem}
+.offer--compact .offer-place{font-size:.78rem;margin-top:.3rem}
+.offer--compact .offer-body{padding:1rem 1.1rem 1.15rem}
+.offer--compact .offer-why{font-size:.92rem;line-height:1.45;margin:.6rem 0 0}
+.offer--compact .offer-chips{margin-top:.7rem;gap:.35rem}
+.offer--compact .offer-chip{font-size:.64rem;padding:.26rem .6rem}
+.offer--compact .offer-facts{margin-top:.9rem;padding-top:.9rem;gap:.5rem;
+  grid-template-columns:repeat(auto-fit,minmax(78px,1fr))}
+.offer--compact .offer-fact{padding:.6rem .45rem}
+.offer--compact .offer-fact-value{font-size:1.2rem}
+
 </style>
+"""
+
+
+# Marca la página como "no traducir". El traductor del navegador (Google
+# Translate y similares) reescribe los nodos de texto del DOM, lo que hace que
+# React —el motor de Streamlit— pierda la referencia a esos nodos y lance el
+# error "removeChild ... is not a child of this node". Marcar el documento como
+# notranslate evita que el traductor toque el árbol y previene ese fallo.
+_NO_TRANSLATE_JS = """
+<script>
+  const _d = window.parent?.document || document;
+  if (_d && _d.documentElement) {
+    _d.documentElement.setAttribute('translate', 'no');
+    _d.documentElement.classList.add('notranslate');
+    if (_d.body) _d.body.classList.add('notranslate');
+  }
+</script>
 """
 
 
 def inject_styles() -> None:
     """Inyecta la hoja de estilos. Debe llamarse una vez, al inicio del script."""
     st.markdown(CSS, unsafe_allow_html=True)
+    st.markdown(_NO_TRANSLATE_JS, unsafe_allow_html=True)
