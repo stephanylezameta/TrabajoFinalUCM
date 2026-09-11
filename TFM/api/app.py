@@ -7,14 +7,14 @@ al arrancar (no en cada request), y expone:
   POST /recomendar          -- llama a recomendar() directo
   POST /feedback            -- llama a registrar_feedback()
   POST /chat                -- el agente conversacional (Claude + tool use)
+  POST /tdrs_ranking        -- ranking de los 39 destinos por sliders
 
 Uso local:
     cd TFM
     pip install fastapi uvicorn anthropic
     uvicorn api.app:app --reload --port 8000
-
-Deploy: ver instrucciones al final de este archivo.
 """
+import json
 import os
 import sys
 from pathlib import Path
@@ -68,6 +68,51 @@ class RecomendarRequest(BaseModel):
     objetivo_popularidad: float | None = None
     excluir_ids: list[str] | None = None
     excluir_destinos: list[str] | None = None
+    incluir_descripcion_ia: bool = False
+
+
+def generar_descripciones_ia(destinos_top: list[dict]) -> dict[str, str]:
+    """Genera una descripcion cualitativa breve por destino, basandose
+    UNICAMENTE en los datos reales ya calculados (datos_humanos, precio) --
+    nunca inventa informacion sobre el destino que no venga de estos datos.
+    Una sola llamada a Claude para todo el lote, no una por destino (mas
+    barato y rapido que N llamadas separadas)."""
+    if not destinos_top:
+        return {}
+
+    contexto = []
+    for d in destinos_top:
+        dh = d.get("datos_humanos", {})
+        contexto.append({
+            "destino": d["destino_nombre"],
+            "precio_desde_eur": d.get("precio_eur"),
+            "dias_soleados_pct": dh.get("dias_soleados_pct"),
+            "sentimiento_real": dh.get("sentimiento_real"),
+            "n_resenas_reales": dh.get("n_resenas_reales"),
+        })
+
+    prompt = f"""Tienes estos datos REALES de {len(contexto)} destinos turisticos:
+
+{contexto}
+
+Para cada destino, escribe una descripcion breve (1-2 frases, español de España)
+que ayude a un viajero a decidir. Basate UNICAMENTE en los datos dados -- si un
+dato es null, no lo menciones, no inventes nada que no este en la lista.
+
+Responde EXCLUSIVAMENTE con un JSON valido, sin texto adicional, con esta forma:
+{{"NombreDestino1": "descripcion...", "NombreDestino2": "descripcion..."}}"""
+
+    try:
+        respuesta = client_anthropic.messages.create(
+            model=MODELO_AGENTE, max_tokens=1024,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        texto = respuesta.content[0].text.strip()
+        if texto.startswith("```"):
+            texto = texto.split("```")[1].replace("json", "", 1).strip()
+        return json.loads(texto)
+    except Exception:
+        return {}  # no bloqueante: si falla, se devuelve sin descripciones
 
 
 @app.post("/recomendar")
@@ -89,6 +134,16 @@ def endpoint_recomendar(req: RecomendarRequest):
         excluir_ids=req.excluir_ids,
         excluir_destinos=req.excluir_destinos,
     )
+
+    if req.incluir_descripcion_ia:
+        escenario_principal = "personalizado" if "personalizado" in rankings else "moderado"
+        top = rankings[escenario_principal][:3]
+        descripciones = generar_descripciones_ia(top)
+        for escenario in rankings.values():
+            for item in escenario:
+                if item["destino_nombre"] in descripciones:
+                    item["descripcion_ia"] = descripciones[item["destino_nombre"]]
+
     return {"rankings": rankings, "session_id": session_id}
 
 
@@ -217,25 +272,15 @@ def endpoint_chat(req: ChatRequest):
 # --------------------------------------------------------------------------
 # /tdrs_ranking -- para la pestaña "Simulador TDRS", donde el usuario mueve
 # sliders de peso y rankea el catalogo COMPLETO de 39 destinos, sin ninguna
-# consulta de texto. A diferencia de /recomendar (que arranca de una
-# busqueda semantica), esto usa directo las señales reales por destino ya
-# construidas -- no pasa por embeddings ni LightGBM, no hace falta para este
-# tipo de pantalla. Reemplaza la reimplementacion local que hacia el
-# dashboard a mano, con datos propios; esto usa las mismas fuentes reales
-# ya validadas del modelo (Eurostat/INE, AENA, Open-Meteo, indicadores tipo
-# Banco Mundial, sentimiento real via XLM-RoBERTa).
+# consulta de texto.
 # --------------------------------------------------------------------------
-SEÑALES_TDRS_RANKING = [
+SENALES_TDRS_RANKING = [
     "sunny_days_pct", "dry_months_pct", "popularity", "hospital_beds",
     "safety", "satisfaction", "impacto_local", "diversificacion", "temporada_baja",
 ]
 
 
-def _cargar_todas_las_señales(db_path: str) -> dict[str, dict]:
-    """Junta, en un solo lugar, todas las señales reales por destino que
-    puede pedir /tdrs_ranking. Los nombres de la izquierda son los que
-    usa el dashboard (sunny_days_pct, popularity, etc.); a la derecha,
-    de donde salen en nuestro pipeline real."""
+def _cargar_todas_las_senales(db_path: str) -> dict[str, dict]:
     temp_confort, dias_secos, horas_sol = cargar_clima_por_destino(db_path)
     return {
         "sunny_days_pct": temp_confort,
@@ -251,14 +296,14 @@ def _cargar_todas_las_señales(db_path: str) -> dict[str, dict]:
 
 
 class TdrsRankingRequest(BaseModel):
-    weights: dict[str, float]  # ej: {"sunny_days_pct": 70, "popularity": 30, ...}
+    weights: dict[str, float]
     max_price: float | None = None
     max_stay_days: int | None = None
 
 
 @app.post("/tdrs_ranking")
 def endpoint_tdrs_ranking(req: TdrsRankingRequest):
-    señales = _cargar_todas_las_señales(DB_PATH)
+    senales = _cargar_todas_las_senales(DB_PATH)
     metadata = cargar_metadata_experiencias(DB_PATH)
     datos_humanos = cargar_datos_humanos_por_destino(DB_PATH)
 
@@ -284,13 +329,13 @@ def endpoint_tdrs_ranking(req: TdrsRankingRequest):
 
         score = 0.0
         contribuciones = []
-        for nombre_señal, peso in req.weights.items():
+        for nombre_senial, peso in req.weights.items():
             peso = max(0.0, peso)
-            valor = señales.get(nombre_señal, {}).get(destino)
+            valor = senales.get(nombre_senial, {}).get(destino)
             contribucion = (peso / total_peso) * valor if valor is not None else 0.0
             score += contribucion
             contribuciones.append({
-                "factor": nombre_señal, "peso": peso, "valor": valor, "contribucion": contribucion,
+                "factor": nombre_senial, "peso": peso, "valor": valor, "contribucion": contribucion,
             })
         contribuciones.sort(key=lambda c: -c["contribucion"])
 
@@ -306,11 +351,6 @@ def endpoint_tdrs_ranking(req: TdrsRankingRequest):
     return {
         "ranked": ranked,
         "excluded": excluded,
-        "señales_disponibles": SEÑALES_TDRS_RANKING,
+        "señales_disponibles": SENALES_TDRS_RANKING,
         "fuente": "Datos reales del modelo TDRS (Eurostat/INE, AENA, Open-Meteo, sentimiento XLM-RoBERTa)",
     }
-
-
-# --------------------------------------------------------------------------
-# INSTRUCCIONES DE DEPLOY (ver mensaje de Claude para el detalle completo)
-# --------------------------------------------------------------------------
