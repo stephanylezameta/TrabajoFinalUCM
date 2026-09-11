@@ -29,6 +29,7 @@ import anthropic
 from scripts.recommendation.run_recommendation import (
     recomendar,
     registrar_feedback,
+    precargar_recursos,
     cargar_metadata_experiencias,
     cargar_clima_por_destino,
     cargar_accesibilidad_por_destino,
@@ -46,6 +47,24 @@ app = FastAPI(title="TUI Recomendador API")
 DB_PATH = os.environ.get("DB_PATH", "data/tui_recomendador.db")
 client_anthropic = anthropic.Anthropic()  # lee ANTHROPIC_API_KEY del entorno
 MODELO_AGENTE = "claude-sonnet-4-6"
+
+
+# --------------------------------------------------------------------------
+# Arranque del servicio: carga el modelo de embeddings (~2 GB), el catalogo
+# vectorial y las señales de la BD UNA sola vez, cuando el contenedor arranca.
+# Antes esto ocurria en cada peticion a /recomendar, lo que agotaba la memoria
+# del contenedor y devolvia 503. Con la precarga en el startup, la primera
+# consulta real ya encuentra todo en memoria.
+# --------------------------------------------------------------------------
+@app.on_event("startup")
+def _precargar_modelo() -> None:
+    try:
+        precargar_recursos(DB_PATH)
+        print("Recursos del recomendador precargados en el arranque.")
+    except Exception as e:  # noqa: BLE001
+        # No se bloquea el arranque: si la precarga falla, la primera peticion
+        # intentara cargar bajo demanda y el error se vera alli con contexto.
+        print(f"Aviso: no se pudieron precargar los recursos en el arranque: {e}")
 
 
 # --------------------------------------------------------------------------
@@ -213,7 +232,22 @@ MANEJO DE RECHAZOS: agrega el destino rechazado a excluir_destinos y ajusta
 la busqueda segun lo que el usuario haya dicho -- no repitas variaciones
 superficiales de lo mismo.
 
-Presenta 2-3 destinos con razones concretas basadas en datos reales. Se breve."""
+CATALOGO CERRADO (regla inviolable): SOLO puedes recomendar destinos que
+aparezcan EXACTAMENTE en la lista devuelta por la herramienta
+recomendar_destinos en este turno. Tienes TERMINANTEMENTE PROHIBIDO nombrar,
+sugerir o describir cualquier destino que no este en esa lista, aunque lo
+conozcas o encaje mejor con lo que pide el usuario. No inventes rutas,
+excursiones ni lugares que no figuren en los datos recibidos.
+
+CUANDO EL CATALOGO NO ENCAJA: si ninguno de los destinos devueltos responde
+bien a lo que pide el usuario (por ejemplo pide un tipo de viaje o una region
+que no esta cubierta), NO inventes una alternativa fuera de la lista. Dilo con
+naturalidad, sin excusas tecnicas, y reorienta con una pregunta que abra el
+criterio hacia lo que si esta disponible. Presenta como mucho los destinos de
+la lista que mas se acerquen, dejando claro en que difieren.
+
+Presenta 2-3 destinos con razones concretas basadas en los datos reales que te
+da la herramienta (categoria, precio, afinidad). Se breve."""
 
 
 class ChatRequest(BaseModel):
@@ -232,6 +266,12 @@ def endpoint_chat(req: ChatRequest):
         tools=[TOOL_RECOMENDAR], messages=historial,
     )
 
+    # Se guarda el ranking estructurado de la ULTIMA llamada a la herramienta
+    # para que el cliente pueda mostrar en la tarjeta destacada exactamente los
+    # destinos que el chat recomienda (misma estructura que /recomendar).
+    ultimo_rankings: dict | None = None
+    ultimo_objetivo_popularidad: float | None = None
+
     bloques_tool = [b for b in respuesta.content if b.type == "tool_use"]
     if bloques_tool:
         historial.append({"role": "assistant", "content": respuesta.content})
@@ -247,9 +287,17 @@ def endpoint_chat(req: ChatRequest):
                 objetivo_popularidad=bloque.input.get("objetivo_popularidad"),
                 excluir_destinos=bloque.input.get("excluir_destinos"),
             )
+            ultimo_rankings = rankings
+            ultimo_objetivo_popularidad = bloque.input.get("objetivo_popularidad")
             escenario = "personalizado" if "personalizado" in rankings else "moderado"
             resultado = [
-                {"destino": r["destino_nombre"], "precio_eur": r.get("precio_eur")}
+                {
+                    "destino": r["destino_nombre"],
+                    "precio_eur": r.get("precio_eur"),
+                    "categoria": r.get("category"),
+                    "afinidad": round(r["afinidad"], 3) if r.get("afinidad") is not None else None,
+                    "tdrs": round(r["tdrs"], 3) if r.get("tdrs") is not None else None,
+                }
                 for r in rankings[escenario][:5]
             ]
             historial.append({
@@ -266,7 +314,16 @@ def endpoint_chat(req: ChatRequest):
         texto = respuesta.content[0].text
         historial.append({"role": "assistant", "content": respuesta.content})
 
-    return {"respuesta": texto, "historial": historial, "session_id": session_id}
+    return {
+        "respuesta": texto,
+        "historial": historial,
+        "session_id": session_id,
+        # Ranking estructurado de la recomendacion citada por el chat (mismo
+        # formato que /recomendar). None si el agente no llamo a la herramienta
+        # en este turno (p. ej. una pregunta de perfilado).
+        "rankings": ultimo_rankings,
+        "objetivo_popularidad": ultimo_objetivo_popularidad,
+    }
 
 
 # --------------------------------------------------------------------------

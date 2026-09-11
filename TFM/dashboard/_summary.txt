@@ -1,0 +1,5 @@
+FAILED tests/test_app_smoke.py::test_every_view_renders_without_exception[Monitor performance ]
+FAILED tests/test_app_smoke.py::test_control_web_shows_commercial_kpis - Runt...
+FAILED tests/test_app_smoke.py::test_recommender_view_degrades_without_endpoint
+FAILED tests/test_app_smoke.py::test_recommender_form_offers_documented_vocabulary
+6 failed, 113 passed in 1343.47s (0:22:23)

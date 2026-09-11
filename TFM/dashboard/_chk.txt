@@ -1,0 +1,3 @@
+{"texto_consulta": "playa y costa", "objetivo_popularidad": 0.3, "presupuesto_max": 150.0, "categoria": "Water Activities"}
+CATS 10
+OK imports

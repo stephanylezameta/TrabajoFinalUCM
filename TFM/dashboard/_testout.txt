@@ -1,0 +1,183 @@
+﻿...............................FF.F..................................... [ 60%]
+...............................................                          [100%]
+================================== FAILURES ===================================
+___________________ test_control_web_shows_commercial_kpis ____________________
+
+    def test_control_web_shows_commercial_kpis():
+>       app = _run(NAV_CONTROL)
+              ^^^^^^^^^^^^^^^^^
+
+tests\test_app_smoke.py:60: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\test_app_smoke.py:36: in _run
+    app.run()
+.venv\Lib\site-packages\streamlit\testing\v1\app_test.py:463: in run
+    return self._tree.run(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\streamlit\testing\v1\element_tree.py:2531: in run
+    return self._runner._run(widget_states, timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\streamlit\testing\v1\app_test.py:407: in _run
+    self._tree = script_runner.run(
+.venv\Lib\site-packages\streamlit\testing\v1\local_script_runner.py:158: in run
+    require_widgets_deltas(self, timeout)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+runner = LocalScriptRunner(forward_msg_queue=<streamlit.runtime.forward_msg_queue.ForwardMsgQueue object at 0x0000020C8739A850>...: true
+  installed_agents: "copilot"
+}
+}, {}, {'client_state': page_script_hash: "d4a188719aa56693955c1f6bab0f6ceb"
+}])
+timeout = 120
+
+    def require_widgets_deltas(runner: LocalScriptRunner, timeout: float = 3) -> None:
+        """Wait for the given ScriptRunner to emit a completion event. If the timeout
+        is reached, the runner will be shutdown and an error will be thrown.
+        """
+    
+        t0 = time.time()
+        while time.time() - t0 < timeout:
+            time.sleep(0.001)
+            if runner.script_stopped():
+                return
+    
+        # If we get here, the runner hasn't yet completed before our
+        # timeout. Create an error string for debugging.
+        err_string = f"AppTest script run timed out after {timeout}(s)"
+    
+        # Shutdown the runner before throwing an error, so that the script
+        # doesn't hang forever.
+        runner.request_stop()
+        runner.join()
+    
+>       raise RuntimeError(err_string)
+E       RuntimeError: AppTest script run timed out after 120(s)
+
+.venv\Lib\site-packages\streamlit\testing\v1\local_script_runner.py:208: RuntimeError
+---------------------------- Captured stderr call -----------------------------
+2026-09-11 13:12:45.637 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+------------------------------ Captured log call ------------------------------
+WARNING  streamlit.runtime.scriptrunner_utils.script_run_context:script_run_context.py:476 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+_______________ test_recommender_view_degrades_without_endpoint _______________
+
+    def test_recommender_view_degrades_without_endpoint():
+        """Sin API configurada la vista informa, no rompe ni inventa resultados."""
+>       app = _run(NAV_RECO)
+              ^^^^^^^^^^^^^^
+
+tests\test_app_smoke.py:68: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\test_app_smoke.py:36: in _run
+    app.run()
+.venv\Lib\site-packages\streamlit\testing\v1\app_test.py:463: in run
+    return self._tree.run(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\streamlit\testing\v1\element_tree.py:2531: in run
+    return self._runner._run(widget_states, timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\streamlit\testing\v1\app_test.py:407: in _run
+    self._tree = script_runner.run(
+.venv\Lib\site-packages\streamlit\testing\v1\local_script_runner.py:158: in run
+    require_widgets_deltas(self, timeout)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+runner = LocalScriptRunner(forward_msg_queue=<streamlit.runtime.forward_msg_queue.ForwardMsgQueue object at 0x0000020C45239A50>...: true
+  installed_agents: "copilot"
+}
+}, {}, {'client_state': page_script_hash: "d4a188719aa56693955c1f6bab0f6ceb"
+}])
+timeout = 120
+
+    def require_widgets_deltas(runner: LocalScriptRunner, timeout: float = 3) -> None:
+        """Wait for the given ScriptRunner to emit a completion event. If the timeout
+        is reached, the runner will be shutdown and an error will be thrown.
+        """
+    
+        t0 = time.time()
+        while time.time() - t0 < timeout:
+            time.sleep(0.001)
+            if runner.script_stopped():
+                return
+    
+        # If we get here, the runner hasn't yet completed before our
+        # timeout. Create an error string for debugging.
+        err_string = f"AppTest script run timed out after {timeout}(s)"
+    
+        # Shutdown the runner before throwing an error, so that the script
+        # doesn't hang forever.
+        runner.request_stop()
+        runner.join()
+    
+>       raise RuntimeError(err_string)
+E       RuntimeError: AppTest script run timed out after 120(s)
+
+.venv\Lib\site-packages\streamlit\testing\v1\local_script_runner.py:208: RuntimeError
+---------------------------- Captured stderr call -----------------------------
+2026-09-11 13:15:24.980 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+------------------------------ Captured log call ------------------------------
+WARNING  streamlit.runtime.scriptrunner_utils.script_run_context:script_run_context.py:476 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+_____________ test_recommender_form_offers_documented_vocabulary ______________
+
+    def test_recommender_form_offers_documented_vocabulary():
+        """El selector ofrece exactamente los siete intereses que acepta la API."""
+        from services.recommendation_api_service import INTEREST_LABELS
+    
+>       app = _run(NAV_RECO)
+              ^^^^^^^^^^^^^^
+
+tests\test_app_smoke.py:110: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+tests\test_app_smoke.py:36: in _run
+    app.run()
+.venv\Lib\site-packages\streamlit\testing\v1\app_test.py:463: in run
+    return self._tree.run(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\streamlit\testing\v1\element_tree.py:2531: in run
+    return self._runner._run(widget_states, timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\streamlit\testing\v1\app_test.py:407: in _run
+    self._tree = script_runner.run(
+.venv\Lib\site-packages\streamlit\testing\v1\local_script_runner.py:158: in run
+    require_widgets_deltas(self, timeout)
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+runner = LocalScriptRunner(forward_msg_queue=<streamlit.runtime.forward_msg_queue.ForwardMsgQueue object at 0x0000020C87586DD0>...: true
+  installed_agents: "copilot"
+}
+}, {}, {'client_state': page_script_hash: "d4a188719aa56693955c1f6bab0f6ceb"
+}])
+timeout = 120
+
+    def require_widgets_deltas(runner: LocalScriptRunner, timeout: float = 3) -> None:
+        """Wait for the given ScriptRunner to emit a completion event. If the timeout
+        is reached, the runner will be shutdown and an error will be thrown.
+        """
+    
+        t0 = time.time()
+        while time.time() - t0 < timeout:
+            time.sleep(0.001)
+            if runner.script_stopped():
+                return
+    
+        # If we get here, the runner hasn't yet completed before our
+        # timeout. Create an error string for debugging.
+        err_string = f"AppTest script run timed out after {timeout}(s)"
+    
+        # Shutdown the runner before throwing an error, so that the script
+        # doesn't hang forever.
+        runner.request_stop()
+        runner.join()
+    
+>       raise RuntimeError(err_string)
+E       RuntimeError: AppTest script run timed out after 120(s)
+
+.venv\Lib\site-packages\streamlit\testing\v1\local_script_runner.py:208: RuntimeError
+---------------------------- Captured stderr call -----------------------------
+2026-09-11 13:18:29.158 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+------------------------------ Captured log call ------------------------------
+WARNING  streamlit.runtime.scriptrunner_utils.script_run_context:script_run_context.py:476 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+=========================== short test summary info ===========================
+FAILED tests/test_app_smoke.py::test_control_web_shows_commercial_kpis - Runt...
+FAILED tests/test_app_smoke.py::test_recommender_view_degrades_without_endpoint
+FAILED tests/test_app_smoke.py::test_recommender_form_offers_documented_vocabulary
+3 failed, 116 passed in 652.66s (0:10:52)

@@ -22,11 +22,11 @@ APP = Path(__file__).resolve().parents[1] / "streamlit_app.py"
 # margen suficiente para evitar falsos negativos por timeout.
 TIMEOUT = 120
 
-NAV_OPTIONS = [
-    "Asistente de viajes",
-    "Recomendaciones España",
-    "Control Web",
-]
+# Etiquetas de navegación reales de la app (ver NAV en streamlit_app.py).
+NAV_ASSISTANT = "TUI Travel Assistant"
+NAV_RECO = "Explora"
+NAV_CONTROL = "Monitor performance "
+NAV_OPTIONS = [NAV_ASSISTANT, NAV_RECO, NAV_CONTROL]
 
 
 def _run(view: str | None = None) -> AppTest:
@@ -57,7 +57,7 @@ def test_every_view_renders_without_exception(view):
 
 
 def test_control_web_shows_commercial_kpis():
-    app = _run("Control Web")
+    app = _run(NAV_CONTROL)
     labels = [m.label for m in app.metric]
     for expected in ("Sesiones", "Clics", "Reservas", "Ingresos", "ROI"):
         assert expected in labels
@@ -65,7 +65,7 @@ def test_control_web_shows_commercial_kpis():
 
 def test_recommender_view_degrades_without_endpoint():
     """Sin API configurada la vista informa, no rompe ni inventa resultados."""
-    app = _run("Recomendaciones España")
+    app = _run(NAV_RECO)
     assert not app.exception
     # El formulario sigue disponible para que el usuario vea el contrato.
     assert app.multiselect, "debería existir el selector de intereses"
@@ -80,30 +80,26 @@ def test_recommender_shows_visible_recommendation(monkeypatch):
     from services import recommendation_api_service as reco
     from tests.test_recommendation_api import SAMPLE_RESPONSE
 
-    monkeypatch.setenv("TUI_RECO_API_BASE", "https://example.invalid/api/recommendations")
-    monkeypatch.setenv("TUI_RECO_API_KEY", "clave-de-prueba")
+    monkeypatch.setenv("TUI_MODELO_API_BASE", "https://example.invalid")
     reco.reset_state()
+    # Se simula la respuesta ya normalizada al formato interno de la UI (lo que
+    # devuelve fetch_recommendations): rankings adaptados a filas destination/*.
+    payload = reco.build_payload(["coast_beach"])
+    normalizado = reco._normalize_response(SAMPLE_RESPONSE, payload)
     monkeypatch.setattr(
         reco, "fetch_recommendations",
-        lambda payload, use_cache=True: {
-            "ok": True, "error": None, "error_kind": None,
-            "recommendation_id": "abc-123",
-            "contract_version": "recommendation-response-v1",
-            "generated_at": "2026-09-05T12:00:00+00:00",
-            "engine": SAMPLE_RESPONSE["engine"],
-            "normalized_input": {},
-            "ranking": SAMPLE_RESPONSE["ranking"],
-            "warnings": [], "from_cache": False,
+        lambda payload, use_cache=True, session_id=None: {
+            **normalizado, "from_cache": False,
         },
     )
 
-    app = _run("Recomendaciones España")
+    app = _run(NAV_RECO)
     assert not app.exception, [str(e) for e in app.exception]
 
     # El nombre del destino recomendado aparece en el bloque destacado.
     rendered = " ".join(block.value for block in app.markdown)
     assert "offer-media" in rendered, "falta el bloque de recomendación destacada"
-    assert "Níjar" in rendered, "el destino recomendado no se muestra"
+    assert "Cerdeña" in rendered, "el destino recomendado no se muestra"
     reco.reset_state()
 
 
@@ -111,7 +107,7 @@ def test_recommender_form_offers_documented_vocabulary():
     """El selector ofrece exactamente los siete intereses que acepta la API."""
     from services.recommendation_api_service import INTEREST_LABELS
 
-    app = _run("Recomendaciones España")
+    app = _run(NAV_RECO)
     interests = app.multiselect[0]
     # AppTest expone las opciones ya formateadas con `format_func`.
     assert set(interests.options) == set(INTEREST_LABELS.values())

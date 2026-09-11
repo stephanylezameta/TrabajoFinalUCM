@@ -1,0 +1,4 @@
+CLAVES: respuesta, historial, session_id
+TIENE_RANKINGS: False
+OBJETIVO_POPULARIDAD: None
+RESPUESTA (300): Aquí tienes tres opciones de playa muy sólidas para 2 personas y 14 días. Ten en cuenta que los 3.400 $ equivalen aproximadamente a **3.150 €** al cambio actual:  ---  🏖️ **1. Costa del Sol (Málaga) — desde 123 €/noche** Clásico europeo de sol y playa. Marbella, Nerja y Torremolinos ofrecen playas d
