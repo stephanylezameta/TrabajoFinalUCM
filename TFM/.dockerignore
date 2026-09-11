@@ -1,0 +1,10 @@
+.venv/
+.venv-dashboard/
+.venv-modelo/
+.git/
+__pycache__/
+*.pyc
+dashboard/
+*.md
+.pytest_cache/
+data/lightfm/
