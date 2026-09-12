@@ -300,9 +300,11 @@ hr { border-color:rgba(17,24,39,.10)!important; }
 .offer-place-item:not(:last-child):after{content:", ";color:var(--muted)}
 .offer-tradeoff{font-size:.78rem;color:#8D5D00;background:#FFF3D6;border:1px solid rgba(141,93,0,.16);
   border-radius:10px;padding:.35rem .6rem;margin-top:.7rem;align-self:flex-start}
-/* CTA decorativo estilo TUI (deshabilitado: es demostración). */
-.offer-cta{margin-top:1.1rem;align-self:flex-start;font-size:.82rem;font-weight:800;color:var(--tui-red);
-  background:#fff;border:1px solid var(--tui-red);border-radius:999px;padding:.6rem 1.5rem;cursor:default}
+/* CTA enlace a TUI (abre en nueva pestaña). */
+.offer-cta{margin-top:1.1rem;align-self:flex-start;font-size:.82rem;font-weight:800;color:#fff !important;
+  background:rgb(53,103,246);border:1px solid rgb(53,103,246);border-radius:999px;padding:.6rem 1.5rem;
+  cursor:pointer;text-decoration:none !important;display:inline-block;transition:.18s ease}
+.offer-cta:hover{background:rgb(30,75,210);color:#fff !important;text-decoration:none !important}
 .offer-facts{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:.7rem;margin-top:1.2rem;
   padding-top:1.15rem;border-top:1px solid rgba(17,24,39,.08)}
 .offer-fact{background:#F7F9FB;border:1px solid rgba(17,24,39,.05);border-radius:16px;padding:.85rem .6rem;text-align:center}
@@ -362,8 +364,10 @@ hr { border-color:rgba(17,24,39,.10)!important; }
 .reco-trip{font-size:.9rem;color:var(--tui-dark);font-weight:700;margin-top:.1rem}
 .reco-places{font-size:.78rem;color:rgb(27 17 92);font-weight:600;line-height:1.45}
 .reco-place-item:not(:last-child):after{content:", ";color:var(--muted)}
-.reco-cta{margin-top:.5rem;align-self:flex-start;font-size:.74rem;font-weight:800;color:var(--tui-red);
-  background:#fff;border:1px solid var(--tui-red);border-radius:999px;padding:.42rem 1.1rem;cursor:default}
+.reco-cta{margin-top:.5rem;align-self:flex-start;font-size:.74rem;font-weight:800;color:#fff !important;
+  background:rgb(53,103,246);border:1px solid rgb(53,103,246);border-radius:999px;padding:.42rem 1.1rem;
+  cursor:pointer;text-decoration:none !important;display:inline-block;transition:.18s ease}
+.reco-cta:hover{background:rgb(30,75,210);color:#fff !important;text-decoration:none !important}
 .reco-typology{align-self:flex-start;font-size:.6rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
   border-radius:999px;padding:.24rem .62rem;background:var(--tui-red-soft);color:var(--tui-red-deep)}
 .reco-headline{font-size:.86rem;color:#5B6472;line-height:1.5;font-weight:400;margin:0}
@@ -552,6 +556,21 @@ hr { border-color:rgba(17,24,39,.10)!important; }
   .chatreco-cards-grid{padding-right:0}
   .chatreco-row .chatreco-bubble{max-width:82%}
 }
+
+/* Botones de sugerencia clicables debajo del chat (aspecto de chip pequeño). */
+[data-testid="chat_sug_wrap"] div.stButton > button {
+  min-height:2.2rem !important;padding:.3rem .7rem !important;
+  border-radius:10px !important;font-size:.72rem !important;font-weight:500 !important;
+  background:#fff !important;border:1px solid rgba(17,24,39,.14) !important;
+  color:var(--tui-dark) !important;box-shadow:0 2px 6px rgba(17,24,39,.05) !important;
+  transition:.15s ease !important}
+[data-testid="chat_sug_wrap"] div.stButton > button:hover {
+  background:#F7F9FB !important;border-color:rgba(17,24,39,.28) !important;
+  transform:translateY(-1px) !important}
+[data-testid="chat_sug_wrap"] div.stButton > button:active,
+[data-testid="chat_sug_wrap"] div.stButton > button:focus:not(:focus-visible) {
+  background:#EEF1F5 !important;border-color:rgba(17,24,39,.32) !important;
+  transform:translateY(0) !important;box-shadow:0 1px 3px rgba(17,24,39,.08) !important}
 
 /* ==========================================================================
    España — Copiloto de viaje al LADO de la recomendación (dos columnas).

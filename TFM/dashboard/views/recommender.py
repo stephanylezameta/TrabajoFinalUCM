@@ -1,9 +1,12 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
+import random
 from html import escape
 
 import streamlit as st
+
+import unicodedata
 
 from components.assets import SCENARIO_ICON_URLS, get_local_destination_image
 from services import price_lookup
@@ -14,6 +17,31 @@ from views.recommender_chat import render_recommender_chat
 # Etiqueta interna para el tracking. La vista se llama «España» en el menú, pero
 # el evento mantiene un identificador descriptivo y estable.
 VIEW_LABEL = "España"
+
+# --------------------------------------------------------------------------
+# Normalización para búsqueda de lugares (case + accent insensitive)
+# --------------------------------------------------------------------------
+
+def _normalize_place(text: str) -> str:
+    """Convierte a minúsculas y elimina diacríticos para comparación."""
+    nfkd = unicodedata.normalize("NFKD", str(text).lower())
+    return "".join(c for c in nfkd if not unicodedata.combining(c))
+
+
+# Lista de destinos conocidos: clave normalizada → nombre original para mostrar.
+# Se usa en el multiselect de «Excluir lugares»: Streamlit filtra por la clave
+# (normalizada, sin tildes ni mayúsculas) y muestra el nombre original.
+_DESTINOS_CONOCIDOS_MAP: dict[str, str] = {
+    _normalize_place(n): n for n in [
+        "Algarve", "Alicante", "Antalya", "Bali", "Barcelona", "Bilbao",
+        "Cabo Verde", "Cádiz", "Cancún", "Cerdeña", "Córdoba",
+        "Costa Amalfitana", "Creta", "Dubai", "Dubrovnik", "Fuerteventura",
+        "Gran Canaria", "Granada", "Hurghada", "Ibiza", "Lanzarote",
+        "Madrid", "Málaga", "Maldivas", "Mallorca", "Menorca", "Naxos",
+        "Punta Cana", "Rodas", "San Sebastián", "Santorini", "Sevilla",
+        "Split", "Tenerife", "Túnez", "Zadar",
+    ]
+}
 STATE_KEY = "reco_result"
 STATE_PAYLOAD = "reco_payload"
 STATE_AUTORUN = "reco_autorun_done"
@@ -33,7 +61,9 @@ DEFAULT_POLICY = "Equilibrado"
 
 POLICY_PRESETS: dict[str, dict] = {
     "Tradicional": {
-        "popularity_target": 0.85,
+        # Destinos muy visitados / turismo masivo → objetivo de popularidad bajo
+        # (el filtro objetivo_popularidad del API: valores bajos = muy populares/masificados)
+        "popularity_target": 0.20,
         "temperature_preference": "warm_sunny",
         "interests": {
             "coast_beach": 90, "history_culture": 60, "gastronomy_wine": 55,
@@ -41,7 +71,7 @@ POLICY_PRESETS: dict[str, dict] = {
         },
     },
     "Equilibrado": {
-        "popularity_target": 0.5,
+        "popularity_target": 0.50,
         "temperature_preference": "mild",
         "interests": {
             "coast_beach": 60, "history_culture": 60, "gastronomy_wine": 55,
@@ -49,7 +79,9 @@ POLICY_PRESETS: dict[str, dict] = {
         },
     },
     "Redistribuido": {
-        "popularity_target": 0.15,
+        # Destinos poco saturados, máxima redistribución → objetivo de popularidad
+        # mucho más bajo que Tradicional
+        "popularity_target": 0.05,
         "temperature_preference": "any",
         "interests": {
             "coast_beach": 25, "history_culture": 55, "gastronomy_wine": 60,
@@ -234,71 +266,153 @@ def _unmatched_prefs(row: dict) -> list[str]:
 # --------------------------------------------------------------------------
 
 def _render_form() -> dict | None:
-    """Formulario de preferencias. Devuelve el payload si se ha enviado.
+    """Formulario de preferencias alineado con el contrato del API (/recomendar).
 
-    El formulario arranca SIN valores preseleccionados: el usuario elige mes,
-    intereses y clima desde cero. Los selectores usan un marcador de posición y
-    los deslizadores parten del mínimo de su rango.
+    Campos obligatorios (marcados con *):
+      - texto_consulta  → se deriva de «Intereses» (obligatorio)
+      - objetivo_popularidad → slider (obligatorio, con valor del escenario activo)
+
+    Campos opcionales:
+      - temperature_preference → clima
+      - presupuesto_max        → presupuesto
+      - categoria              → categoría de experiencia
+      - excluir_destinos       → destinos a excluir (text input, coma-separados)
     """
+    # Pre-rellena los valores del escenario activo para que el formulario
+    # refleje siempre el preset del botón seleccionado.
+    preset = POLICY_PRESETS.get(_current_policy_name(), POLICY_PRESETS["Equilibrado"])
+    default_popularity = float(preset.get("popularity_target", 0.5))
+    default_temp = preset.get("temperature_preference", "any")
+    if default_temp not in reco.TEMPERATURE_PREFERENCES:
+        default_temp = "any"
+    temp_index = list(reco.TEMPERATURE_PREFERENCES).index(default_temp)
+
+    # Intereses por defecto: los que superen el umbral en el preset activo.
+    preset_weights: dict[str, int] = preset.get("interests") or {}
+    default_interests = [
+        code for code, w in sorted(preset_weights.items(), key=lambda kv: -float(kv[1]))
+        if code in reco.INTERESTS and float(w) >= _INTEREST_ACTIVE_THRESHOLD
+    ][:_MAX_INTERESTS]
+    if not default_interests:
+        default_interests = [reco.INTERESTS[0]]
+
     with st.form("reco_form"):
+        # --- CAMPO OBLIGATORIO: Intereses → texto_consulta ---
         interests = st.multiselect(
-            "Intereses",
-            reco.INTERESTS,
-            default=[],
+            "Intereses *",
+            list(reco.INTERESTS),
+            default=default_interests,
             format_func=reco.interest_label,
             placeholder="Selecciona al menos uno",
-            help="Selecciona al menos uno. Estos son los intereses que acepta el motor.",
+            help=(
+                "Obligatorio. Se traduce a texto_consulta para la búsqueda semántica del motor. "
+                "Opciones: " + ", ".join(reco.interest_label(c) for c in reco.INTERESTS)
+            ),
+        )
+
+        # --- CAMPO OBLIGATORIO: Objetivo de popularidad → objetivo_popularidad ---
+        popularity = st.slider(
+            "Objetivo de popularidad *",
+            0.0, 1.0, default_popularity, 0.05,
+            help=(
+                "Obligatorio. 0.0 = destinos muy masificados/populares · "
+                "1.0 = destinos alternativos poco saturados. "
+                "El motor busca proximidad a este valor."
+            ),
         )
 
         c1, c2 = st.columns(2)
+
+        # --- Temperatura preferida (opcional) ---
         temperature = c1.selectbox(
             "Temperatura preferida",
-            reco.TEMPERATURE_PREFERENCES,
-            index=None,
-            placeholder="Indiferente",
+            list(reco.TEMPERATURE_PREFERENCES),
+            index=temp_index,
             format_func=lambda code: reco.TEMPERATURE_LABELS[code],
-        )
-        categoria = c2.selectbox(
-            "Categoría de experiencia",
-            reco.CATEGORIES,
-            index=None,
-            placeholder="Cualquiera",
-            format_func=lambda code: reco.CATEGORY_LABELS[code],
-            help="Filtra por el tipo de experiencia. Coincidencia exacta con el catálogo del motor.",
+            help=(
+                "Opcional. Opciones: "
+                + ", ".join(f"{reco.TEMPERATURE_LABELS[c]} ({c})" for c in reco.TEMPERATURE_PREFERENCES)
+            ),
         )
 
-        c3, c4 = st.columns(2)
-        popularity = c3.slider(
-            "Objetivo de popularidad",
-            0.0, 1.0, 0.5, 0.05,
-            help="0 = destinos poco conocidos · 1 = destinos muy conocidos. "
-                 "El motor busca proximidad a este valor, no el máximo.",
+        # --- Categoría de experiencia (opcional, múltiple) → categoria ---
+        categorias_sel = c2.multiselect(
+            "Categoría de experiencia",
+            list(reco.CATEGORIES),
+            default=[],
+            format_func=lambda code: reco.CATEGORY_LABELS[code],
+            placeholder="Cualquiera",
+            help=(
+                "Opcional. Selecciona una o más categorías. "
+                "Opciones: " + ", ".join(reco.CATEGORY_LABELS.values())
+            ),
         )
-        presupuesto = c4.number_input(
+        # Para la llamada al modelo se usa la primera seleccionada (contrato admite una)
+        categoria = categorias_sel[0] if categorias_sel else None
+
+        c3, c4 = st.columns(2)
+
+        # --- Presupuesto máximo (opcional) → presupuesto_max ---
+        presupuesto = c3.number_input(
             "Presupuesto máximo (€)",
             min_value=0,
             value=None,
-            step=10,
+            step=50,
             placeholder="Sin límite",
-            help="Precio orientativo por persona. Deja vacío para no filtrar por precio.",
+            help="Opcional. Precio orientativo por persona en euros (precio_eur ≤ presupuesto_max).",
         )
 
+        # c4 reservada: el multiselect de excluir lugares va FUERA del st.form
+        # (necesita session_state para búsqueda case+accent-insensitive propia).
+        c4.empty()
+
         submitted = st.form_submit_button(
-            "Pedir recomendaciones", type="primary", width="stretch"
+            "Buscar destinos", type="primary", use_container_width=True,
         )
+
+    # --- Excluir lugares: multiselect insensible a tildes ---
+    # Cada destino aparece como dos opciones: "Túnez" y "tunez" (normalizada).
+    # format_func siempre muestra el nombre original con tilde.
+    # Así el usuario puede escribir con o sin tilde y encontrar el mismo lugar.
+    # Al enviar al modelo se usa siempre el nombre original.
+    _SK_EXCLUIR = "reco_excluir_sel"
+    _excluir_prev = [n for n in (st.session_state.get(_SK_EXCLUIR) or [])
+                     if n in _DESTINOS_CONOCIDOS_MAP.values()]
+
+    # Opciones: nombre original + alias sin tilde (si difiere del original)
+    _opciones_excluir = []
+    for _nombre_orig in _DESTINOS_CONOCIDOS_MAP.values():
+        _opciones_excluir.append(_nombre_orig)
+        _alias = _normalize_place(_nombre_orig)
+        if _alias != _nombre_orig.lower():
+            _opciones_excluir.append(_alias)
+
+    excluir_sel_raw = st.multiselect(
+        "Excluir lugares",
+        options=_opciones_excluir,
+        default=_excluir_prev,
+        format_func=lambda v: _DESTINOS_CONOCIDOS_MAP.get(_normalize_place(v), v),
+        placeholder="Escribe o selecciona lugares a excluir…",
+        help="Escribe con o sin tildes: tunez y Túnez encuentran lo mismo.",
+        key="reco_excluir_multisel",
+    )
+    # Normalizar selección: convertir alias sin tilde al nombre original
+    excluir_sel = list({
+        _DESTINOS_CONOCIDOS_MAP.get(_normalize_place(v), v)
+        for v in excluir_sel_raw
+    })
+    st.session_state[_SK_EXCLUIR] = excluir_sel
 
     if not submitted:
         return None
 
-    # El único campo obligatorio de la API es la consulta de texto, que se
-    # deriva de los intereses; por eso se exige al menos un interés.
     if not interests:
-        st.error("Selecciona al menos un interés para pedir recomendaciones.")
+        st.error("Selecciona al menos un interés (campo obligatorio).")
         return None
 
-    # El selector de temperatura sin elegir equivale a "Indiferente" (any).
     temperature = temperature or "any"
     presupuesto_max = float(presupuesto) if presupuesto else None
+    excluir = list(st.session_state.get(_SK_EXCLUIR) or [])
 
     errors = reco.validate_request(
         interests=interests,
@@ -318,6 +432,7 @@ def _render_form() -> dict | None:
         popularity_target=popularity,
         presupuesto_max=presupuesto_max,
         categoria=categoria,
+        exclude_destinations=excluir,
     )
 
 
@@ -408,7 +523,7 @@ def _render_hero(row: dict, payload: dict, compact: bool = False) -> None:
         )
     parts.append('</div>')
 
-    parts.append('<button class="offer-cta" disabled>Ver opciones</button>')
+    parts.append('<a class="offer-cta" href="https://es.tui.com/es/" target="_blank" rel="noopener noreferrer">Ver opciones</a>')
     parts.append('</div>')  # body
     parts.append('</div>')  # offer
 
@@ -452,7 +567,7 @@ def _card_html(row: dict, idx: int, compact: bool = False, payload: dict | None 
         )
     else:
         parts.append(f'<div class="reco-photo-fallback">{escape(name)}</div>')
-    parts.append('<div class="reco-flag">Oferta TUI</div>')
+    # Sin badge "Oferta TUI" en tarjetas alternativas (solo va en la primera opción)
     parts.append('</div>')  # cierra photo-wrap
 
     # Cuerpo: título azul debajo de la imagen (estilo oferta TUI).
@@ -488,7 +603,7 @@ def _card_html(row: dict, idx: int, compact: bool = False, payload: dict | None 
                 + "".join(f'<span class="reco-place-item">{escape(s)}</span>' for s in strengths[:2])
                 + '</div>'
             )
-        parts.append('<button class="reco-cta" disabled>Ver opciones</button>')
+        parts.append('<a class="reco-cta" href="https://es.tui.com/es/" target="_blank" rel="noopener noreferrer">Ver opciones</a>')
 
     parts.append('</div>')  # cierra body
     parts.append('</div>')  # cierra card
@@ -668,7 +783,8 @@ def _render_advanced_form() -> None:
     # arranca abierto para invitar a ajustar la búsqueda.
     result = st.session_state.get(STATE_KEY) or {}
     has_recommendation = bool(result.get("ok") and (result.get("ranking") or []))
-    with st.expander("🔍 Ajustar filtros", expanded=not has_recommendation):
+    expander_label = "🔍 Ajustar filtros" if has_recommendation else "🔍 ¿A qué tipo de viaje quieres escaparte?"
+    with st.expander(expander_label, expanded=not has_recommendation):
         new_payload = _render_form()
     if new_payload is not None:
         _run(new_payload, is_custom=True)
@@ -738,7 +854,23 @@ def render_assistant_chat_view() -> None:
     ranking = result.get("ranking") or []
 
     with col_reco:
-        _render_featured(result, compact=True)
+        if result.get("ok") and ranking:
+            _render_featured(result, compact=True)
+        else:
+            # Estado vacío: invitar al usuario a conversar con el asistente
+            st.markdown(
+                '<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;'
+                'min-height:260px;border:1px dashed rgba(17,24,39,.15);border-radius:20px;'
+                'background:linear-gradient(180deg,#FBFCFE,#F4F7FA);padding:2rem;text-align:center;">'
+                '<div style="font-size:2rem;margin-bottom:.8rem">🌍</div>'
+                '<div style="font-size:.95rem;font-weight:700;color:rgb(27,17,92);margin-bottom:.4rem">'
+                'Tu recomendación aparecerá aquí</div>'
+                '<div style="font-size:.78rem;color:var(--muted);max-width:220px;line-height:1.5">'
+                'Cuéntale al asistente qué viaje buscas y te propondrá destinos personalizados.'
+                '</div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
 
     # Opciones 2 y 3, a lo ancho y en formato compacto (tarjetas más pequeñas
     # para que la opción 1 siga siendo la protagonista).
@@ -775,24 +907,96 @@ def _render_policy_selector() -> None:
 
 
 
+def _render_random_placeholder() -> None:
+    """Muestra 3 destinos aleatorios como contenido inicial antes de que el
+    usuario llame al modelo. Solo se usa cuando no hay resultado en sesión."""
+    nombres = list(_DESTINOS_CONOCIDOS_MAP.values())
+    muestra = random.sample(nombres, min(3, len(nombres)))
+
+    # Textos de inspiración por destino para el placeholder
+    _HEADLINES: dict[str, str] = {
+        "Barcelona": "Arquitectura modernista, playa y vida nocturna",
+        "Madrid": "Museos de clase mundial y gastronomía sin igual",
+        "Sevilla": "Flamenco, tapas y la Giralda bajo el sol andaluz",
+        "Granada": "La Alhambra, el Albaicín y noches de tapas gratis",
+        "Málaga": "Costa del Sol, Picasso y el mejor boquerón frito",
+        "Mallorca": "Calas de agua turquesa y sierra de Tramuntana",
+        "Ibiza": "Puestas de sol legendarias y fiestas hasta el alba",
+        "Tenerife": "Volcán Teide, playas negras y clima todo el año",
+        "Fuerteventura": "Las mejores dunas de Europa y viento para el surf",
+        "Lanzarote": "Paisajes volcánicos y arquitectura de César Manrique",
+        "Gran Canaria": "Mini continente con playas, cumbres y carnaval",
+        "Menorca": "Calas vírgenes, calma y Patrimonio de la Humanidad",
+        "Santorini": "Casas blancas, volcán y atardeceres inigualables",
+        "Creta": "Minoicos, playas salvajes y cocina mediterránea pura",
+        "Dubrovnik": "La Perla del Adriático y escenario de Juego de Tronos",
+        "Split": "Palacio de Diocleciano y nightlife junto al mar",
+        "Bali": "Templos entre arrozales y olas para todos los niveles",
+        "Cancún": "Playas del Caribe y ruinas mayas a un paso",
+        "Punta Cana": "Resorts todo incluido en aguas cristalinas",
+        "Algarve": "Acantilados dorados y las mejores playas de Portugal",
+        "Antalya": "Mar turquesa, ruinas romanas y gastronomía turca",
+        "Dubai": "Rascacielos futuristas y desierto en el mismo día",
+        "Maldivas": "Bungalows sobre el agua y arrecifes de coral",
+        "Cabo Verde": "Capoeira, música morna y playas de arena volcánica",
+        "Hurghada": "Mar Rojo, submarinismo y sol garantizado",
+        "Túnez": "Medinas declaradas patrimonio y playas del Mediterráneo",
+        "Zadar": "Órgano marino y el atardecer más bello del mundo",
+        "Rodas": "Ciudad medieval amurallada y 300 días de sol al año",
+        "Naxos": "La isla más verde de las Cícladas y queso local",
+        "Bilbao": "Guggenheim, pintxos y la ría renovada",
+        "San Sebastián": "La Concha, txakoli y la mejor gastronomía de Europa",
+        "Cádiz": "La ciudad más antigua de Occidente y carnaval único",
+        "Córdoba": "La Mezquita-Catedral y patios llenos de flores",
+        "Alicante": "Castillo de Santa Bárbara y playas del Mediterráneo",
+        "Cerdeña": "Aguas esmeraldas, nuraghe y queso pecorino",
+        "Costa Amalfitana": "Limones, acantilados y pueblos de postal",
+    }
+    default_headline = "Descubre este destino con TUI"
+
+    cards_html = ""
+    for nombre in muestra:
+        foto = get_local_destination_image(nombre)
+        headline = _HEADLINES.get(nombre, default_headline)
+        if foto:
+            img_html = (
+                f'<img class="reco-photo" src="{escape(foto["url"], quote=True)}" '
+                f'alt="{escape(foto["alt"], quote=True)}" loading="lazy">'
+            )
+        else:
+            img_html = f'<div class="reco-photo-fallback">{escape(nombre)}</div>'
+        cards_html += (
+            f'<div class="reco-card">'
+            f'<div class="reco-photo-wrap">{img_html}</div>'
+            f'<div class="reco-body">'
+            f'<div class="reco-name">{escape(nombre)}</div>'
+            f'<p class="reco-headline">{escape(headline)}</p>'
+            f'<a class="reco-cta" href="https://es.tui.com/es/" target="_blank" rel="noopener noreferrer">Ver opciones</a>'
+            f'</div>'
+            f'</div>'
+        )
+    st.markdown(
+        '<div class="alt-title">Inspírate — destinos destacados</div>'
+        f'<div class="alt-grid">{cards_html}</div>'
+        '<p style="font-size:.72rem;color:var(--muted);margin-top:.6rem">'
+        '✦ Ajusta los filtros y pulsa <strong>Buscar destinos</strong> para ver recomendaciones personalizadas.'
+        '</p>',
+        unsafe_allow_html=True,
+    )
+
+
 def render_recommender() -> None:
     st.markdown(
         '<div class="reco-header">'
         '<div class="reco-kicker">TUI Travel Assistant</div>'
-        '<p class="reco-hero-lead">Elige un escenario de reparto de la demanda '
-        '—o ajusta tus filtros— y el motor te propone los destinos que mejor '
-        'encajan, con el motivo de cada elección.</p>'
+        '<p class="reco-hero-lead">Dinos qué buscas en tu próximo viaje y el motor '
+        'te propone los destinos que mejor encajan, con el motivo de cada elección. '
+        'Elige un escenario o ajusta los filtros a tu medida.</p>'
         '</div>',
         unsafe_allow_html=True,
     )
 
     _render_policy_selector()
-
-    # Precalcula una recomendación por defecto (autorun) para que la vista tenga
-    # contenido en cuanto se abre, sin pantallas vacías. Sin API no se lanza el
-    # modelo real (se informa).
-    if reco.is_configured():
-        _autorun_if_needed()
 
     result = st.session_state.get(STATE_KEY) or {}
     ranking = result.get("ranking") or []
@@ -801,6 +1005,15 @@ def render_recommender() -> None:
     # la vista «Asistente de viajes». No se envuelven los widgets en <div>
     # propios: hacerlo rompe el árbol DOM de React de Streamlit (removeChild).
     _render_advanced_form()
-    _render_featured(result)
-    if result.get("ok") and len(ranking) > 1:
-        _render_alternatives(result)
+
+    # Layout horizontal: Opción 1 (mitad izquierda) + opciones secundarias (mitad derecha)
+    # Si no hay resultado del modelo todavía, se muestran destinos aleatorios como placeholder.
+    if result.get("ok") and ranking:
+        col_hero, col_alts = st.columns([1, 1], gap="medium")
+        with col_hero:
+            _render_featured(result, compact=True)
+        with col_alts:
+            if len(ranking) > 1:
+                _render_alternatives(result, compact=True)
+    else:
+        _render_random_placeholder()

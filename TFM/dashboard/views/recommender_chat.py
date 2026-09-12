@@ -459,6 +459,18 @@ def render_recommender_chat() -> None:
             st.session_state.pop(CHAT_PENDING_KEY, None)
             st.rerun()
 
+    # Sugerencias clicables (solo cuando la conversación aún no ha comenzado).
+    # Se muestran como botones pequeños que al pulsar envían el mensaje directamente.
+    if not hay_turnos_usuario and not pendiente:
+        with st.container(key="chat_sug_wrap"):
+            cols_sug = st.columns(len(CHAT_SUGGESTIONS), gap="small")
+            for i, sugerencia in enumerate(CHAT_SUGGESTIONS):
+                if cols_sug[i].button(sugerencia, key=f"chatreco_sug_{i}", use_container_width=True):
+                    history.append({"role": "user", "text": sugerencia, "cards": []})
+                    st.session_state[CHAT_HISTORY_KEY] = history
+                    st.session_state[CHAT_PENDING_KEY] = sugerencia
+                    st.rerun()
+
     # Entrada del usuario: nativo de Streamlit.
     mensaje = st.chat_input("Escribe qué viaje buscas…")
 
