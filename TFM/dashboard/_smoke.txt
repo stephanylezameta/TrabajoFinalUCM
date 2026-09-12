@@ -1,0 +1,180 @@
+FFFFFFF..                                                                [100%]
+================================== FAILURES ===================================
+______________________ test_app_starts_without_exception ______________________
+tests\test_app_smoke.py:44: in test_app_starts_without_exception
+    app = _run()
+          ^^^^^^
+tests\test_app_smoke.py:36: in _run
+    app.run()
+.venv\Lib\site-packages\streamlit\testing\v1\app_test.py:463: in run
+    return self._tree.run(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\streamlit\testing\v1\element_tree.py:2531: in run
+    return self._runner._run(widget_states, timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\streamlit\testing\v1\app_test.py:407: in _run
+    self._tree = script_runner.run(
+.venv\Lib\site-packages\streamlit\testing\v1\local_script_runner.py:158: in run
+    require_widgets_deltas(self, timeout)
+.venv\Lib\site-packages\streamlit\testing\v1\local_script_runner.py:208: in require_widgets_deltas
+    raise RuntimeError(err_string)
+E   RuntimeError: AppTest script run timed out after 120(s)
+---------------------------- Captured stdout setup ----------------------------
+OK  products_html: procesados=3 filas=3 run=d3359fbe-60ce-4547-8c35-92c9e8764a83
+OK  destinations_tdrs: procesados=39 filas=39 run=08480240-07dc-46c2-b703-a617530a782d
+OK  climate: procesados=1638 filas=1638 run=90f680ed-de06-4af7-be17-35f0a89825c9
+OK  connectivity: procesados=39 filas=39 run=7af39000-2e2e-4bbc-8490-20a65b2a01bb
+OK  country_indicators: procesados=16 filas=16 run=6c454800-c453-4c85-93bb-d03cfe4cf2cb
+OK  sentiment: procesados=392 filas=392 run=9b218d63-1b4d-4539-898b-14199b5435c2
+Modelo listo: C:\Users\Steph\AppData\Local\Temp\tui_tests_zfuy9hfu\test_app.db
+---------------------------- Captured stderr call -----------------------------
+2026-09-11 13:13:49.402 WARNING streamlit.runtime.scriptrunner_utils.script_run_context: Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+------------------------------ Captured log call ------------------------------
+WARNING  streamlit.runtime.scriptrunner_utils.script_run_context:script_run_context.py:476 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+_____________________ test_sidebar_exposes_the_nav_views ______________________
+tests\test_app_smoke.py:49: in test_sidebar_exposes_the_nav_views
+    app = _run()
+          ^^^^^^
+tests\test_app_smoke.py:36: in _run
+    app.run()
+.venv\Lib\site-packages\streamlit\testing\v1\app_test.py:463: in run
+    return self._tree.run(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\streamlit\testing\v1\element_tree.py:2531: in run
+    return self._runner._run(widget_states, timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\streamlit\testing\v1\app_test.py:407: in _run
+    self._tree = script_runner.run(
+.venv\Lib\site-packages\streamlit\testing\v1\local_script_runner.py:158: in run
+    require_widgets_deltas(self, timeout)
+.venv\Lib\site-packages\streamlit\testing\v1\local_script_runner.py:208: in require_widgets_deltas
+    raise RuntimeError(err_string)
+E   RuntimeError: AppTest script run timed out after 120(s)
+---------------------------- Captured stderr call -----------------------------
+2026-09-11 13:16:58.044 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+------------------------------ Captured log call ------------------------------
+WARNING  streamlit.runtime.scriptrunner_utils.script_run_context:script_run_context.py:476 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+_______ test_every_view_renders_without_exception[TUI Travel Assistant] _______
+tests\test_app_smoke.py:55: in test_every_view_renders_without_exception
+    app = _run(view)
+          ^^^^^^^^^^
+tests\test_app_smoke.py:36: in _run
+    app.run()
+.venv\Lib\site-packages\streamlit\testing\v1\app_test.py:463: in run
+    return self._tree.run(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\streamlit\testing\v1\element_tree.py:2531: in run
+    return self._runner._run(widget_states, timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\streamlit\testing\v1\app_test.py:407: in _run
+    self._tree = script_runner.run(
+.venv\Lib\site-packages\streamlit\testing\v1\local_script_runner.py:158: in run
+    require_widgets_deltas(self, timeout)
+.venv\Lib\site-packages\streamlit\testing\v1\local_script_runner.py:208: in require_widgets_deltas
+    raise RuntimeError(err_string)
+E   RuntimeError: AppTest script run timed out after 120(s)
+---------------------------- Captured stderr call -----------------------------
+2026-09-11 13:21:34.943 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+------------------------------ Captured log call ------------------------------
+WARNING  streamlit.runtime.scriptrunner_utils.script_run_context:script_run_context.py:476 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+_____________ test_every_view_renders_without_exception[Explora] ______________
+tests\test_app_smoke.py:55: in test_every_view_renders_without_exception
+    app = _run(view)
+          ^^^^^^^^^^
+tests\test_app_smoke.py:36: in _run
+    app.run()
+.venv\Lib\site-packages\streamlit\testing\v1\app_test.py:463: in run
+    return self._tree.run(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\streamlit\testing\v1\element_tree.py:2531: in run
+    return self._runner._run(widget_states, timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\streamlit\testing\v1\app_test.py:407: in _run
+    self._tree = script_runner.run(
+.venv\Lib\site-packages\streamlit\testing\v1\local_script_runner.py:158: in run
+    require_widgets_deltas(self, timeout)
+.venv\Lib\site-packages\streamlit\testing\v1\local_script_runner.py:208: in require_widgets_deltas
+    raise RuntimeError(err_string)
+E   RuntimeError: AppTest script run timed out after 120(s)
+---------------------------- Captured stderr call -----------------------------
+2026-09-11 13:23:53.044 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+------------------------------ Captured log call ------------------------------
+WARNING  streamlit.runtime.scriptrunner_utils.script_run_context:script_run_context.py:476 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+_______ test_every_view_renders_without_exception[Monitor performance ] _______
+tests\test_app_smoke.py:55: in test_every_view_renders_without_exception
+    app = _run(view)
+          ^^^^^^^^^^
+tests\test_app_smoke.py:36: in _run
+    app.run()
+.venv\Lib\site-packages\streamlit\testing\v1\app_test.py:463: in run
+    return self._tree.run(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\streamlit\testing\v1\element_tree.py:2531: in run
+    return self._runner._run(widget_states, timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\streamlit\testing\v1\app_test.py:407: in _run
+    self._tree = script_runner.run(
+.venv\Lib\site-packages\streamlit\testing\v1\local_script_runner.py:158: in run
+    require_widgets_deltas(self, timeout)
+.venv\Lib\site-packages\streamlit\testing\v1\local_script_runner.py:208: in require_widgets_deltas
+    raise RuntimeError(err_string)
+E   RuntimeError: AppTest script run timed out after 120(s)
+---------------------------- Captured stderr call -----------------------------
+2026-09-11 13:28:29.945 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+------------------------------ Captured log call ------------------------------
+WARNING  streamlit.runtime.scriptrunner_utils.script_run_context:script_run_context.py:476 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+___________________ test_control_web_shows_commercial_kpis ____________________
+tests\test_app_smoke.py:60: in test_control_web_shows_commercial_kpis
+    app = _run(NAV_CONTROL)
+          ^^^^^^^^^^^^^^^^^
+tests\test_app_smoke.py:36: in _run
+    app.run()
+.venv\Lib\site-packages\streamlit\testing\v1\app_test.py:463: in run
+    return self._tree.run(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\streamlit\testing\v1\element_tree.py:2531: in run
+    return self._runner._run(widget_states, timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\streamlit\testing\v1\app_test.py:407: in _run
+    self._tree = script_runner.run(
+.venv\Lib\site-packages\streamlit\testing\v1\local_script_runner.py:158: in run
+    require_widgets_deltas(self, timeout)
+.venv\Lib\site-packages\streamlit\testing\v1\local_script_runner.py:208: in require_widgets_deltas
+    raise RuntimeError(err_string)
+E   RuntimeError: AppTest script run timed out after 120(s)
+---------------------------- Captured stderr call -----------------------------
+2026-09-11 13:30:46.623 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+------------------------------ Captured log call ------------------------------
+WARNING  streamlit.runtime.scriptrunner_utils.script_run_context:script_run_context.py:476 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+_______________ test_recommender_view_degrades_without_endpoint _______________
+tests\test_app_smoke.py:68: in test_recommender_view_degrades_without_endpoint
+    app = _run(NAV_RECO)
+          ^^^^^^^^^^^^^^
+tests\test_app_smoke.py:36: in _run
+    app.run()
+.venv\Lib\site-packages\streamlit\testing\v1\app_test.py:463: in run
+    return self._tree.run(timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\streamlit\testing\v1\element_tree.py:2531: in run
+    return self._runner._run(widget_states, timeout=timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+.venv\Lib\site-packages\streamlit\testing\v1\app_test.py:407: in _run
+    self._tree = script_runner.run(
+.venv\Lib\site-packages\streamlit\testing\v1\local_script_runner.py:158: in run
+    require_widgets_deltas(self, timeout)
+.venv\Lib\site-packages\streamlit\testing\v1\local_script_runner.py:208: in require_widgets_deltas
+    raise RuntimeError(err_string)
+E   RuntimeError: AppTest script run timed out after 120(s)
+---------------------------- Captured stderr call -----------------------------
+2026-09-11 13:34:30.142 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+------------------------------ Captured log call ------------------------------
+WARNING  streamlit.runtime.scriptrunner_utils.script_run_context:script_run_context.py:476 Thread 'MainThread': missing ScriptRunContext! This warning can be ignored when running in bare mode.
+=========================== short test summary info ===========================
+FAILED tests/test_app_smoke.py::test_app_starts_without_exception - RuntimeEr...
+FAILED tests/test_app_smoke.py::test_sidebar_exposes_the_nav_views - RuntimeE...
+FAILED tests/test_app_smoke.py::test_every_view_renders_without_exception[TUI Travel Assistant]
+FAILED tests/test_app_smoke.py::test_every_view_renders_without_exception[Explora]
+FAILED tests/test_app_smoke.py::test_every_view_renders_without_exception[Monitor performance ]
+FAILED tests/test_app_smoke.py::test_control_web_shows_commercial_kpis - Runt...
+FAILED tests/test_app_smoke.py::test_recommender_view_degrades_without_endpoint
+7 failed, 2 passed in 1572.89s (0:26:12)

@@ -9,6 +9,22 @@ from components.assets import get_local_destination_image
 from services import recommendation_api_service as reco
 
 CHAT_HISTORY_KEY = "reco_chat_history"
+# Historial y sesión que mantiene la propia API /chat (formato del backend,
+# distinto del historial visual). Se guardan aparte para reenviarlos tal cual.
+CHAT_API_HISTORY_KEY = "reco_chat_api_history"
+CHAT_SESSION_KEY = "reco_chat_session_id"
+# Mensaje del usuario a la espera de respuesta del asistente. Permite pintar el
+# turno del usuario al instante y procesar la llamada (lenta) en el rerun
+# siguiente, mostrando entretanto un indicador de «escribiendo…».
+CHAT_PENDING_KEY = "reco_chat_pending"
+
+# Claves de estado compartidas con views/recommender.py (STATE_KEY / STATE_CUSTOM):
+# la tarjeta destacada y las alternativas leen de "reco_result". Al citar
+# destinos en el chat, se sobrescriben para que la columna derecha refleje
+# exactamente lo recomendado. Se replican como literales para no crear un import
+# circular (recommender.py ya importa de este módulo).
+RECO_STATE_KEY = "reco_result"
+RECO_STATE_CUSTOM = "reco_is_custom"
 
 # Sugerencias de arranque, para que el usuario no mire una caja vacía.
 CHAT_SUGGESTIONS = (
@@ -184,13 +200,9 @@ def _chat_card_html(dest: dict) -> str:
 # --------------------------------------------------------------------------
 
 def _simular_respuesta_asistente(mensaje_usuario: str) -> dict:
-    """Respuesta simulada del asistente: SOLO texto conversacional.
-
-    No embebe tarjetas de destino en el chat para no duplicar visualmente la
-    sección "Recomendación del modelo" que aparece debajo (donde la opción 1 es
-    la protagonista). El asistente conversa y remite a esa recomendación.
-    No hay red ni modelo: es una demostración visual.
-    """
+    """Respuesta local de respaldo, cuando la API /chat no está configurada o
+    falla. SOLO texto conversacional; no embebe tarjetas para no duplicar la
+    sección de recomendación que aparece debajo."""
     tarjetas = _tarjetas_desde_session_state()
     nombres = ", ".join(t["name"] for t in tarjetas[:3])
     if nombres:
@@ -206,9 +218,84 @@ def _simular_respuesta_asistente(mensaje_usuario: str) -> dict:
             "en «Ajustar filtros» de abajo y el modelo te propondrá los destinos "
             "que mejor encajan, con el motivo de cada elección."
         )
-
-    # Sin tarjetas en el chat: la recomendación visual vive abajo, no duplicada.
     return {"texto": texto, "tarjetas": []}
+
+
+def _responder_asistente(mensaje_usuario: str) -> dict:
+    """Obtiene la respuesta del asistente. Usa la API real POST /chat si está
+    configurada; si no lo está o falla, cae a la respuesta local de respaldo.
+
+    Devuelve {"texto": str, "tarjetas": list}. El chat conversacional del
+    backend ya redacta las descripciones de destino en su propio texto, así que
+    no se embeben tarjetas (se mantiene la recomendación destacada de abajo como
+    apoyo visual)."""
+    if not reco.is_configured():
+        return _simular_respuesta_asistente(mensaje_usuario)
+
+    api_history = st.session_state.get(CHAT_API_HISTORY_KEY, [])
+    session_id = st.session_state.get(CHAT_SESSION_KEY)
+    respuesta = reco.chat(mensaje_usuario, historial=api_history, session_id=session_id)
+
+    if not respuesta.get("ok") or not respuesta.get("respuesta"):
+        # Sin tumbar la conversación: se responde con el respaldo local.
+        return _simular_respuesta_asistente(mensaje_usuario)
+
+    st.session_state[CHAT_API_HISTORY_KEY] = respuesta.get("historial", [])
+    st.session_state[CHAT_SESSION_KEY] = respuesta.get("session_id")
+
+    # Sincroniza la recomendación destacada (columna derecha) y las alternativas
+    # (2 y 3) con los destinos que el chat acaba de citar. Solo se actualiza si
+    # este turno produjo una recomendación estructurada; en turnos meramente
+    # conversacionales (preguntas de perfilado) se conserva la última tarjeta.
+    reco_result = respuesta.get("reco_result")
+    if reco_result and reco_result.get("ok") and (reco_result.get("ranking") or []):
+        # El chat citó un ranking estructurado del catálogo: la tarjeta
+        # destacada (derecha) y las alternativas (abajo) se sincronizan con ESOS
+        # destinos, reordenados para que el #1 de la tarjeta sea el primero que
+        # el asistente nombró en su texto (así no se contradicen).
+        reco_result = _alinear_con_texto(reco_result, respuesta.get("respuesta") or "")
+        st.session_state[RECO_STATE_KEY] = reco_result
+        st.session_state[RECO_STATE_CUSTOM] = True
+    else:
+        # El turno NO trajo un ranking del catálogo (el agente solo hizo una
+        # pregunta de perfilado o habló de destinos fuera del catálogo cerrado).
+        # Se RETIRA la tarjeta destacada anterior en vez de dejar una que
+        # contradiga la conversación: era el origen del "sigue saliendo Túnez"
+        # cuando el chat hablaba de otro destino. La tarjeta solo reaparece
+        # cuando el chat propone destinos reales del catálogo.
+        st.session_state.pop(RECO_STATE_KEY, None)
+
+    return {"texto": respuesta["respuesta"], "tarjetas": []}
+
+
+def _alinear_con_texto(reco_result: dict, texto_chat: str) -> dict:
+    """Reordena el ranking para que el destino que el asistente nombra PRIMERO en
+    su texto sea la tarjeta destacada (#1). Evita que el chat hable de un destino
+    y la tarjeta de la derecha muestre otro distinto del mismo ranking.
+
+    Solo reordena entre los destinos que YA vienen en el ranking del catálogo; no
+    inventa nada. Si no encuentra ninguna coincidencia, deja el orden original."""
+    ranking = reco_result.get("ranking") or []
+    if len(ranking) < 2 or not texto_chat:
+        return reco_result
+    texto = texto_chat.lower()
+
+    def _pos(row: dict) -> int:
+        nombre = str(((row.get("destination") or {}).get("name")) or "").strip().lower()
+        if not nombre:
+            return 10**9
+        idx = texto.find(nombre)
+        return idx if idx >= 0 else 10**9
+
+    reordenado = sorted(ranking, key=_pos)
+    if _pos(reordenado[0]) == 10**9:
+        # Ningún destino del ranking aparece en el texto: no se toca.
+        return reco_result
+    nuevo = dict(reco_result)
+    for i, row in enumerate(reordenado, start=1):
+        row["rank"] = i
+    nuevo["ranking"] = reordenado
+    return nuevo
 
 
 # --------------------------------------------------------------------------
@@ -261,12 +348,28 @@ def _user_message_html(msg: dict) -> str:
     )
 
 
+def _typing_indicator_html() -> str:
+    """Burbuja del asistente con tres puntos animados («escribiendo…»),
+    mostrada mientras se espera la respuesta del modelo."""
+    return (
+        '<div class="chatreco-row chatreco-row--bot">'
+        '<div class="chatreco-avatar chatreco-avatar--bot">TUI</div>'
+        '<div class="chatreco-bubble chatreco-bubble--bot chatreco-typing">'
+        '<span class="chatreco-dot"></span>'
+        '<span class="chatreco-dot"></span>'
+        '<span class="chatreco-dot"></span>'
+        '</div>'
+        '</div>'
+    )
+
+
 # --------------------------------------------------------------------------
 # Punto de entrada de la maqueta del chat.
 # --------------------------------------------------------------------------
 
 def render_recommender_chat() -> None:
     history = _ensure_history()
+    pendiente = st.session_state.get(CHAT_PENDING_KEY)
     hay_turnos_usuario = any(m.get("role") == "user" for m in history)
 
     # TODA la ventana del chat (cabecera + sugerencias + historial completo) se
@@ -276,11 +379,15 @@ def render_recommender_chat() -> None:
     # mensaje, React tenía que crear/destruir un nº variable de nodos y lanzaba
     # el error removeChild. Con un único nodo HTML, React lo monta de una pieza.
     parts = ['<div class="chatreco-window">']
+    subtitulo = (
+        "Conectado al modelo" if reco.is_configured()
+        else "Vista previa · demostración visual"
+    )
     parts.append(
         '<div class="chatreco-window-head">'
         '<span class="chatreco-window-dot"></span>'
         '<span class="chatreco-window-title">Asistente de viaje TUI</span>'
-        '<span class="chatreco-window-sub">Vista previa · demostración visual</span>'
+        f'<span class="chatreco-window-sub">{escape(subtitulo)}</span>'
         '</div>'
     )
     if not hay_turnos_usuario:
@@ -296,23 +403,45 @@ def render_recommender_chat() -> None:
             parts.append(_assistant_message_html(msg))
         else:
             parts.append(_user_message_html(msg))
+    # Mientras hay un mensaje pendiente de respuesta, se muestra un indicador de
+    # «escribiendo…» (tres puntos animados) en lugar de dejar la UI congelada.
+    if pendiente:
+        parts.append(_typing_indicator_html())
+    # Ancla al final del historial: el script de auto-scroll la usa para dejar
+    # visible el último mensaje dentro de la caja con scroll propio.
+    parts.append('<div class="chatreco-scroll-anchor"></div>')
     parts.append('</div>')  # cierra chatreco-window
     st.markdown("".join(parts), unsafe_allow_html=True)
 
-    # Entrada del usuario: nativo de Streamlit.
-    mensaje = st.chat_input("Escribe qué viaje buscas…")
+    # Auto-scroll: tras cada rerun deja la ventana de chat mostrando el último
+    # mensaje (la caja tiene overflow propio, así la página no crece hacia
+    # abajo). Se busca en el documento padre porque el markdown se pinta dentro
+    # del iframe de Streamlit.
+    st.markdown(
+        """
+        <script>
+          (function () {
+            const doc = window.parent && window.parent.document
+              ? window.parent.document : document;
+            const ventanas = doc.querySelectorAll('.chatreco-window');
+            const ventana = ventanas[ventanas.length - 1];
+            if (ventana) {
+              requestAnimationFrame(function () {
+                ventana.scrollTop = ventana.scrollHeight;
+              });
+            }
+          })();
+        </script>
+        """,
+        unsafe_allow_html=True,
+    )
 
-    if mensaje:
-        history.append({"role": "user", "text": mensaje, "cards": []})
-
-        # -----------------------------------------------------------------
-        # GANCHO /chat REAL: aquí, en producción, se llamaría al backend en
-        # vez de simular. Ver docstring del módulo para el contrato exacto.
-        #   respuesta = _llamar_chat_backend(mensaje, history, session_id)
-        # De momento, maqueta 100% en cliente:
-        # -----------------------------------------------------------------
-        respuesta = _simular_respuesta_asistente(mensaje)
-
+    # Procesa el mensaje pendiente: ya se ha pintado el turno del usuario y el
+    # indicador «escribiendo…», así que ahora sí se llama al asistente (lento)
+    # y, al terminar, se hace rerun para mostrar la respuesta.
+    if pendiente:
+        st.session_state.pop(CHAT_PENDING_KEY, None)
+        respuesta = _responder_asistente(pendiente)
         history.append({
             "role": "assistant",
             "text": respuesta["texto"],
@@ -321,8 +450,24 @@ def render_recommender_chat() -> None:
         st.session_state[CHAT_HISTORY_KEY] = history
         st.rerun()
 
-    # Pie: reinicio de la conversación de la maqueta.
+    # Pie: reinicio de la conversación.
     if hay_turnos_usuario:
         if st.button("Empezar de nuevo", key="chatreco_reset"):
             st.session_state.pop(CHAT_HISTORY_KEY, None)
+            st.session_state.pop(CHAT_API_HISTORY_KEY, None)
+            st.session_state.pop(CHAT_SESSION_KEY, None)
+            st.session_state.pop(CHAT_PENDING_KEY, None)
             st.rerun()
+
+    # Entrada del usuario: nativo de Streamlit.
+    mensaje = st.chat_input("Escribe qué viaje buscas…")
+
+    if mensaje:
+        # UX: se pinta el turno del usuario INMEDIATAMENTE y se marca el mensaje
+        # como pendiente de responder. El rerun siguiente lo procesa contra la
+        # API (que puede tardar), así el usuario ve su mensaje al instante en
+        # vez de esperar bloqueado a que el modelo conteste.
+        history.append({"role": "user", "text": mensaje, "cards": []})
+        st.session_state[CHAT_HISTORY_KEY] = history
+        st.session_state[CHAT_PENDING_KEY] = mensaje
+        st.rerun()

@@ -74,24 +74,62 @@ class ReRankingEngine:
             scored.append({**c, "score_final": sf})
         
         if escenario == "tradicional":
-            # Ranking puro por score
+            # Ranking puro por score, pero con UN destino por posicion: aunque
+            # el pool ya suele venir deduplicado por destino, aqui se garantiza
+            # (05/09) que nunca se repita destino_nombre en la lista final --
+            # antes 'tradicional' hacia scored[:k] sin ninguna diversificacion,
+            # asi que dejaba pasar el mismo destino varias veces.
             scored.sort(key=lambda x: (-x["score_final"], x.get("id_paquete", "")))
-            return scored[:k]
+            unicos: list[dict] = []
+            vistos: set[str] = set()
+            for cand in scored:
+                destino = cand.get("destino_nombre", "")
+                if destino in vistos:
+                    continue
+                vistos.add(destino)
+                unicos.append(cand)
+                if len(unicos) >= k:
+                    break
+            return unicos
         
         # Selección greedy con diversificación de destinos
         return self._select_diverse(scored, k=k, escenario=escenario)
+
+    def _penalizacion_frecuencia(self, scored: list[dict]) -> dict[str, float]:
+        """Factor de novedad por destino en funcion de cuantas veces aparece en
+        el pool de candidatos.
+
+        Sin esto, un destino sobre-representado en el catalogo (muchos paquetes)
+        o con señales query-independientes altas (LightGBM/sentimiento) ganaba el
+        puesto #1 en casi cualquier consulta -- el sintoma de "siempre el mismo
+        destino". Aqui se reduce ligeramente el score de los destinos que copan
+        el pool, para que el #1 pueda variar segun la consulta real del usuario.
+        El texto de la consulta sigue mandando (via coseno); esto solo evita el
+        empate sistematico a favor del mismo destino."""
+        conteo = Counter(c.get("destino_nombre", "") for c in scored)
+        maximo = max(conteo.values()) if conteo else 1
+        # Factor entre ~0.85 (destino mas repetido) y 1.0 (destino unico).
+        return {
+            dest: 1.0 - 0.15 * ((n - 1) / maximo if maximo > 1 else 0.0)
+            for dest, n in conteo.items()
+        }
     
     def _select_diverse(self, scored: list[dict], k: int, escenario: str) -> list[dict]:
         """
-        Selección greedy con penalización por repetición de destino.
-        
-        Penalización: cada vez que un destino ya está en el ranking seleccionado,
-        su score efectivo se reduce un % (30% para moderado, 50% para intensivo).
-        Esto fuerza la diversificación de destinos en el ranking.
+        Selección greedy con UN destino distinto por posición del ranking.
+
+        Cada destino entra como mucho una vez (05/09): antes solo se penalizaba
+        la repetición, lo que aún permitía el mismo destino dos veces en la
+        lista. El orden entre destinos distintos sigue guiándose por el
+        score_final y el factor de novedad (que evita que un destino con muchos
+        paquetes en el pool cope el puesto #1).
         """
-        # Factor de penalización por repetición
-        penalty_factor = 0.12 if escenario == "moderado" else 0.20
-        
+        # Factor de novedad por frecuencia en el pool: se aplica DESDE el
+        # primer puesto (a diferencia de la penalizacion por repeticion, que
+        # solo afectaba a los puestos 2..k). Es lo que rompe el "siempre el
+        # mismo destino" en la posicion #1.
+        novedad = self._penalizacion_frecuencia(scored)
+
         selected = []
         destino_count = Counter()
         remaining = list(scored)
@@ -104,9 +142,19 @@ class ReRankingEngine:
             for idx, candidate in enumerate(remaining):
                 destino = candidate.get("destino_nombre", "")
                 repeticiones = destino_count.get(destino, 0)
-                
-                # Penalizar por cada aparición previa del mismo destino
-                effective_score = candidate["score_final"] * (1 - penalty_factor * repeticiones)
+
+                # Un destino ya seleccionado no vuelve a entrar (05/09): la
+                # penalizacion por repeticion no garantizaba unicidad y dejaba
+                # el mismo destino dos veces en la lista. Se salta directamente.
+                if repeticiones > 0:
+                    continue
+
+                # Factor de novedad por sobre-representacion en el pool: evita
+                # que un destino con muchos paquetes copase el puesto #1.
+                effective_score = (
+                    candidate["score_final"]
+                    * novedad.get(destino, 1.0)
+                )
                 
                 if effective_score > best_score:
                     best_score = effective_score

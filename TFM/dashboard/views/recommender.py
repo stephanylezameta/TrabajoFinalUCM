@@ -101,21 +101,13 @@ def _policy_to_payload(policy_name: str) -> dict:
     if temperature not in reco.TEMPERATURE_LABELS:
         temperature = defaults["temperature_preference"]
 
-    # Los escenarios no imponen exigencia de clima: el objetivo es explorar el
-    # reparto de demanda (popularidad), no filtrar por sol/lluvia. Arrancar sin
-    # mínimos de clima maximiza los candidatos y evita el rechazo del modelo por
-    # «menos de tres destinos».
+    # Los escenarios solo mueven la popularidad y los intereses de referencia:
+    # el objetivo es explorar el reparto de demanda, no filtrar por precio ni
+    # categoría (esos filtros quedan para la búsqueda avanzada del usuario).
     return reco.build_payload(
-        month=defaults["month"],
-        trip_length_days=defaults["trip_length_days"],
         interests=interests,
         temperature_preference=temperature,
-        minimum_sunny_days=reco.SUNNY_DAYS_RANGE[0],
-        maximum_precipitation_days=reco.PRECIPITATION_DAYS_RANGE[1],
         popularity_target=max(0.0, min(1.0, float(preset["popularity_target"]))),
-        accommodation_type=defaults["accommodation_type"],
-        include_regions=[],
-        exclude_regions=[],
     )
 
 # El asistente de viaje está INTEGRADO en la vista como un copiloto único, al
@@ -249,31 +241,6 @@ def _render_form() -> dict | None:
     los deslizadores parten del mínimo de su rango.
     """
     with st.form("reco_form"):
-        c1, c2, c3 = st.columns([1.1, 1, 1])
-        month = c1.selectbox(
-            "Mes del viaje",
-            list(range(1, 13)),
-            index=None,
-            placeholder="Elige un mes",
-            format_func=reco.month_name,
-        )
-        trip_length = c2.number_input(
-            "Duración (días)",
-            min_value=reco.TRIP_LENGTH_RANGE[0],
-            max_value=reco.TRIP_LENGTH_RANGE[1],
-            value=None,
-            step=1,
-            placeholder="Días",
-            help="La API admite viajes de 1 a 30 días.",
-        )
-        accommodation = c3.selectbox(
-            "Alojamiento",
-            reco.ACCOMMODATION_TYPES,
-            index=None,
-            placeholder="Cualquiera",
-            format_func=lambda code: reco.ACCOMMODATION_LABELS[code],
-        )
-
         interests = st.multiselect(
             "Intereses",
             reco.INTERESTS,
@@ -283,44 +250,38 @@ def _render_form() -> dict | None:
             help="Selecciona al menos uno. Estos son los intereses que acepta el motor.",
         )
 
-        c4, c5, c6 = st.columns(3)
-        temperature = c4.selectbox(
+        c1, c2 = st.columns(2)
+        temperature = c1.selectbox(
             "Temperatura preferida",
             reco.TEMPERATURE_PREFERENCES,
             index=None,
             placeholder="Indiferente",
             format_func=lambda code: reco.TEMPERATURE_LABELS[code],
         )
-        min_sunny = c5.slider(
-            "Mínimo de días soleados / mes",
-            reco.SUNNY_DAYS_RANGE[0], reco.SUNNY_DAYS_RANGE[1],
-            reco.SUNNY_DAYS_RANGE[0],
-        )
-        max_precip = c6.slider(
-            "Máximo de días de lluvia / mes",
-            reco.PRECIPITATION_DAYS_RANGE[0], reco.PRECIPITATION_DAYS_RANGE[1],
-            reco.PRECIPITATION_DAYS_RANGE[1],
+        categoria = c2.selectbox(
+            "Categoría de experiencia",
+            reco.CATEGORIES,
+            index=None,
+            placeholder="Cualquiera",
+            format_func=lambda code: reco.CATEGORY_LABELS[code],
+            help="Filtra por el tipo de experiencia. Coincidencia exacta con el catálogo del motor.",
         )
 
-        popularity = st.slider(
+        c3, c4 = st.columns(2)
+        popularity = c3.slider(
             "Objetivo de popularidad",
             0.0, 1.0, 0.5, 0.05,
             help="0 = destinos poco conocidos · 1 = destinos muy conocidos. "
                  "El motor busca proximidad a este valor, no el máximo.",
         )
-
-        with st.expander("Filtros de región", expanded=False):
-            fc1, fc2 = st.columns(2)
-            include_regions = fc1.multiselect(
-                "Incluir solo estas comunidades", reco.AUTONOMOUS_COMMUNITIES
-            )
-            exclude_regions = fc2.multiselect(
-                "Excluir comunidades", reco.AUTONOMOUS_COMMUNITIES
-            )
-            st.caption(
-                "Si los filtros dejan menos de tres destinos disponibles, la API "
-                "rechaza la petición con un aviso explícito."
-            )
+        presupuesto = c4.number_input(
+            "Presupuesto máximo (€)",
+            min_value=0,
+            value=None,
+            step=10,
+            placeholder="Sin límite",
+            help="Precio orientativo por persona. Deja vacío para no filtrar por precio.",
+        )
 
         submitted = st.form_submit_button(
             "Pedir recomendaciones", type="primary", width="stretch"
@@ -329,29 +290,22 @@ def _render_form() -> dict | None:
     if not submitted:
         return None
 
-    # Campos obligatorios sin preselección: se avisa si el usuario no los rellena.
-    faltantes = []
-    if month is None:
-        faltantes.append("el mes del viaje")
-    if trip_length is None:
-        faltantes.append("la duración")
-    if faltantes:
-        st.error("Indica " + " y ".join(faltantes) + " para pedir recomendaciones.")
+    # El único campo obligatorio de la API es la consulta de texto, que se
+    # deriva de los intereses; por eso se exige al menos un interés.
+    if not interests:
+        st.error("Selecciona al menos un interés para pedir recomendaciones.")
         return None
 
-    # Los selectores opcionales sin elegir equivalen a "Indiferente" (any).
+    # El selector de temperatura sin elegir equivale a "Indiferente" (any).
     temperature = temperature or "any"
-    accommodation = accommodation or "any"
+    presupuesto_max = float(presupuesto) if presupuesto else None
 
     errors = reco.validate_request(
-        month=month,
-        trip_length_days=int(trip_length),
         interests=interests,
         temperature_preference=temperature,
-        minimum_sunny_days=min_sunny,
-        maximum_precipitation_days=max_precip,
         popularity_target=popularity,
-        accommodation_type=accommodation,
+        presupuesto_max=presupuesto_max,
+        categoria=categoria,
     )
     if errors:
         for message in errors:
@@ -359,16 +313,11 @@ def _render_form() -> dict | None:
         return None
 
     return reco.build_payload(
-        month=month,
-        trip_length_days=int(trip_length),
         interests=interests,
         temperature_preference=temperature,
-        minimum_sunny_days=min_sunny,
-        maximum_precipitation_days=max_precip,
         popularity_target=popularity,
-        accommodation_type=accommodation,
-        include_regions=include_regions,
-        exclude_regions=exclude_regions,
+        presupuesto_max=presupuesto_max,
+        categoria=categoria,
     )
 
 
@@ -612,10 +561,10 @@ def _render_error(result: dict) -> None:
     if kind == "not_configured":
         st.markdown(
             "Configura el endpoint en `.streamlit/secrets.toml` (hay una plantilla "
-            "en `.streamlit/secrets.toml.example`) o como variables de entorno:"
+            "en `.streamlit/secrets.toml.example`) o como variable de entorno:"
         )
         st.code(
-            'TUI_RECO_API_URL = "https://<function-app>.azurewebsites.net/api/recommendations?code=<clave>"',
+            'TUI_MODELO_API_BASE = "https://<app>.azurecontainerapps.io"',
             language="toml",
         )
 
@@ -633,21 +582,17 @@ def _is_too_few_destinations(result: dict) -> bool:
 
 
 def _relax_payload(payload: dict) -> dict:
-    """Afloja la petición para maximizar candidatos: sin exigencia de clima ni
-    filtros de región, y temperatura indiferente. Conserva mes, duración e
-    intereses (lo que da sentido a la recomendación). Sirve para reintentar
-    cuando el modelo rechaza por «menos de tres destinos»."""
+    """Afloja la petición para maximizar candidatos: quita exclusiones, el
+    filtro de categoría y el de presupuesto. Conserva la consulta de texto y el
+    objetivo de popularidad. Sirve para reintentar en el caso (poco habitual con
+    la API nueva) de que no lleguen destinos."""
     relaxed = json.loads(json.dumps(payload))  # copia profunda simple
-    prefs = relaxed.setdefault("preferences", {})
-    climate = prefs.setdefault("climate", {})
-    climate["minimum_sunny_days"] = float(reco.SUNNY_DAYS_RANGE[0])
-    climate["maximum_precipitation_days"] = float(reco.PRECIPITATION_DAYS_RANGE[1])
-    climate["temperature_preference"] = "any"
-    relaxed["filters"] = {
-        "include_regions": [],
-        "exclude_regions": [],
-        "exclude_destinations": [],
-    }
+    relaxed["excluir_destinos"] = []
+    relaxed.pop("categoria", None)
+    relaxed.pop("presupuesto_max", None)
+    form = relaxed.setdefault("_form", {})
+    form["categoria"] = None
+    form["presupuesto_max"] = None
     return relaxed
 
 
@@ -673,6 +618,7 @@ def _run(payload: dict, is_custom: bool) -> dict:
     st.session_state[STATE_PAYLOAD] = payload
     st.session_state[STATE_CUSTOM] = is_custom
 
+    form = payload.get("_form") or {}
     register_event(
         st.session_state.session_id,
         "recommendation_request",
@@ -681,9 +627,10 @@ def _run(payload: dict, is_custom: bool) -> dict:
             "ok": bool(result.get("ok")),
             "error_kind": result.get("error_kind"),
             "origin": "formulario" if is_custom else "automatica",
-            "month": payload["travel"]["month"],
-            "trip_length_days": payload["travel"]["trip_length_days"],
-            "interests": payload["preferences"]["interests"],
+            "interests": form.get("interests"),
+            "categoria": form.get("categoria"),
+            "presupuesto_max": form.get("presupuesto_max"),
+            "objetivo_popularidad": payload.get("objetivo_popularidad"),
             "recommendation_id": result.get("recommendation_id"),
             "engine_version": (result.get("engine") or {}).get("version"),
         },
@@ -775,9 +722,6 @@ def render_assistant_chat_view() -> None:
     if reco.is_configured():
         _autorun_if_needed()
 
-    result = st.session_state.get(STATE_KEY) or {}
-    ranking = result.get("ranking") or []
-
     # Layout de dos columnas: a la IZQUIERDA la conversación (chat) y a la
     # DERECHA la recomendación destacada (opción 1). Las alternativas (opciones
     # 2 y 3) van DEBAJO, a lo ancho y más compactas.
@@ -785,6 +729,13 @@ def render_assistant_chat_view() -> None:
 
     with col_chat:
         render_recommender_chat()
+
+    # El estado se lee DESPUÉS de render_recommender_chat: si el turno del chat
+    # produjo (o disparó) una recomendación, aquí ya está actualizada, así la
+    # opción 1 (derecha) y las alternativas (abajo) reflejan lo que acaba de
+    # decir el asistente y no la propuesta anterior.
+    result = st.session_state.get(STATE_KEY) or {}
+    ranking = result.get("ranking") or []
 
     with col_reco:
         _render_featured(result, compact=True)

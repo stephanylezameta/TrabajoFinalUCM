@@ -29,6 +29,7 @@ import anthropic
 from scripts.recommendation.run_recommendation import (
     recomendar,
     registrar_feedback,
+    precargar_recursos,
     cargar_metadata_experiencias,
     cargar_clima_por_destino,
     cargar_accesibilidad_por_destino,
@@ -46,6 +47,24 @@ app = FastAPI(title="TUI Recomendador API")
 DB_PATH = os.environ.get("DB_PATH", "data/tui_recomendador.db")
 client_anthropic = anthropic.Anthropic()  # lee ANTHROPIC_API_KEY del entorno
 MODELO_AGENTE = "claude-sonnet-4-6"
+
+
+# --------------------------------------------------------------------------
+# Arranque del servicio: carga el modelo de embeddings (~2 GB), el catalogo
+# vectorial y las senales de la BD UNA sola vez, cuando el contenedor arranca.
+# Antes esto ocurria en cada peticion a /recomendar, lo que agotaba la memoria
+# del contenedor y devolvia 503. Con la precarga en el startup, la primera
+# consulta real ya encuentra todo en memoria.
+# --------------------------------------------------------------------------
+@app.on_event("startup")
+def _precargar_modelo() -> None:
+    try:
+        precargar_recursos(DB_PATH)
+        print("Recursos del recomendador precargados en el arranque.")
+    except Exception as e:  # noqa: BLE001
+        # No se bloquea el arranque: si la precarga falla, la primera peticion
+        # intentara cargar bajo demanda y el error se vera alli con contexto.
+        print(f"Aviso: no se pudieron precargar los recursos en el arranque: {e}")
 
 
 # --------------------------------------------------------------------------
@@ -95,9 +114,10 @@ def generar_descripciones_ia(destinos_top: list[dict]) -> dict[str, str]:
 
 {contexto}
 
-Para cada destino, escribe una descripcion breve (1-2 frases, español de España)
-que ayude a un viajero a decidir. Basate UNICAMENTE en los datos dados -- si un
-dato es null, no lo menciones, no inventes nada que no este en la lista.
+Para cada destino, escribe una descripcion breve (1-2 frases, espanol de
+Espana, con tildes normales) que ayude a un viajero a decidir. Basate
+UNICAMENTE en los datos dados -- si un dato es null, no lo menciones, no
+inventes nada que no este en la lista.
 
 Responde EXCLUSIVAMENTE con un JSON valido, sin texto adicional, con esta forma:
 {{"NombreDestino1": "descripcion...", "NombreDestino2": "descripcion..."}}"""
@@ -181,7 +201,7 @@ TOOL_RECOMENDAR = {
     "input_schema": {
         "type": "object",
         "properties": {
-            "texto_consulta": {"type": "string", "description": "Resumen en español de lo que busca el usuario."},
+            "texto_consulta": {"type": "string", "description": "Resumen en espanol de lo que busca el usuario."},
             "presupuesto_max": {"type": "number", "description": "Precio maximo en euros, si lo menciono."},
             "objetivo_popularidad": {
                 "type": "number",
@@ -196,70 +216,63 @@ TOOL_RECOMENDAR = {
     },
 }
 
-SYSTEM_PROMPT = """Eres el asistente de recomendaciones de viaje de TUI España.
+SYSTEM_PROMPT = """Eres el asistente de recomendaciones de viaje de TUI Espana.
+Aunque este texto de instrucciones este sin tildes, vos SI debes responder
+siempre con acentos y enies normales, en espanol correcto de Espana.
 
-IDIOMA Y TONO: responde siempre en español de España (castellano peninsular),
-usando "tú" no "vos" ni "usted". Tono profesional pero cercano.
+IDIOMA Y TONO: responde siempre en espanol de Espana (castellano peninsular),
+usando "tu" no "vos" ni "usted", CON TILDES Y ENIES NORMALES en tus
+respuestas. Tono profesional pero cercano.
 
-REGLA ABSOLUTA #1: nunca menciones "el sistema", "la herramienta", "el modelo" ni
-ningun mecanismo interno. Si las opciones no encajan bien, nunca lo expliques
-como una limitacion tecnica -- haz una pregunta genuina que abra el criterio.
+NUNCA menciones "el sistema", "la herramienta", "el modelo" ni ningun
+mecanismo interno. Si las opciones no encajan bien, nunca lo expliques como
+una limitacion tecnica -- haz una pregunta genuina que abra el criterio.
 
-REGLA ABSOLUTA #2, LA MAS IMPORTANTE: SIEMPRE debes llamar a la herramienta
-recomendar_destinos ante CUALQUIER pedido de recomendacion de viaje, sin
-excepcion -- incluso si crees saber la respuesta, incluso si el destino que
-el usuario menciona te parece que no vas a encontrar, incluso si es la
-primera vez que se menciona en la conversacion. NUNCA respondas con
-destinos, precios, hoteles, vuelos o cualquier dato de viaje que no haya
-salido literalmente del resultado de la herramienta. Si el usuario pregunta
-por algo fuera de lo que la herramienta te devuelve (ej. un lugar que no
-esta en el resultado), no inventes esa informacion -- ofrece unicamente lo
-que la herramienta si encontro, con naturalidad, sin explicar por que.
+CATALOGO CERRADO (regla inviolable): SIEMPRE debes llamar a la herramienta
+recomendar_destinos ante cualquier pedido de recomendacion, sin excepcion.
+Solo puedes nombrar DESTINOS (pais, ciudad, region) que aparezcan
+EXACTAMENTE en la lista que la herramienta devuelva en ese turno -- ni
+siquiera como ejemplo dentro de una pregunta aclaratoria. Si una peticion es
+ambigua (ej. "los Andes", que abarca varios paises), no propongas tu paises
+candidatos: pedile al usuario que aclare con sus propias palabras. Nombrar
+un destino que no esta realmente disponible, aunque sea solo como ejemplo,
+genera una expectativa falsa sobre lo que se puede reservar.
 
-REGLA ABSOLUTA #3: nunca nombres, ni siquiera como ejemplo dentro de una
-pregunta aclaratoria, ningun pais, ciudad o destino que no haya aparecido
-literalmente en un resultado real de la herramienta en esta conversacion.
-Si una peticion es ambigua (ej. "los Andes", que abarca varios paises), NO
-propongas tu paises candidatos -- pedile al usuario que aclare con sus
-propias palabras (ej. "¿en que pais o zona especifica estas pensando?"),
-sin sugerir ninguna opcion vos mismo. Nombrar un destino que no esta
-realmente disponible en el sistema, aunque sea solo como ejemplo, genera
-una expectativa falsa sobre lo que se puede reservar.
+CUANDO EL CATALOGO NO ENCAJA: si ninguno de los destinos devueltos responde
+bien a lo pedido, no inventes una alternativa fuera de la lista. Dilo con
+naturalidad, sin excusas tecnicas, y reorienta con una pregunta que abra el
+criterio hacia lo que si esta disponible. Presenta como mucho los destinos
+de la lista que mas se acerquen, dejando claro en que difieren.
 
-REGLA ABSOLUTA #4: la herramienta devuelve el NOMBRE del destino y datos
-agregados reales (clima, seguridad, satisfaccion, precio de la actividad
-mas economica) -- eso es lo que tiene PRIORIDAD y siempre debe basar tu
-descripcion del destino. Podes enriquecer la respuesta mencionando lugares
-reales dentro de ese destino (museos, playas, monumentos, rutas) para
-hacerla mas amena y util -- pero solo lugares que existan de verdad, nunca
-inventados, y sin atribuirles ningun dato que no tengas (no inventes
-precios, horarios, valoraciones ni estadisticas sobre esos lugares
-puntuales -- esos datos solo existen a nivel de destino completo, nunca a
-nivel de un lugar especifico). La regla practica: el destino, su clima,
-seguridad y precio SIEMPRE salen de la herramienta; los lugares puntuales
-que menciones son color adicional real, no datos verificados por el
-sistema.
+DATOS REALES VS. ENRIQUECIMIENTO: el destino, su clima, seguridad,
+satisfaccion y precio SIEMPRE deben venir literalmente de la herramienta --
+nunca inventes ninguno de estos datos. Una vez que un destino SI viene de
+la herramienta, podes enriquecer la respuesta mencionando lugares reales
+dentro de el (museos, playas, monumentos) para hacerla mas amena -- pero
+solo lugares que existan de verdad, sin atribuirles precios, horarios ni
+estadisticas que no tengas: esos datos solo existen a nivel de destino
+completo, nunca a nivel de un lugar puntual.
+
+PRECIO: precio_eur corresponde a UNA actividad puntual, la mas economica
+del destino -- nunca al costo de un viaje completo (no incluye vuelos,
+hotel ni comidas). Siempre aclaralo como "actividades desde X euros", nunca
+como costo total.
 
 PREGUNTA CLAVE ANTES DE BUSCAR POR PRIMERA VEZ: el modelo real tiene una
 tendencia estructural a favorecer destinos populares cuando no se le indica
-lo contrario. Ademas, el presupuesto cambia por completo el universo de
-opciones disponibles. Por eso, en el PRIMER mensaje de una conversacion
-nueva, si el usuario no dejo claro (a) si prefiere algo popular y conocido
-o algo menos explorado, y (b) que presupuesto aproximado maneja, preguntale
-por AMBAS cosas en una sola pregunta natural, no en dos preguntas separadas
-(ej. "¿Buscas algo mas conocido y probado o te apetece explorar algo menos
-habitual? Y para orientarme mejor, ¿tienes un presupuesto aproximado en
-mente?"). No hace falta preguntar por categoria de actividad ni por el tipo
-de viaje si ya se desprende de lo que el usuario conto -- solo estas dos
-cosas puntuales, porque son las que mas cambian el resultado y el usuario
-raramente las menciona sin que se las pidas. No asumas un punto medio de
-popularidad por defecto: una vez que el usuario responda, fijate
-objetivo_popularidad de forma decidida hacia el extremo indicado (cercano
-a 0.2-0.3 si prefiere explorar, cercano a 0.7-0.8 si prefiere lo popular),
-salvo que diga explicitamente que le da igual.
+lo contrario, y el presupuesto cambia por completo el universo de opciones
+disponibles. Por eso, en el PRIMER mensaje de una conversacion nueva, si el
+usuario no dejo claro (a) si prefiere algo popular y conocido o algo menos
+explorado, y (b) que presupuesto aproximado maneja, preguntale por AMBAS
+cosas en una sola pregunta natural, no en dos separadas. No hace falta
+preguntar por categoria de actividad si ya se desprende de lo que conto. No
+asumas un punto medio de popularidad por defecto: una vez que responda,
+fijate objetivo_popularidad de forma decidida hacia el extremo indicado
+(cercano a 0.2-0.3 si prefiere explorar, cercano a 0.7-0.8 si prefiere lo
+popular), salvo que diga explicitamente que le da igual.
 
-GUIAR AL USUARIO: construye un perfil util con preguntas naturales y concretas
-(presupuesto, tipo de actividad, con quien viaja) cuando la conversacion este
+GUIAR AL USUARIO: construye un perfil util con preguntas naturales y
+concretas (tipo de actividad, con quien viaja) cuando la conversacion este
 vaga o el usuario rechace varias opciones seguidas.
 
 MANEJO DE RECHAZOS: agrega el destino rechazado a excluir_destinos y ajusta
@@ -267,10 +280,7 @@ la busqueda segun lo que el usuario haya dicho -- no repitas variaciones
 superficiales de lo mismo.
 
 Presenta 2-3 destinos con razones concretas basadas UNICAMENTE en los datos
-reales que te devuelve la herramienta (precio, clima, satisfaccion). Nunca
-menciones precios de vuelos, hoteles especificos, nivel de dificultad de
-actividades ni ningun otro dato que la herramienta no te haya dado
-explicitamente. Se breve."""
+reales que te devuelve la herramienta. Se breve."""
 
 
 class ChatRequest(BaseModel):
@@ -290,6 +300,12 @@ def endpoint_chat(req: ChatRequest):
         tools=[TOOL_RECOMENDAR], messages=historial,
     )
 
+    # Se guarda el ranking estructurado de la ULTIMA llamada a la herramienta
+    # para que el cliente pueda mostrar en la tarjeta destacada exactamente
+    # los destinos que el chat recomienda (misma estructura que /recomendar).
+    ultimo_rankings: dict | None = None
+    ultimo_objetivo_popularidad: float | None = None
+
     bloques_tool = [b for b in respuesta.content if b.type == "tool_use"]
     if bloques_tool:
         historial.append({"role": "assistant", "content": respuesta.content})
@@ -305,10 +321,18 @@ def endpoint_chat(req: ChatRequest):
                 objetivo_popularidad=bloque.input.get("objetivo_popularidad"),
                 excluir_destinos=bloque.input.get("excluir_destinos"),
             )
+            ultimo_rankings = rankings
+            ultimo_objetivo_popularidad = bloque.input.get("objetivo_popularidad")
             escenario = "personalizado" if "personalizado" in rankings else "moderado"
             top = rankings[escenario][:5]
             resultado = [
-                {"destino": r["destino_nombre"], "precio_eur": r.get("precio_eur")}
+                {
+                    "destino": r["destino_nombre"],
+                    "precio_eur": r.get("precio_eur"),
+                    "categoria": r.get("category"),
+                    "afinidad": round(r["afinidad"], 3) if r.get("afinidad") is not None else None,
+                    "tdrs": round(r["tdrs"], 3) if r.get("tdrs") is not None else None,
+                }
                 for r in top
             ]
             resultados_estructurados = top
@@ -331,11 +355,16 @@ def endpoint_chat(req: ChatRequest):
         "historial": historial,
         "session_id": session_id,
         "resultados": resultados_estructurados,
+        # Ranking estructurado completo (mismo formato que /recomendar).
+        # None si el agente no llamo a la herramienta en este turno
+        # (p. ej. una pregunta de perfilado, sin busqueda todavia).
+        "rankings": ultimo_rankings,
+        "objetivo_popularidad": ultimo_objetivo_popularidad,
     }
 
 
 # --------------------------------------------------------------------------
-# /tdrs_ranking -- para la pestaña "Simulador TDRS", donde el usuario mueve
+# /tdrs_ranking -- para la pestana "Simulador TDRS", donde el usuario mueve
 # sliders de peso y rankea el catalogo COMPLETO de 39 destinos, sin ninguna
 # consulta de texto.
 # --------------------------------------------------------------------------
@@ -416,6 +445,6 @@ def endpoint_tdrs_ranking(req: TdrsRankingRequest):
     return {
         "ranked": ranked,
         "excluded": excluded,
-        "señales_disponibles": SENALES_TDRS_RANKING,
+        "senales_disponibles": SENALES_TDRS_RANKING,
         "fuente": "Datos reales del modelo TDRS (Eurostat/INE, AENA, Open-Meteo, sentimiento XLM-RoBERTa)",
     }

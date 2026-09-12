@@ -29,6 +29,142 @@ from src.recommender.tdrs_calculator import TDRSCalculator
 from src.recommender.reranking_engine import ReRankingEngine
 
 
+# ==========================================================================
+# Capa de cacheo de recursos pesados (singletons de proceso).
+# --------------------------------------------------------------------------
+# El modelo de embeddings (intfloat/multilingual-e5-large, ~2 GB) y la matriz
+# vectorial del catalogo tardan varios segundos en cargar y consumen mucha
+# memoria. Antes se reconstruian en CADA llamada a recomendar(), lo que en un
+# contenedor con memoria limitada (Azure Container Apps) agotaba los recursos y
+# hacia que /recomendar devolviera 503. Aqui se cargan UNA sola vez por proceso
+# y se reutilizan. Los datos derivados de la base (senales por destino) se
+# cachean por ruta de BD, porque dependen del fichero .db concreto.
+#
+# Los objetos cacheados son de solo lectura durante una recomendacion (el
+# scoring no muta las senales), asi que compartirlos entre peticiones es seguro.
+# Si en el futuro la API sirve varias BD distintas, la cache por db_path lo
+# soporta sin cambios.
+# ==========================================================================
+_QUERY_PIPELINE: QueryPipeline | None = None
+_RECOMMENDER: TuiRecommender | None = None
+_TDRS_CALC: TDRSCalculator | None = None
+_RERANKER: ReRankingEngine | None = None
+_LIGHTGBM_CACHE: dict | None = None
+_INDICE_OPORTUNIDADES: tuple | None = None
+_DATOS_DESTINO_POR_DB: dict[str, dict] = {}
+
+
+def get_query_pipeline() -> QueryPipeline:
+    """Devuelve el QueryPipeline (con el modelo e5-large ya cargado),
+    creandolo solo la primera vez que se necesita."""
+    global _QUERY_PIPELINE
+    if _QUERY_PIPELINE is None:
+        _QUERY_PIPELINE = QueryPipeline()
+    return _QUERY_PIPELINE
+
+
+def get_recommender() -> TuiRecommender:
+    """Devuelve el TuiRecommender (matriz vectorial del catalogo en RAM),
+    creandolo solo la primera vez."""
+    global _RECOMMENDER
+    if _RECOMMENDER is None:
+        _RECOMMENDER = TuiRecommender()
+    return _RECOMMENDER
+
+
+def get_tdrs_calculator() -> TDRSCalculator:
+    global _TDRS_CALC
+    if _TDRS_CALC is None:
+        _TDRS_CALC = TDRSCalculator()
+    return _TDRS_CALC
+
+
+def get_reranker() -> ReRankingEngine:
+    global _RERANKER
+    if _RERANKER is None:
+        _RERANKER = ReRankingEngine()
+    return _RERANKER
+
+
+def get_lightgbm(metadata: dict) -> dict:
+    """Devuelve el modelo LightGBM y los diccionarios normalizados de precio,
+    duracion, rating y numero de reseñas (features del ranker), calculados una
+    sola vez. Estructura:
+        {"model", "feature_names", "precios", "duraciones", "ratings", "reviews"}
+    ``model`` es None si el modelo entrenado todavia no existe en disco."""
+    global _LIGHTGBM_CACHE
+    if _LIGHTGBM_CACHE is None:
+        modelo_lgbm, feature_names_lgbm = cargar_modelo_lightgbm()
+        if modelo_lgbm is not None:
+            precios = normalizar_dict({eid: m["price_eur"] for eid, m in metadata.items()})
+            duraciones = normalizar_dict({eid: m["duration_hrs"] for eid, m in metadata.items()})
+            ratings = normalizar_dict({eid: m["rating"] for eid, m in metadata.items()})
+            reviews = normalizar_dict({eid: m["review_count"] for eid, m in metadata.items()})
+        else:
+            precios = duraciones = ratings = reviews = {}
+        _LIGHTGBM_CACHE = {
+            "model": modelo_lgbm,
+            "feature_names": feature_names_lgbm,
+            "precios": precios,
+            "duraciones": duraciones,
+            "ratings": ratings,
+            "reviews": reviews,
+        }
+    return _LIGHTGBM_CACHE
+
+
+def get_indice_oportunidades() -> tuple:
+    """Carga (una vez) el indice semantico de destinos oportunidad. Devuelve
+    (embeddings, nombres); (None, None) si el indice no existe en disco."""
+    global _INDICE_OPORTUNIDADES
+    if _INDICE_OPORTUNIDADES is None:
+        _INDICE_OPORTUNIDADES = cargar_indice_oportunidades()
+    return _INDICE_OPORTUNIDADES
+
+
+def get_datos_destino(db_path: str) -> dict:
+    """Devuelve todas las señales por destino leidas de la BD, cacheadas por
+    ruta de fichero .db. Se leen una sola vez por proceso y por BD."""
+    cache = _DATOS_DESTINO_POR_DB.get(db_path)
+    if cache is None:
+        temp_confort, dias_secos, horas_sol = cargar_clima_por_destino(db_path)
+        cache = {
+            "metadata": cargar_metadata_experiencias(db_path),
+            "ocupacion": cargar_ocupacion_por_destino(db_path),
+            "sensibilidad": cargar_caracteristicas_destino(db_path),
+            "accesibilidad": cargar_accesibilidad_por_destino(db_path),
+            "capacidad": cargar_capacidad_por_destino(db_path),
+            "diversificacion": cargar_diversificacion_por_destino(db_path),
+            "temporada_baja": cargar_temporada_baja_por_destino(db_path),
+            "impacto_local": cargar_impacto_local_por_destino(db_path),
+            "sentimiento": cargar_sentimiento_por_destino(db_path),
+            "temp_confort": temp_confort,
+            "dias_secos": dias_secos,
+            "horas_sol": horas_sol,
+            "capacidad_sanitaria": cargar_capacidad_sanitaria_por_destino(db_path),
+            "seguridad": cargar_seguridad_criminalidad_por_destino(db_path),
+            "datos_humanos": cargar_datos_humanos_por_destino(db_path),
+        }
+        _DATOS_DESTINO_POR_DB[db_path] = cache
+    return cache
+
+
+def precargar_recursos(db_path: str = "data/tui_recomendador.db") -> None:
+    """Fuerza la carga de todos los recursos pesados (modelo de embeddings,
+    catalogo vectorial, señales de BD, LightGBM, indice de oportunidades).
+
+    Pensado para llamarlo al ARRANCAR el servicio (p. ej. en el startup de la
+    API FastAPI), de modo que la primera peticion real no pague el coste de
+    cargar ~2 GB de modelo y el usuario no vea un 503 por arranque en frio."""
+    get_query_pipeline()
+    get_recommender()
+    get_tdrs_calculator()
+    get_reranker()
+    datos = get_datos_destino(db_path)
+    get_lightgbm(datos["metadata"])
+    get_indice_oportunidades()
+
+
 def cargar_metadata_experiencias(db_path: str) -> dict:
     """id_paquete (experience_id) -> atributos completos, incluyendo los
     numericos que necesita el modelo LightGBM (precio, duracion, rating,
@@ -613,7 +749,7 @@ def detectar_oportunidades(db_path: str, texto_consulta: str, query_vector: np.n
     cae de vuelta a la version v1 (coincidencia literal del nombre del
     destino en la consulta)."""
     try:
-        embeddings_indice, nombres_indice = cargar_indice_oportunidades()
+        embeddings_indice, nombres_indice = get_indice_oportunidades()
 
         if embeddings_indice is not None and query_vector is not None:
             dim_indice = embeddings_indice.shape[1]
@@ -946,91 +1082,143 @@ def recomendar(
     filtros = filtros or {}
 
     print(f"\n1) Vectorizando consulta: '{texto_consulta}'")
-    query_pipeline = QueryPipeline()
+    # Recursos pesados cacheados a nivel de proceso: el modelo e5-large y la
+    # matriz del catalogo se cargan UNA vez (ver capa de cacheo arriba), no en
+    # cada llamada. Esto es lo que evita el 503 por agotamiento de memoria.
+    query_pipeline = get_query_pipeline()
     query_vector = query_pipeline.process_query(texto_consulta)
 
     print("2) Buscando candidatos por afinidad semantica (similitud coseno)...")
-    recommender = TuiRecommender()
+    recommender = get_recommender()
     # Se pide un pool mas grande de lo habitual porque parte se va a
     # descartar por exclusiones/filtros antes de llegar al TDRS.
     candidatos_afinidad = recommender.search(query_vector, top_k=top_k_candidatos * 3)
 
     print("3) Calculando TDRS por candidato (redistribución/sostenibilidad)...")
-    metadata = cargar_metadata_experiencias(db_path)
-    ocupacion_por_destino = cargar_ocupacion_por_destino(db_path)
+    # Señales por destino, leidas de la BD una sola vez y cacheadas por db_path.
+    datos = get_datos_destino(db_path)
+    metadata = datos["metadata"]
+    ocupacion_por_destino = datos["ocupacion"]
     # estancia_media_por_destino DESACTIVADA (01/09) -- ver docstring de
     # cargar_estancia_media_por_destino, datos de fuente no confiables.
-    # estancia_media_por_destino = cargar_estancia_media_por_destino(db_path)
-    sensibilidad_por_destino = cargar_caracteristicas_destino(db_path)
-    accesibilidad_por_destino = cargar_accesibilidad_por_destino(db_path)
-    capacidad_por_destino = cargar_capacidad_por_destino(db_path)
-    diversificacion_por_destino = cargar_diversificacion_por_destino(db_path)
-    temporada_baja_por_destino = cargar_temporada_baja_por_destino(db_path)
-    impacto_local_por_destino = cargar_impacto_local_por_destino(db_path)
-    sentimiento_por_destino = cargar_sentimiento_por_destino(db_path)
-    temp_confort_por_destino, dias_secos_por_destino, horas_sol_por_destino = cargar_clima_por_destino(db_path)
-    capacidad_sanitaria_por_destino = cargar_capacidad_sanitaria_por_destino(db_path)
-    seguridad_criminalidad_por_destino = cargar_seguridad_criminalidad_por_destino(db_path)
-    datos_humanos_por_destino = cargar_datos_humanos_por_destino(db_path)
-    tdrs_calc = TDRSCalculator()
+    sensibilidad_por_destino = datos["sensibilidad"]
+    accesibilidad_por_destino = datos["accesibilidad"]
+    capacidad_por_destino = datos["capacidad"]
+    diversificacion_por_destino = datos["diversificacion"]
+    temporada_baja_por_destino = datos["temporada_baja"]
+    impacto_local_por_destino = datos["impacto_local"]
+    sentimiento_por_destino = datos["sentimiento"]
+    temp_confort_por_destino = datos["temp_confort"]
+    dias_secos_por_destino = datos["dias_secos"]
+    horas_sol_por_destino = datos["horas_sol"]
+    capacidad_sanitaria_por_destino = datos["capacidad_sanitaria"]
+    seguridad_criminalidad_por_destino = datos["seguridad"]
+    datos_humanos_por_destino = datos["datos_humanos"]
+    tdrs_calc = get_tdrs_calculator()
 
-    modelo_lgbm, feature_names_lgbm = cargar_modelo_lightgbm()
+    lgbm = get_lightgbm(metadata)
+    modelo_lgbm = lgbm["model"]
+    precios = lgbm["precios"]
+    duraciones = lgbm["duraciones"]
+    ratings = lgbm["ratings"]
+    reviews = lgbm["reviews"]
     if modelo_lgbm is not None:
         print("   -> Modelo LightGBM Ranker encontrado, re-puntuando afinidad "
               "con datos de comportamiento real...")
-        precios = normalizar_dict({eid: m["price_eur"] for eid, m in metadata.items()})
-        duraciones = normalizar_dict({eid: m["duration_hrs"] for eid, m in metadata.items()})
-        ratings = normalizar_dict({eid: m["rating"] for eid, m in metadata.items()})
-        reviews = normalizar_dict({eid: m["review_count"] for eid, m in metadata.items()})
     else:
         print("   -> Modelo LightGBM no encontrado (correr train_lightgbm_ranker.py "
               "primero); usando afinidad por coseno solamente.")
 
-    candidatos = []
-    detalle_afinidad = {}
-    for c in candidatos_afinidad:
-        id_paq = c["id_paquete"]
-        meta = metadata.get(id_paq, {"destino_nombre": "desconocido", "category": "", "price_eur": None})
-        destino = meta["destino_nombre"]
-
-        # --- Exclusiones y filtros (arquitectura conversacional/manual) ---
+    def _pasa_filtros(id_paq, destino, meta, filtros_activos):
         if id_paq in excluir_ids:
-            continue
+            return False
         if destino in excluir_destinos:
-            continue
-        if "presupuesto_max" in filtros and meta.get("price_eur") is not None:
-            if meta["price_eur"] > filtros["presupuesto_max"]:
-                continue
-        if "categoria" in filtros and meta.get("category") != filtros["categoria"]:
-            continue
-        if "destino" in filtros and destino != filtros["destino"]:
-            continue
-        # Filtro "estancia_media_max_noches" DESACTIVADO (01/09) -- ver
-        # docstring de cargar_estancia_media_por_destino, dato de fuente
-        # INE no confiable (pernoctaciones/viajeros da valores fisicamente
-        # imposibles, <1 noche promedio).
+            return False
+        if "presupuesto_max" in filtros_activos and meta.get("price_eur") is not None:
+            if meta["price_eur"] > filtros_activos["presupuesto_max"]:
+                return False
+        if "categoria" in filtros_activos and meta.get("category") != filtros_activos["categoria"]:
+            return False
+        if "destino" in filtros_activos and destino != filtros_activos["destino"]:
+            return False
+        return True
 
-        candidato, detalle = calcular_candidato(
-            id_paq, destino, c["score_similitud"],
-            ocupacion_por_destino, sensibilidad_por_destino,
-            accesibilidad_por_destino, capacidad_por_destino,
-            diversificacion_por_destino, temporada_baja_por_destino,
-            impacto_local_por_destino, sentimiento_por_destino,
-            temp_confort_por_destino, dias_secos_por_destino, horas_sol_por_destino,
-            capacidad_sanitaria_por_destino, seguridad_criminalidad_por_destino,
-            modelo_lgbm, precios, duraciones, ratings, reviews, tdrs_calc,
-        )
-        # Datos humanos: valores reales para mostrar en el dashboard
-        # (% dias soleados, pasajeros/año, etc.), separados de los
-        # scores 0-1 que usa el modelo internamente -- no afecta el
-        # scoring, es solo para presentacion.
-        candidato["datos_humanos"] = datos_humanos_por_destino.get(destino, {})
-        candidato["precio_eur"] = meta.get("price_eur")
-        candidatos.append(candidato)
-        detalle_afinidad[id_paq] = detalle
+    def _construir_candidatos(filtros_activos):
+        cands, detalles = [], {}
+        for c in candidatos_afinidad:
+            id_paq = c["id_paquete"]
+            meta = metadata.get(id_paq, {"destino_nombre": "desconocido", "category": "", "price_eur": None})
+            destino = meta["destino_nombre"]
+            # Filtro "estancia_media_max_noches" DESACTIVADO (01/09) -- ver
+            # docstring de cargar_estancia_media_por_destino, dato de fuente
+            # INE no confiable (pernoctaciones/viajeros da valores fisicamente
+            # imposibles, <1 noche promedio).
+            if not _pasa_filtros(id_paq, destino, meta, filtros_activos):
+                continue
+            candidato, detalle = calcular_candidato(
+                id_paq, destino, c["score_similitud"],
+                ocupacion_por_destino, sensibilidad_por_destino,
+                accesibilidad_por_destino, capacidad_por_destino,
+                diversificacion_por_destino, temporada_baja_por_destino,
+                impacto_local_por_destino, sentimiento_por_destino,
+                temp_confort_por_destino, dias_secos_por_destino, horas_sol_por_destino,
+                capacidad_sanitaria_por_destino, seguridad_criminalidad_por_destino,
+                modelo_lgbm, precios, duraciones, ratings, reviews, tdrs_calc,
+            )
+            # Datos humanos: valores reales para mostrar en el dashboard
+            # (% dias soleados, pasajeros/año, etc.), separados de los
+            # scores 0-1 que usa el modelo internamente -- no afecta el
+            # scoring, es solo para presentacion.
+            candidato["datos_humanos"] = datos_humanos_por_destino.get(destino, {})
+            candidato["precio_eur"] = meta.get("price_eur")
+            cands.append(candidato)
+            detalles[id_paq] = detalle
+
+        # Dedup por destino (05/09): el pool viene por id_paquete, asi que el
+        # MISMO destino (p. ej. Tunez) aparecia varias veces, cada una con su
+        # precio/score -- el sintoma de "un destino repetido en la lista" y de
+        # que el ranking se llenaba de paquetes del mismo sitio. Aqui se colapsa
+        # a UN candidato por destino_nombre, quedandose con el paquete de mayor
+        # afinidad (y, a igualdad de afinidad, el mas barato) para que el
+        # re-ranking ordene destinos DISTINTOS, no paquetes.
+        mejor_por_destino: dict[str, dict] = {}
+        for cand in cands:
+            destino_cand = cand.get("destino_nombre", "")
+            actual = mejor_por_destino.get(destino_cand)
+            if actual is None:
+                mejor_por_destino[destino_cand] = cand
+                continue
+            afinidad_nueva = cand.get("afinidad", 0.0)
+            afinidad_actual = actual.get("afinidad", 0.0)
+            if afinidad_nueva > afinidad_actual:
+                mejor_por_destino[destino_cand] = cand
+            elif afinidad_nueva == afinidad_actual:
+                precio_nuevo = cand.get("precio_eur")
+                precio_actual = actual.get("precio_eur")
+                if precio_nuevo is not None and (
+                    precio_actual is None or precio_nuevo < precio_actual
+                ):
+                    mejor_por_destino[destino_cand] = cand
+        cands_unicos = list(mejor_por_destino.values())
+        return cands_unicos, detalles
+
+    # Primer intento con todos los filtros pedidos.
+    candidatos, detalle_afinidad = _construir_candidatos(filtros)
+    # Fallback (04/09): si categoria/presupuesto dejan el pool vacio, se
+    # reintenta relajando esos dos filtros para que el usuario reciba
+    # SIEMPRE recomendaciones en vez de una pantalla vacia. Se conservan
+    # las exclusiones y el filtro de destino explicito.
+    if not candidatos and ("categoria" in filtros or "presupuesto_max" in filtros):
+        filtros_relajados = {
+            k: v for k, v in filtros.items()
+            if k not in ("categoria", "presupuesto_max")
+        }
+        print("   -> Filtros de categoria/presupuesto sin resultados; "
+              "reintentando sin ellos para no devolver vacio.")
+        candidatos, detalle_afinidad = _construir_candidatos(filtros_relajados)
 
     print("4) Aplicando re-ranking (3 escenarios)...")
-    reranker = ReRankingEngine()
+    reranker = get_reranker()
     rankings = reranker.rank_all_scenarios(candidatos, k=k_final)
     if objetivo_popularidad is not None:
         # Ranking adicional con el slider continuo del dashboard
