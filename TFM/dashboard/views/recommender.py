@@ -371,37 +371,33 @@ def _render_form() -> dict | None:
         )
 
     # --- Excluir lugares: multiselect insensible a tildes ---
-    # Cada destino aparece como dos opciones: "Túnez" y "tunez" (normalizada).
-    # format_func siempre muestra el nombre original con tilde.
-    # Así el usuario puede escribir con o sin tilde y encontrar el mismo lugar.
-    # Al enviar al modelo se usa siempre el nombre original.
+    # format_func incluye la forma normalizada entre paréntesis para que
+    # Streamlit la encuentre al filtrar. Ej: "Túnez (tunez)".
+    # Así escribir "tunez" o "Túnez" encuentra la misma entrada sin duplicados.
     _SK_EXCLUIR = "reco_excluir_sel"
     _excluir_prev = [n for n in (st.session_state.get(_SK_EXCLUIR) or [])
                      if n in _DESTINOS_CONOCIDOS_MAP.values()]
 
-    # Opciones: nombre original + alias sin tilde (si difiere del original)
-    _opciones_excluir = []
-    for _nombre_orig in _DESTINOS_CONOCIDOS_MAP.values():
-        _opciones_excluir.append(_nombre_orig)
-        _alias = _normalize_place(_nombre_orig)
-        if _alias != _nombre_orig.lower():
-            _opciones_excluir.append(_alias)
+    _opciones_excluir = list(_DESTINOS_CONOCIDOS_MAP.values())
+
+    def _fmt_lugar(nombre: str) -> str:
+        alias = _normalize_place(nombre)
+        # Solo añade el alias si difiere del nombre en minúsculas (tiene tilde)
+        if alias != nombre.lower():
+            return f"{nombre} ({alias})"
+        return nombre
 
     excluir_sel_raw = st.multiselect(
         "Excluir lugares",
         options=_opciones_excluir,
         default=_excluir_prev,
-        format_func=lambda v: _DESTINOS_CONOCIDOS_MAP.get(_normalize_place(v), v),
+        format_func=_fmt_lugar,
         placeholder="Escribe o selecciona lugares a excluir…",
         help="Escribe con o sin tildes: tunez y Túnez encuentran lo mismo.",
+        filter_mode="contains",
         key="reco_excluir_multisel",
     )
-    # Normalizar selección: convertir alias sin tilde al nombre original
-    excluir_sel = list({
-        _DESTINOS_CONOCIDOS_MAP.get(_normalize_place(v), v)
-        for v in excluir_sel_raw
-    })
-    st.session_state[_SK_EXCLUIR] = excluir_sel
+    st.session_state[_SK_EXCLUIR] = excluir_sel_raw
 
     if not submitted:
         return None

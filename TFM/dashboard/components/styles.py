@@ -436,7 +436,7 @@ hr { border-color:rgba(17,24,39,.10)!important; }
   padding:0 .8rem .2rem;width:100%;
   /* La conversación scrollea DENTRO de su propia caja en vez de estirar la
      página hacia abajo con cada mensaje nuevo. */
-  max-height:62vh;overflow-y:auto;scroll-behavior:smooth;
+  max-height:62vh;overflow-y:auto;scroll-behavior:auto;
   display:flex;flex-direction:column;justify-content:flex-start;
   overscroll-behavior:contain}
 /* Barra de scroll discreta dentro de la ventana de chat. */
@@ -566,11 +566,11 @@ hr { border-color:rgba(17,24,39,.10)!important; }
   transition:.15s ease !important}
 [data-testid="chat_sug_wrap"] div.stButton > button:hover {
   background:#F7F9FB !important;border-color:rgba(17,24,39,.28) !important;
-  transform:translateY(-1px) !important}
+  transform:none !important}
 [data-testid="chat_sug_wrap"] div.stButton > button:active,
 [data-testid="chat_sug_wrap"] div.stButton > button:focus:not(:focus-visible) {
   background:#EEF1F5 !important;border-color:rgba(17,24,39,.32) !important;
-  transform:translateY(0) !important;box-shadow:0 1px 3px rgba(17,24,39,.08) !important}
+  transform:none !important;box-shadow:0 1px 3px rgba(17,24,39,.08) !important}
 
 /* ==========================================================================
    España — Copiloto de viaje al LADO de la recomendación (dos columnas).
