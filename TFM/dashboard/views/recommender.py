@@ -60,34 +60,16 @@ POLICIES = ("Tradicional", "Equilibrado", "Redistribuido")
 DEFAULT_POLICY = "Equilibrado"
 
 POLICY_PRESETS: dict[str, dict] = {
-    "Tradicional": {
-        # Destinos muy visitados / turismo masivo → objetivo de popularidad bajo
-        # (el filtro objetivo_popularidad del API: valores bajos = muy populares/masificados)
-        "popularity_target": 0.20,
-        "temperature_preference": "warm_sunny",
-        "interests": {
-            "coast_beach": 90, "history_culture": 60, "gastronomy_wine": 55,
-            "nature_mountains": 20, "rural": 10, "wellness": 20, "sports_outdoors": 20,
-        },
-    },
-    "Equilibrado": {
-        "popularity_target": 0.50,
-        "temperature_preference": "mild",
-        "interests": {
-            "coast_beach": 60, "history_culture": 60, "gastronomy_wine": 55,
-            "nature_mountains": 55, "rural": 40, "wellness": 40, "sports_outdoors": 40,
-        },
-    },
-    "Redistribuido": {
-        # Destinos poco saturados, máxima redistribución → objetivo de popularidad
-        # mucho más bajo que Tradicional
-        "popularity_target": 0.05,
-        "temperature_preference": "any",
-        "interests": {
-            "coast_beach": 25, "history_culture": 55, "gastronomy_wine": 60,
-            "nature_mountains": 90, "rural": 85, "wellness": 60, "sports_outdoors": 60,
-        },
-    },
+    # El motor real: objetivo_popularidad ALTO = tradicional/muy popular,
+    # BAJO = redistribucion/poco saturado (ver src/recommender/reranking_engine.py,
+    # pesos_interpolados: 1.0 -> pesos de 'tradicional', 0.0 -> pesos de 'intensivo').
+    # Cada escenario mueve UNICAMENTE este valor, nunca los intereses, la
+    # temperatura, el presupuesto ni la categoria que el usuario ya eligio:
+    # el boton cambia el modelo de redistribucion, no las preferencias
+    # personales ya introducidas.
+    "Tradicional": {"popularity_target": 0.85},
+    "Equilibrado": {"popularity_target": 0.50},
+    "Redistribuido": {"popularity_target": 0.05},
 }
 
 # Cada escenario mapea a uno de los iconos empaquetados en assets.
@@ -112,34 +94,28 @@ def _current_policy_name() -> str:
 
 
 def _policy_to_payload(policy_name: str) -> dict:
-    """Traduce un escenario de redistribución al payload del recomendador.
-
-    Mueve ``popularity_target`` según el escenario y envía los intereses de
-    referencia que superan el umbral (máximo tres, como exige el contrato).
-    """
+    """Traduce un escenario de redistribucion al payload del recomendador,
+    tocando UNICAMENTE objetivo_popularidad. Nunca pisa los intereses, la
+    temperatura, el presupuesto ni la categoria que el usuario ya haya
+    elegido en el formulario: el escenario mueve el dial de redistribucion
+    del modelo (mismo mecanismo que el TDRS), no las preferencias
+    personales del usuario."""
     preset = POLICY_PRESETS.get(policy_name, POLICY_PRESETS[DEFAULT_POLICY])
+    popularity_target = max(0.0, min(1.0, float(preset["popularity_target"])))
+
+    payload_actual = st.session_state.get(STATE_PAYLOAD)
+    if payload_actual:
+        nuevo_payload = dict(payload_actual)
+        nuevo_payload["objetivo_popularidad"] = popularity_target
+        form = dict(nuevo_payload.get("_form") or {})
+        nuevo_payload["_form"] = form
+        return nuevo_payload
+
     defaults = reco.default_request()
-
-    weights: dict[str, int] = preset.get("interests") or {}
-    interests = [
-        code
-        for code, weight in sorted(weights.items(), key=lambda kv: -float(kv[1]))
-        if code in reco.INTERESTS and float(weight) >= _INTEREST_ACTIVE_THRESHOLD
-    ][:_MAX_INTERESTS]
-    if not interests:
-        interests = list(defaults["interests"])[:_MAX_INTERESTS]
-
-    temperature = preset.get("temperature_preference", defaults["temperature_preference"])
-    if temperature not in reco.TEMPERATURE_LABELS:
-        temperature = defaults["temperature_preference"]
-
-    # Los escenarios solo mueven la popularidad y los intereses de referencia:
-    # el objetivo es explorar el reparto de demanda, no filtrar por precio ni
-    # categoría (esos filtros quedan para la búsqueda avanzada del usuario).
     return reco.build_payload(
-        interests=interests,
-        temperature_preference=temperature,
-        popularity_target=max(0.0, min(1.0, float(preset["popularity_target"]))),
+        interests=list(defaults["interests"]),
+        temperature_preference=defaults["temperature_preference"],
+        popularity_target=popularity_target,
     )
 
 # El asistente de viaje está INTEGRADO en la vista como un copiloto único, al
@@ -181,10 +157,14 @@ def _price_txt(value: float | None) -> str | None:
 
 
 def _trip_line(price: float | None) -> str:
-    """Reservado. Ya no se muestra ni duración ni precio en las tarjetas: los
-    montos en euros no eran fiables (precio orientativo derivado) y confundían.
-    Devuelve cadena vacía para no pintar nada."""
-    return ""
+    """Precio orientativo del destino (mediana real de precios de sus
+    experiencias, ver price_lookup.py). Antes se ocultaba porque el precio
+    de una sola actividad puntual no era representativo; la mediana por
+    destino si lo es, y ya viene aclarada como orientativa."""
+    texto = _price_txt(price)
+    if not texto:
+        return ""
+    return f'<div class="offer-price">Precio orientativo: desde {escape(texto)}</div>'
 
 
 def _bar(label: str, value: float | None) -> str:
@@ -278,21 +258,21 @@ def _render_form() -> dict | None:
       - categoria              → categoría de experiencia
       - excluir_destinos       → destinos a excluir (text input, coma-separados)
     """
-    # Pre-rellena los valores del escenario activo para que el formulario
-    # refleje siempre el preset del botón seleccionado.
+    # Precarga los valores del ULTIMO payload real del usuario (si existe),
+    # no del preset de escenario: los intereses y la temperatura son
+    # preferencias personales que el escenario ya no debe pisar.
+    payload_actual = st.session_state.get(STATE_PAYLOAD) or {}
+    form_actual = payload_actual.get("_form") or {}
     preset = POLICY_PRESETS.get(_current_policy_name(), POLICY_PRESETS["Equilibrado"])
-    default_popularity = float(preset.get("popularity_target", 0.5))
-    default_temp = preset.get("temperature_preference", "any")
+    default_popularity = float(
+        payload_actual.get("objetivo_popularidad", preset.get("popularity_target", 0.5))
+    )
+    default_temp = form_actual.get("temperature_preference", "any")
     if default_temp not in reco.TEMPERATURE_PREFERENCES:
         default_temp = "any"
     temp_index = list(reco.TEMPERATURE_PREFERENCES).index(default_temp)
 
-    # Intereses por defecto: los que superen el umbral en el preset activo.
-    preset_weights: dict[str, int] = preset.get("interests") or {}
-    default_interests = [
-        code for code, w in sorted(preset_weights.items(), key=lambda kv: -float(kv[1]))
-        if code in reco.INTERESTS and float(w) >= _INTEREST_ACTIVE_THRESHOLD
-    ][:_MAX_INTERESTS]
+    default_interests = list(form_actual.get("interests") or [])[:_MAX_INTERESTS]
     if not default_interests:
         default_interests = [reco.INTERESTS[0]]
 
@@ -315,8 +295,8 @@ def _render_form() -> dict | None:
             "Objetivo de popularidad *",
             0.0, 1.0, default_popularity, 0.05,
             help=(
-                "Obligatorio. 0.0 = destinos muy masificados/populares · "
-                "1.0 = destinos alternativos poco saturados. "
+                "Obligatorio. 1.0 = destinos muy masificados/populares · "
+                "0.0 = destinos alternativos poco saturados. "
                 "El motor busca proximidad a este valor."
             ),
         )
@@ -441,7 +421,7 @@ def _hero_facts(row: dict) -> list[tuple[str, str]]:
     offers = row.get("what_it_offers") or {}
     popularity = row.get("popularity_profile") or {}
     facts = [
-        (_fmt(climate.get("sunny_days"), decimals=0), "Días de sol"),
+        (_fmt(climate.get("sunshine_hours"), decimals=1), "Horas de sol/día"),
         (_fmt(climate.get("temperature_mean_c"), "°", 0), "Temp. media"),
         (_fmt(offers.get("poi_count"), decimals=0), "Puntos de interés"),
     ]
@@ -462,11 +442,13 @@ def _render_hero(row: dict, payload: dict, compact: bool = False) -> None:
     name = str(destination.get("name") or "Destino sin nombre")
     place = _place(destination)
     typology = destination.get("primary_typology")
+    precio_orientativo = price_lookup.reference_price(destination)
 
     why = str(row.get("headline") or "")
     strengths = [str(s) for s in (row.get("strengths") or [])]
     if not why and strengths:
         why = strengths[0]
+        strengths = strengths[1:]  # evita repetir el mismo texto como 'why' y como chip
 
     tradeoffs = [str(s) for s in (row.get("tradeoffs") or [])]
 
@@ -494,6 +476,9 @@ def _render_hero(row: dict, payload: dict, compact: bool = False) -> None:
     parts.append(f'<h2 class="offer-name">{escape(name)}</h2>')
     if place:
         parts.append(f'<div class="offer-place">📍 {escape(place)}</div>')
+    linea_precio = _trip_line(precio_orientativo)
+    if linea_precio:
+        parts.append(linea_precio)
 
     if typology:
         parts.append(f'<span class="offer-typology">{escape(str(typology))}</span>')
@@ -581,7 +566,7 @@ def _card_html(row: dict, idx: int, compact: bool = False, payload: dict | None 
         # Tres datos objetivos del modelo, en rejilla compacta.
         parts.append('<div class="reco-facts">')
         for value, label in (
-            (_fmt(climate.get("sunny_days"), decimals=0), "Días de sol"),
+            (_fmt(climate.get("sunshine_hours"), decimals=1), "Horas de sol/día"),
             (_fmt(climate.get("temperature_mean_c"), "°", 0), "Temp. media"),
             (_fmt(offers.get("poi_count"), decimals=0), "Puntos interés"),
         ):

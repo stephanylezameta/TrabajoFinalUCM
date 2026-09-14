@@ -93,7 +93,7 @@ def _tarjetas_desde_session_state() -> list[dict]:
             "typology": destination.get("primary_typology"),
             "headline": row.get("headline")
             or (row.get("strengths") or [""])[0],
-            "sunny_days": climate.get("sunny_days"),
+            "sunshine_hours": climate.get("sunshine_hours"),
             "temperature_mean_c": climate.get("temperature_mean_c"),
             "poi_count": offers.get("poi_count"),
         })
@@ -179,7 +179,7 @@ def _chat_card_html(dest: dict) -> str:
 
     parts.append('<div class="chatreco-facts">')
     for value, label in (
-        (_fmt(dest.get("sunny_days")), "Días de sol"),
+        (_fmt(dest.get("sunshine_hours")), "Horas de sol/día"),
         (_fmt(dest.get("temperature_mean_c"), "°"), "Temp. media"),
         (_fmt(dest.get("poi_count")), "Puntos interés"),
     ):

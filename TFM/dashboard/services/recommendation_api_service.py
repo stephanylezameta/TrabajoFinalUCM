@@ -419,9 +419,10 @@ def _adapt_destino(dest: dict[str, Any], rank: int) -> dict[str, Any]:
     # dias_soleados_pct es un % del mes; la UI lo muestra como "días de sol".
     dias_sol_mes = round(dias_soleados / 100.0 * 30, 0) if dias_soleados is not None else None
 
+    horas_sol = _num(dh.get("horas_sol_promedio_dia"))
     strengths: list[str] = []
-    if dias_soleados is not None and dias_soleados >= 70:
-        strengths.append("Muchos días de sol")
+    if horas_sol is not None and horas_sol >= 8:
+        strengths.append("Muchas horas de sol al día")
     sentimiento = _num(dh.get("sentimiento_real"))
     if sentimiento is not None and sentimiento >= 0.6:
         strengths.append("Buenas reseñas de viajeros")
