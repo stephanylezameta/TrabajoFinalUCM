@@ -184,17 +184,19 @@ p,label,span,div { text-rendering:optimizeLegibility; }
 [data-testid="stChatMessage"] { background:linear-gradient(180deg,rgba(255,255,255,.78),rgba(246,250,253,.74)); border:1px solid rgba(17,24,39,.10); border-radius:15px; padding:.25rem .35rem; backdrop-filter:blur(3px); }
 /* Barra de entrada del chat: alineada al ancho de la ventana, compacta y con
    acento TUI. Sin el bloque interno gigante por defecto de Streamlit. */
-[data-testid="stChatInput"]{border:1px solid rgba(17,24,39,.14)!important;
-  border-radius:14px!important;background:#fff!important;
-  box-shadow:0 2px 8px rgba(17,24,39,.05),0 14px 30px -22px rgba(17,24,39,.30)!important;
-  margin-top:.7rem}
+[data-testid="stChatInput"]{border:1px solid rgba(17,24,39,.12)!important;
+  border-radius:10px!important;background:#fff!important;
+  box-shadow:none!important;
+  margin-top:-.6rem!important}
+/* El bloque que contiene el chat input, pegado a la conversación de arriba. */
+[data-testid="stChatInput"]:not(.stChatInput--bottom){margin-top:-.6rem!important}
 [data-testid="stChatInput"]:focus-within{border-color:var(--tui-red)!important;
-  box-shadow:0 0 0 3px rgba(212,14,20,.12),0 14px 30px -22px rgba(17,24,39,.30)!important}
+  box-shadow:0 0 0 2px rgba(212,14,20,.10)!important}
 [data-testid="stChatInput"] textarea{font-size:.9rem!important;min-height:2.6rem!important;
   padding-top:.55rem!important;padding-bottom:.55rem!important;box-shadow:none!important}
 /* Botón de envío en rojo TUI para que la acción principal se lea clara. */
 [data-testid="stChatInput"] button{background:var(--tui-red)!important;color:#fff!important;
-  border-radius:10px!important}
+  border-radius:8px!important}
 [data-testid="stChatInput"] button:hover{background:var(--tui-red-deep)!important}
 [data-testid="stChatInput"] button svg{fill:#fff!important;color:#fff!important}
 [data-testid="stChatInput"] button:disabled{background:rgba(17,24,39,.12)!important}
@@ -253,6 +255,11 @@ hr { border-color:rgba(17,24,39,.10)!important; }
 
 /* --- Cabecera comercial del recomendador, tono editorial de viajes --- */
 .reco-header{margin:.3rem 0 1.3rem;animation:fadeUp .4s ease both}
+/* Variante del asistente: intro breve y ligera, poco espacio vertical, para
+   que el chat sea el protagonista de la pantalla. */
+.reco-header--assistant{margin:.2rem 0 .85rem}
+.reco-header--assistant .reco-kicker--title{font-size:1.5rem;margin-bottom:.3rem}
+.reco-header--assistant .reco-hero-lead{font-size:.9rem;line-height:1.5;max-width:none}
 .reco-kicker{display:inline-flex;align-items:center;gap:.5rem;font-size:.66rem;font-weight:700;
   letter-spacing:.16em;text-transform:uppercase;color:var(--tui-red);margin-bottom:.55rem}
 .reco-kicker:before{content:"";width:22px;height:2px;border-radius:2px;background:var(--tui-red)}
@@ -413,30 +420,29 @@ hr { border-color:rgba(17,24,39,.10)!important; }
 .chatreco-preview-note{display:inline-flex;align-items:center;gap:.5rem;
   font-size:.7rem;font-weight:700;letter-spacing:.02em;color:var(--tui-red-deep);
   background:var(--tui-red-soft);border:1px solid rgba(212,14,20,.16);
-  border-radius:999px;padding:.34rem .8rem;margin:.1rem 0 1rem}
+  border-radius:6px;padding:.34rem .8rem;margin:.1rem 0 1rem}
 /* Indicador rectangular (sin puntos circulares): una barrita de acento TUI. */
 .chatreco-preview-mark{width:14px;height:4px;border-radius:2px;background:var(--tui-red)}
 
 /* Sugerencias de arranque (chips no clicables dentro del HTML de la ventana). */
-.chatreco-suggest-title{font-size:.74rem;font-weight:700;letter-spacing:.05em;
-  text-transform:uppercase;color:var(--muted);margin:.15rem 0 .5rem}
-.chatreco-suggest-chips{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.6rem}
+.chatreco-suggest-title{font-size:.7rem;font-weight:700;letter-spacing:.05em;
+  text-transform:uppercase;color:var(--muted);margin:.75rem 0 .5rem}
+.chatreco-suggest-chips{display:flex;flex-wrap:wrap;gap:.4rem;margin-bottom:.7rem}
 .chatreco-suggest-chip{font-size:.72rem;font-weight:500;color:var(--tui-dark);
-  background:#fff;border:1px solid rgba(17,24,39,.14);border-radius:12px;padding:.4rem .7rem;
-  box-shadow:0 2px 6px rgba(17,24,39,.05)}
+  background:#fff;border:1px solid rgba(17,24,39,.12);border-radius:6px;padding:.4rem .7rem}
 
 /* Ventana de chat: un contenedor VISIBLE que enmarca la conversación como un
    módulo aparte del resto de la página (fondo muy sutil, borde y sombra). Así
    el chat «se nota» como una caja propia y no queda flotando sin marco. */
-.chatreco-window{border:1px solid rgba(17,24,39,.12);border-radius:16px;
-  background:linear-gradient(180deg,#FBFCFE 0%,#F4F7FA 100%);
-  box-shadow:0 2px 8px rgba(17,24,39,.04),0 18px 40px -26px rgba(17,24,39,.30);
+.chatreco-window{border:1px solid rgba(17,24,39,.10);border-radius:6px;
+  background:#FDFDFE;
+  box-shadow:0 1px 2px rgba(17,24,39,.04);
   /* Sin padding lateral propio: la cabecera sticky y las filas gestionan su
      propio espaciado, así la cabecera tapa de borde a borde al hacer scroll. */
-  padding:0 .8rem .2rem;width:100%;
+  padding:0 1rem .3rem;width:100%;
   /* La conversación scrollea DENTRO de su propia caja en vez de estirar la
      página hacia abajo con cada mensaje nuevo. */
-  max-height:62vh;overflow-y:auto;scroll-behavior:auto;
+  max-height:54vh;overflow-y:auto;scroll-behavior:auto;
   display:flex;flex-direction:column;justify-content:flex-start;
   overscroll-behavior:contain}
 /* Barra de scroll discreta dentro de la ventana de chat. */
@@ -447,20 +453,20 @@ hr { border-color:rgba(17,24,39,.10)!important; }
    y margen negativo lateral para cubrir todo el ancho de la caja (incluido el
    padding) y que ningún mensaje se cuele por los bordes al desplazarse. */
 .chatreco-window-head{position:sticky;top:0;z-index:5;
-  margin:0 -.8rem;padding:.75rem .8rem .65rem;
-  background:#FBFCFE;
-  display:flex;align-items:center;gap:.55rem;
-  border-bottom:1px solid rgba(17,24,39,.10);
-  box-shadow:0 6px 12px -8px rgba(17,24,39,.18)}
-.chatreco-window-dot{width:9px;height:9px;border-radius:3px;background:var(--tui-red);
-  box-shadow:0 0 0 4px rgba(212,14,20,.10)}
-.chatreco-window-title{font-size:.82rem;font-weight:700;color:var(--tui-dark);letter-spacing:-.01em}
-.chatreco-window-sub{font-size:.68rem;color:var(--muted);margin-left:auto}
+  margin:0 -1rem;padding:.85rem 1rem .8rem;
+  background:#FDFDFE;
+  display:flex;align-items:center;gap:.5rem;
+  border-bottom:1px solid rgba(17,24,39,.08)}
+.chatreco-window-dot{width:6px;height:6px;border-radius:2px;background:var(--tui-red)}
+.chatreco-window-title{font-size:.85rem;font-weight:700;color:var(--tui-dark);letter-spacing:-.01em}
+.chatreco-window-sub{font-size:.66rem;font-weight:500;color:var(--muted);margin-left:auto;
+  display:inline-flex;align-items:center;gap:.34rem}
+.chatreco-sub-dot{width:5px;height:5px;border-radius:50%;background:var(--tui-red);flex:0 0 auto}
 
 /* Filas de conversación con avatar CUADRADO (esquinas suaves, NUNCA círculos).
    El asistente a la izquierda, el usuario a la derecha. Margen amplio entre
    mensajes para que cada caja se lea separada de la anterior. */
-.chatreco-row{display:flex;align-items:flex-start;gap:.5rem;margin:.6rem 0}
+.chatreco-row{display:flex;align-items:flex-start;gap:.55rem;margin:.75rem 0}
 /* Asistente a la IZQUIERDA (avatar + burbuja) y usuario a la DERECHA (burbuja +
    avatar), como un chat convencional. El HTML del bot pone el avatar antes de
    la burbuja, así que flex-start los deja en orden natural a la izquierda. */
@@ -468,30 +474,27 @@ hr { border-color:rgba(17,24,39,.10)!important; }
 .chatreco-row--user{justify-content:flex-end}
 /* Primer mensaje pegado a la cabecera sticky: un poco de aire arriba. */
 .chatreco-row:first-of-type{margin-top:.7rem}
-.chatreco-avatar{flex:0 0 auto;width:28px;height:28px;border-radius:9px;
+.chatreco-avatar{flex:0 0 auto;width:28px;height:28px;border-radius:5px;
   display:flex;align-items:center;justify-content:center;
-  font-size:.55rem;font-weight:700;letter-spacing:.02em;line-height:1;
-  box-shadow:0 6px 16px -8px rgba(17,24,39,.4)}
-.chatreco-avatar--bot{background:linear-gradient(180deg,var(--tui-red),var(--tui-red-deep));
-  color:#fff}
+  font-size:.55rem;font-weight:700;letter-spacing:.02em;line-height:1}
+.chatreco-avatar--bot{background:var(--tui-red);color:#fff}
 .chatreco-avatar--user{background:#EEF1F5;color:var(--tui-dark);
   border:1px solid rgba(17,24,39,.10)}
-/* La burbuja no debe estirarse a todo el ancho: se ajusta a su contenido. */
-.chatreco-row .chatreco-bubble{max-width:min(320px,86%)}
+/* La burbuja aprovecha el ancho disponible pero mantiene una anchura máxima
+   cómoda para leer (mayor que antes, ahora que el chat ocupa toda la pantalla). */
+.chatreco-row .chatreco-bubble{max-width:min(680px,80%)}
 
 /* Burbujas de chat como CAJAS bien definidas: borde visible, sombra clara y
    esquinas redondeadas PARCIALES (14px, nunca píldora total). Asistente a la
    izquierda (fondo blanco, acento TUI), usuario a la derecha (rojo TUI). */
 .chatreco-bubble{display:inline-block;max-width:100%;padding:.6rem .8rem;
-  font-size:.82rem;line-height:1.45;border-radius:12px;
-  border:1px solid rgba(17,24,39,.12);
-  box-shadow:0 2px 6px rgba(17,24,39,.05),0 12px 26px -16px rgba(17,24,39,.32);
-  animation:fadeUp .3s ease both}
+  font-size:.76rem;line-height:1.5;border-radius:6px;
+  border:1px solid rgba(17,24,39,.10);
+  box-shadow:none}
 .chatreco-bubble--bot{background:#fff;color:var(--tui-dark);
-  border-color:rgba(17,24,39,.12);border-top-left-radius:6px}
-.chatreco-bubble--user{background:linear-gradient(180deg,var(--tui-red),var(--tui-red-deep));
-  color:#fff;border-color:rgba(184,11,16,.55);border-top-right-radius:6px;
-  box-shadow:0 3px 8px rgba(212,14,20,.16),0 12px 26px -14px rgba(212,14,20,.5)}
+  border-color:rgba(17,24,39,.10);border-top-left-radius:2px}
+.chatreco-bubble--user{background:var(--tui-red);
+  color:#fff;border-color:rgba(184,11,16,.55);border-top-right-radius:2px}
 
 /* Indicador «escribiendo…»: tres puntos que laten mientras llega la respuesta. */
 .chatreco-typing{display:inline-flex;align-items:center;gap:.28rem;padding:.7rem .85rem}
@@ -505,25 +508,19 @@ hr { border-color:rgba(17,24,39,.10)!important; }
 /* Rejilla de tarjetas EMBEBIDAS en la respuesta del asistente. Un único bloque
    CSS grid (no st.columns) para no romper el DOM de React. Sangrada a la altura
    de la burbuja para leerse como parte de la respuesta. */
-.chatreco-cards-grid{margin:.55rem 0 .3rem;padding-right:2.4rem;
-  display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.55rem}
+.chatreco-cards-grid{margin:.55rem 0 .3rem;padding-right:1rem;
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.6rem}
 
 /* Tarjeta de destino compacta embebida en el chat: CAJA definida con borde
    visible, sombra y esquinas parciales (16px). */
-.chatreco-card{position:relative;overflow:hidden;border-radius:16px;background:#fff;
-  border:1px solid rgba(17,24,39,.12);
-  box-shadow:0 2px 8px rgba(17,24,39,.05),0 18px 38px -22px rgba(17,24,39,.32);
-  display:flex;flex-direction:column;height:100%;
-  transition:transform .3s cubic-bezier(.16,1,.3,1),box-shadow .3s ease;
-  animation:fadeUp .38s ease both}
-.chatreco-card:hover{transform:translateY(-4px);
-  box-shadow:0 10px 22px rgba(17,24,39,.08),0 26px 48px -18px rgba(17,24,39,.32)}
+.chatreco-card{position:relative;overflow:hidden;border-radius:8px;background:#fff;
+  border:1px solid rgba(17,24,39,.10);
+  box-shadow:0 1px 2px rgba(17,24,39,.04);
+  display:flex;flex-direction:column;height:100%}
 /* Banner: imagen a todo el ancho, pegada a los bordes, esquinas superiores. */
 .chatreco-media-wrap{position:relative;width:100%;aspect-ratio:16/10;overflow:hidden;
-  background:#EEF2F6;border-radius:15px 15px 0 0;line-height:0}
-.chatreco-media{width:100%;height:100%;object-fit:cover;object-position:center;display:block;
-  transition:transform .55s cubic-bezier(.16,1,.3,1)}
-.chatreco-card:hover .chatreco-media{transform:scale(1.07)}
+  background:#EEF2F6;border-radius:7px 7px 0 0;line-height:0}
+.chatreco-media{width:100%;height:100%;object-fit:cover;object-position:center;display:block}
 .chatreco-media-fallback{width:100%;height:100%;display:flex;align-items:center;justify-content:center;
   background:linear-gradient(135deg,#243244,#3B4A5E);color:#fff;font-weight:700;font-size:1.1rem}
 .chatreco-media-veil{position:absolute;inset:0;pointer-events:none;
@@ -535,20 +532,19 @@ hr { border-color:rgba(17,24,39,.10)!important; }
   display:inline-flex;align-items:center;gap:.24rem;text-shadow:0 2px 12px rgba(0,0,0,.45)}
 .chatreco-body{padding:.85rem .95rem 1rem;display:flex;flex-direction:column;gap:.55rem;flex:1}
 .chatreco-typology{align-self:flex-start;font-size:.56rem;font-weight:700;letter-spacing:.05em;
-  text-transform:uppercase;border-radius:999px;padding:.22rem .56rem;
+  text-transform:uppercase;border-radius:4px;padding:.22rem .56rem;
   background:var(--tui-red-soft);color:var(--tui-red-deep)}
 .chatreco-headline{font-size:.79rem;color:#5B6472;line-height:1.5;font-weight:400;margin:0}
 .chatreco-facts{display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;margin-top:.05rem}
-.chatreco-fact{background:#F7F9FB;border:1px solid rgba(17,24,39,.05);border-radius:12px;
+.chatreco-fact{background:#F7F9FB;border:1px solid rgba(17,24,39,.05);border-radius:5px;
   padding:.5rem .35rem;text-align:center}
 .chatreco-fact-value{font-size:.98rem;font-weight:700;color:var(--tui-dark);line-height:1}
 .chatreco-fact-label{font-size:.5rem;font-weight:700;letter-spacing:.045em;text-transform:uppercase;
   color:var(--muted);margin-top:.28rem}
 /* CTA de la maqueta: deshabilitado a propósito (es demostración). */
 .chatreco-cta{margin-top:.35rem;align-self:stretch;border:none;cursor:default;
-  border-radius:999px;padding:.55rem .9rem;font-family:inherit;font-weight:700;font-size:.78rem;
-  color:#fff;background:linear-gradient(180deg,var(--tui-red),var(--tui-red-deep));
-  box-shadow:0 8px 18px -8px rgba(212,14,20,.55);opacity:.92}
+  border-radius:5px;padding:.55rem .9rem;font-family:inherit;font-weight:700;font-size:.78rem;
+  color:#fff;background:var(--tui-red);opacity:.92}
 
 @media(max-width:900px){
   .chatreco-window{max-width:100%}
@@ -558,19 +554,29 @@ hr { border-color:rgba(17,24,39,.10)!important; }
 }
 
 /* Botones de sugerencia clicables debajo del chat (aspecto de chip pequeño). */
+/* El bloque de sugerencias no se estira a toda la pantalla: ancho contenido
+   para que se lean como sugerencias rápidas y no como barras enormes.
+   Streamlit expone el key del container como clase .st-key-<key> (no como
+   data-testid), por eso el selector apunta a esa clase. */
+.st-key-chat_sug_wrap{max-width:820px;margin-top:.5rem}
+.st-key-chat_sug_wrap .chatreco-suggest-title{margin:.1rem 0 .45rem}
+.st-key-chat_sug_wrap div.stButton > button,
 [data-testid="chat_sug_wrap"] div.stButton > button {
   min-height:2.2rem !important;padding:.3rem .7rem !important;
-  border-radius:10px !important;font-size:.72rem !important;font-weight:500 !important;
-  background:#fff !important;border:1px solid rgba(17,24,39,.14) !important;
-  color:var(--tui-dark) !important;box-shadow:0 2px 6px rgba(17,24,39,.05) !important;
-  transition:.15s ease !important}
+  border-radius:8px !important;font-size:.72rem !important;font-weight:500 !important;
+  background:#fff !important;border:1px solid rgba(17,24,39,.12) !important;
+  color:var(--tui-dark) !important;box-shadow:none !important;
+  transition:background .15s ease,border-color .15s ease !important}
+.st-key-chat_sug_wrap div.stButton > button:hover,
 [data-testid="chat_sug_wrap"] div.stButton > button:hover {
-  background:#F7F9FB !important;border-color:rgba(17,24,39,.28) !important;
+  background:#F7F9FB !important;border-color:rgba(17,24,39,.22) !important;
   transform:none !important}
+.st-key-chat_sug_wrap div.stButton > button:active,
+.st-key-chat_sug_wrap div.stButton > button:focus:not(:focus-visible),
 [data-testid="chat_sug_wrap"] div.stButton > button:active,
 [data-testid="chat_sug_wrap"] div.stButton > button:focus:not(:focus-visible) {
-  background:#EEF1F5 !important;border-color:rgba(17,24,39,.32) !important;
-  transform:none !important;box-shadow:0 1px 3px rgba(17,24,39,.08) !important}
+  background:#EEF1F5 !important;border-color:rgba(17,24,39,.26) !important;
+  transform:none !important;box-shadow:none !important}
 
 /* ==========================================================================
    España — Copiloto de viaje al LADO de la recomendación (dos columnas).

@@ -4,6 +4,7 @@ from __future__ import annotations
 from html import escape
 
 import streamlit as st
+import streamlit.components.v1 as components
 
 from components.assets import get_local_destination_image
 from services import recommendation_api_service as reco
@@ -379,25 +380,16 @@ def render_recommender_chat() -> None:
     # mensaje, React tenía que crear/destruir un nº variable de nodos y lanzaba
     # el error removeChild. Con un único nodo HTML, React lo monta de una pieza.
     parts = ['<div class="chatreco-window">']
-    subtitulo = (
-        "Conectado al modelo" if reco.is_configured()
-        else "Vista previa · demostración visual"
-    )
+    conectado = reco.is_configured()
+    subtitulo = "Conectado al modelo" if conectado else "Vista previa · demostración visual"
+    _sub_dot = '<span class="chatreco-sub-dot"></span>' if conectado else ''
     parts.append(
         '<div class="chatreco-window-head">'
         '<span class="chatreco-window-dot"></span>'
         '<span class="chatreco-window-title">Asistente de viaje TUI</span>'
-        f'<span class="chatreco-window-sub">{escape(subtitulo)}</span>'
+        f'<span class="chatreco-window-sub">{_sub_dot}{escape(subtitulo)}</span>'
         '</div>'
     )
-    if not hay_turnos_usuario:
-        parts.append('<div class="chatreco-suggest-title">Prueba a pedir algo así:</div>')
-        parts.append('<div class="chatreco-suggest-chips">')
-        parts.append("".join(
-            f'<span class="chatreco-suggest-chip">{escape(s)}</span>'
-            for s in CHAT_SUGGESTIONS
-        ))
-        parts.append('</div>')
     for msg in history:
         if msg.get("role") == "assistant":
             parts.append(_assistant_message_html(msg))
@@ -413,27 +405,63 @@ def render_recommender_chat() -> None:
     parts.append('</div>')  # cierra chatreco-window
     st.markdown("".join(parts), unsafe_allow_html=True)
 
+    # Sugerencias clicables, solo cuando la conversación aún no ha comenzado. Son
+    # los ÚNICOS botones de sugerencia y al pulsar envían el mensaje directamente.
+    # Con CSS (clase --into-window) se solapan visualmente DENTRO de la caja del
+    # chat mediante margen negativo, para que se lean como parte de la ventana.
+    if not hay_turnos_usuario and not pendiente:
+        with st.container(key="chat_sug_wrap"):
+            st.markdown('<div class="chatreco-suggest-title">Prueba a pedir algo así:</div>',
+                        unsafe_allow_html=True)
+            cols_sug = st.columns(len(CHAT_SUGGESTIONS), gap="small")
+            for i, sugerencia in enumerate(CHAT_SUGGESTIONS):
+                if cols_sug[i].button(sugerencia, key=f"chatreco_sug_{i}", use_container_width=True):
+                    history.append({"role": "user", "text": sugerencia, "cards": []})
+                    st.session_state[CHAT_HISTORY_KEY] = history
+                    st.session_state[CHAT_PENDING_KEY] = sugerencia
+                    st.rerun()
+
     # Auto-scroll: tras cada rerun deja la ventana de chat mostrando el último
     # mensaje (la caja tiene overflow propio, así la página no crece hacia
     # abajo). Se busca en el documento padre porque el markdown se pinta dentro
     # del iframe de Streamlit.
-    st.markdown(
-        """
+    #
+    # IMPORTANTE: Streamlit deduplica bloques HTML idénticos entre reruns, así
+    # que un <script> con texto fijo puede no re-ejecutarse cuando llega un
+    # mensaje nuevo. Se inyecta un token único (nº de mensajes + pendiente) para
+    # que el bloque cambie en cada render y el navegador vuelva a ejecutarlo.
+    # El auto-scroll se inyecta con components.v1.html (no con st.markdown)
+    # porque este método SÍ ejecuta el <script> de forma fiable en cada render
+    # y no lo deduplica entre reruns. El componente vive en su propio iframe
+    # hijo, así que desde él se accede a window.parent.document (el documento
+    # principal de la app) para encontrar y scrollear la ventana del chat.
+    _scroll_token = f"{len(history)}-{1 if pendiente else 0}"
+    components.html(
+        f"""
         <script>
-          (function () {
-            const doc = window.parent && window.parent.document
-              ? window.parent.document : document;
-            const ventanas = doc.querySelectorAll('.chatreco-window');
-            const ventana = ventanas[ventanas.length - 1];
-            if (ventana) {
-              requestAnimationFrame(function () {
-                ventana.scrollTop = ventana.scrollHeight;
-              });
-            }
-          })();
+          (function () {{
+            const doc = window.parent && window.parent.document;
+            if (!doc) return;
+            function alFinal() {{
+              const ventanas = doc.querySelectorAll('.chatreco-window');
+              ventanas.forEach(function (v) {{ v.scrollTop = v.scrollHeight; }});
+            }}
+            // Token {_scroll_token}: fuerza re-render del componente por turno.
+            // Bucle persistente ~2.5s para cubrir el retardo con que Streamlit
+            // inyecta el HTML nuevo (la respuesta del API llega en un rerun).
+            let n = 0;
+            const iv = setInterval(function () {{
+              alFinal();
+              if (++n > 50) clearInterval(iv);
+            }}, 50);
+            // Reajuste cuando cargan imágenes de las tarjetas.
+            doc.querySelectorAll('.chatreco-window img').forEach(function (img) {{
+              if (!img.complete) {{ img.addEventListener('load', alFinal, {{ once: true }}); }}
+            }});
+          }})();
         </script>
         """,
-        unsafe_allow_html=True,
+        height=0,
     )
 
     # Procesa el mensaje pendiente: ya se ha pintado el turno del usuario y el
@@ -450,7 +478,11 @@ def render_recommender_chat() -> None:
         st.session_state[CHAT_HISTORY_KEY] = history
         st.rerun()
 
-    # Pie: reinicio de la conversación.
+    # Entrada del usuario: nativo de Streamlit.
+    mensaje = st.chat_input("Escribe qué viaje buscas…")
+
+    # Pie: reinicio de la conversación, DEBAJO del campo de escritura para que
+    # ambos se lean como un bloque junto y no como elementos separados.
     if hay_turnos_usuario:
         if st.button("Empezar de nuevo", key="chatreco_reset"):
             st.session_state.pop(CHAT_HISTORY_KEY, None)
@@ -458,21 +490,6 @@ def render_recommender_chat() -> None:
             st.session_state.pop(CHAT_SESSION_KEY, None)
             st.session_state.pop(CHAT_PENDING_KEY, None)
             st.rerun()
-
-    # Sugerencias clicables (solo cuando la conversación aún no ha comenzado).
-    # Se muestran como botones pequeños que al pulsar envían el mensaje directamente.
-    if not hay_turnos_usuario and not pendiente:
-        with st.container(key="chat_sug_wrap"):
-            cols_sug = st.columns(len(CHAT_SUGGESTIONS), gap="small")
-            for i, sugerencia in enumerate(CHAT_SUGGESTIONS):
-                if cols_sug[i].button(sugerencia, key=f"chatreco_sug_{i}", use_container_width=True):
-                    history.append({"role": "user", "text": sugerencia, "cards": []})
-                    st.session_state[CHAT_HISTORY_KEY] = history
-                    st.session_state[CHAT_PENDING_KEY] = sugerencia
-                    st.rerun()
-
-    # Entrada del usuario: nativo de Streamlit.
-    mensaje = st.chat_input("Escribe qué viaje buscas…")
 
     if mensaje:
         # UX: se pinta el turno del usuario INMEDIATAMENTE y se marca el mensaje

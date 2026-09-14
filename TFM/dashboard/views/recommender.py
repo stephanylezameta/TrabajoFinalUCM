@@ -47,6 +47,12 @@ STATE_PAYLOAD = "reco_payload"
 STATE_AUTORUN = "reco_autorun_done"
 STATE_CUSTOM = "reco_is_custom"
 STATE_POLICY = "reco_policy"
+# Huella de la última combinación de filtros usada en modo automático, para no
+# repetir dos veces seguidas exactamente la misma combinación aleatoria.
+STATE_AUTO_COMBO = "reco_auto_combo"
+# Marca de que «Explora» ya lanzó su primera recomendación automática aleatoria
+# en esta sesión (independiente del autorun del asistente).
+STATE_EXPLORA_AUTORUN = "reco_explora_autorun_done"
 
 # --------------------------------------------------------------------------
 # Escenarios de redistribución (TDRS) integrados en el recomendador.
@@ -116,6 +122,56 @@ def _policy_to_payload(policy_name: str) -> dict:
         interests=list(defaults["interests"]),
         temperature_preference=defaults["temperature_preference"],
         popularity_target=popularity_target,
+    )
+
+
+# Presupuestos orientativos ya presentes en la UI (step de 50 €): se elige uno
+# al azar —o ninguno— para variar la combinación sin inventar valores nuevos.
+_AUTO_BUDGET_CHOICES = (None, None, 500.0, 800.0, 1200.0, 1800.0)
+
+
+def _random_auto_payload(policy_name: str) -> dict:
+    """Combinación ALEATORIA (pero válida y coherente) de los filtros que YA
+    existen en «Explora», para usar SOLO en modo automático/inicial.
+
+    Se eligen al azar entre las opciones existentes: intereses (1-3 de
+    ``reco.INTERESTS``), temperatura (``reco.TEMPERATURE_PREFERENCES``),
+    categoría (una de ``reco.CATEGORIES`` o ninguna) y un presupuesto
+    orientativo. El ``objetivo_popularidad`` sigue mandado por el escenario
+    activo (no se altera el dial de redistribución del modelo).
+
+    Evita repetir exactamente la misma combinación que la anterior cuando
+    existan otras posibles, para aumentar la variedad de destinos sugeridos.
+    """
+    preset = POLICY_PRESETS.get(policy_name, POLICY_PRESETS[DEFAULT_POLICY])
+    popularity_target = max(0.0, min(1.0, float(preset["popularity_target"])))
+
+    intereses_disponibles = list(reco.INTERESTS)
+    temperaturas = list(reco.TEMPERATURE_PREFERENCES)
+    categorias = list(reco.CATEGORIES)
+
+    combo_previa = st.session_state.get(STATE_AUTO_COMBO)
+
+    # Hasta unos pocos intentos para no repetir la combinación anterior.
+    for _ in range(8):
+        n_intereses = random.randint(1, min(_MAX_INTERESTS, len(intereses_disponibles)))
+        intereses = sorted(random.sample(intereses_disponibles, n_intereses))
+        temperatura = random.choice(temperaturas)
+        categoria = random.choice([None] + categorias)
+        presupuesto = random.choice(_AUTO_BUDGET_CHOICES)
+
+        firma = (tuple(intereses), temperatura, categoria, presupuesto)
+        if firma != combo_previa:
+            break
+
+    st.session_state[STATE_AUTO_COMBO] = firma
+
+    return reco.build_payload(
+        interests=intereses,
+        temperature_preference=temperatura,
+        popularity_target=popularity_target,
+        presupuesto_max=presupuesto,
+        categoria=categoria,
     )
 
 # El asistente de viaje está INTEGRADO en la vista como un copiloto único, al
@@ -276,6 +332,14 @@ def _render_form() -> dict | None:
     if not default_interests:
         default_interests = [reco.INTERESTS[0]]
 
+    # Categoría y presupuesto del último payload, para que la combinación
+    # (incluida la automática aleatoria) se refleje también en estos campos.
+    default_categoria = form_actual.get("categoria")
+    default_categorias = [default_categoria] if default_categoria in reco.CATEGORIES else []
+    default_presupuesto = form_actual.get("presupuesto_max")
+    if default_presupuesto is not None:
+        default_presupuesto = int(default_presupuesto)
+
     with st.form("reco_form"):
         # --- CAMPO OBLIGATORIO: Intereses → texto_consulta ---
         interests = st.multiselect(
@@ -319,7 +383,7 @@ def _render_form() -> dict | None:
         categorias_sel = c2.multiselect(
             "Categoría de experiencia",
             list(reco.CATEGORIES),
-            default=[],
+            default=default_categorias,
             format_func=lambda code: reco.CATEGORY_LABELS[code],
             placeholder="Cualquiera",
             help=(
@@ -336,7 +400,7 @@ def _render_form() -> dict | None:
         presupuesto = c3.number_input(
             "Presupuesto máximo (€)",
             min_value=0,
-            value=None,
+            value=default_presupuesto,
             step=50,
             placeholder="Sin límite",
             help="Opcional. Precio orientativo por persona en euros (precio_eur ≤ presupuesto_max).",
@@ -805,7 +869,7 @@ def render_assistant_chat_view() -> None:
     alternativas (opciones 2 y 3).
     """
     st.markdown(
-        '<div class="reco-header">'
+        '<div class="reco-header reco-header--assistant">'
         '<div class="reco-kicker reco-kicker--title">TUI Travel Assistant</div>'
         '<p class="reco-hero-lead">Cuéntale al asistente cómo te gusta viajar '
         '—el ambiente, las fechas, con quién vas— y te irá orientando hacia '
@@ -882,7 +946,15 @@ def _render_policy_selector() -> None:
             )
             if clicked and current != name:
                 st.session_state[STATE_POLICY] = name
-                _run(_policy_to_payload(name), is_custom=False)
+                # Si el usuario NO ha fijado filtros manualmente (modo
+                # automático/inicial), cada escenario parte de una combinación
+                # ALEATORIA de los filtros ya existentes para que Explora no
+                # devuelva siempre lo mismo. Si sí los personalizó, se respetan
+                # exactamente y solo se mueve el dial del escenario.
+                if st.session_state.get(STATE_CUSTOM):
+                    _run(_policy_to_payload(name), is_custom=False)
+                else:
+                    _run(_random_auto_payload(name), is_custom=False)
                 st.rerun()
 
 
@@ -978,6 +1050,17 @@ def render_recommender() -> None:
     )
 
     _render_policy_selector()
+
+    # Al entrar en «Explora» sin configuración manual, se lanza una primera
+    # recomendación automática con una combinación ALEATORIA de los filtros ya
+    # existentes (una sola vez por sesión), para que no salga siempre la misma.
+    if (
+        reco.is_configured()
+        and not st.session_state.get(STATE_EXPLORA_AUTORUN)
+        and not st.session_state.get(STATE_CUSTOM)
+    ):
+        st.session_state[STATE_EXPLORA_AUTORUN] = True
+        _run(_random_auto_payload(_current_policy_name()), is_custom=False)
 
     result = st.session_state.get(STATE_KEY) or {}
     ranking = result.get("ranking") or []
