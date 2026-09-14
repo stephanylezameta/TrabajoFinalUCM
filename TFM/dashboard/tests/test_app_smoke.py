@@ -75,7 +75,7 @@ def test_control_web_shows_performance_dashboard():
     ):
         assert section in rendered, f"falta la sección «{section}»"
     # KPIs principales presentes como tarjetas.
-    for kpi in ("Sesiones activas", "Recomendaciones", "Clics", "CTR"):
+    for kpi in ("Recomendaciones", "Clics", "CTR"):
         assert kpi in rendered, f"falta el KPI «{kpi}»"
 
 

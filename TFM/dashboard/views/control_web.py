@@ -168,13 +168,61 @@ def _spain_polygons(ax) -> None:
             ax.fill(xs, ys, facecolor="#F4F7FA", edgecolor="#D8DEE6", linewidth=.5, zorder=1)
 
 
-def render_spain_map(points: list[dict], metric_label: str = "Clics") -> None:
-    """Mapa de España con intensidad de interés por destino.
+# Paleta cualitativa por zona (comunidad autónoma). Colores diferenciados y
+# legibles sobre fondo oscuro. Se asignan de forma estable por nombre.
+_ZONE_PALETTE = [
+    (232, 89, 94),    # rojo TUI claro
+    (79, 154, 214),   # azul
+    (86, 191, 145),   # verde
+    (240, 173, 78),   # ámbar
+    (166, 122, 214),  # violeta
+    (78, 201, 197),   # turquesa
+    (230, 126, 179),  # rosa
+    (150, 179, 90),   # oliva
+    (219, 122, 96),   # terracota
+    (120, 144, 214),  # índigo
+    (215, 178, 74),   # oro
+    (108, 194, 111),  # verde lima
+]
 
-    El tamaño y el color de cada punto escalan con el interés (clics, o
-    impresiones si aún no hay clics). Más interés → punto mayor y más intenso.
-    Responde a «¿dónde están haciendo clic los usuarios?»: solo dibuja destinos
-    con interacción real; si no hay ninguno, lo declara.
+
+def _zone_color(ccaa: str | None) -> tuple[int, int, int]:
+    """Color RGB estable para una comunidad (zona). Mismo nombre → mismo color."""
+    if not ccaa:
+        return (148, 163, 184)  # gris para "sin comunidad"
+    idx = sum(ord(c) for c in ccaa) % len(_ZONE_PALETTE)
+    return _ZONE_PALETTE[idx]
+
+
+def _interest_color(frac: float) -> list[int]:
+    """Color RGBA (lista) de un punto según su intensidad de interés (0–1).
+
+    Degradado de rosa claro a rojo TUI oscuro, coherente con la marca. La
+    opacidad también sube con el interés para reforzar el foco.
+    """
+    stops = [
+        (0.0, (251, 213, 214)),   # #FBD5D6
+        (0.4, (232, 89, 94)),     # #E8595E
+        (0.75, (212, 14, 20)),    # TUI red
+        (1.0, (142, 10, 14)),     # #8E0A0E
+    ]
+    frac = max(0.0, min(1.0, frac))
+    for (f0, c0), (f1, c1) in zip(stops, stops[1:]):
+        if frac <= f1:
+            t = 0 if f1 == f0 else (frac - f0) / (f1 - f0)
+            rgb = [int(round(a + (b - a) * t)) for a, b in zip(c0, c1)]
+            return rgb + [int(150 + 90 * frac)]
+    return list(stops[-1][1]) + [240]
+
+
+def render_spain_map(points: list[dict], metric_label: str = "Clics") -> None:
+    """Mapa INTERACTIVO de España con la intensidad de interés por destino.
+
+    Usa pydeck (zoom, arrastre y tooltip al pasar el cursor). El radio y el color
+    de cada círculo escalan con el interés (clics, o impresiones si aún no hay
+    clics). Responde a «¿dónde están interactuando los usuarios?»: solo dibuja
+    destinos con interacción real; si no hay ninguno, lo declara. Si pydeck no
+    estuviera disponible, cae a un mapa estático de respaldo.
     """
     active = [p for p in points if (p.get("clicks") or 0) > 0 or (p.get("impressions") or 0) > 0]
     if not active:
@@ -185,31 +233,175 @@ def render_spain_map(points: list[dict], metric_label: str = "Clics") -> None:
     use_clicks = any((p.get("clicks") or 0) > 0 for p in active)
     intensity_key = "clicks" if use_clicks else "impressions"
     intensity_name = "clics" if use_clicks else "impresiones"
-    values = [p[intensity_key] for p in active]
-    max_value = max(values) if values else 0
+    max_value = max(p[intensity_key] for p in active) or 1
 
+    try:
+        import pydeck as pdk
+    except ImportError:
+        _render_spain_map_static(active, intensity_key, intensity_name, max_value)
+        return
+
+    # Etiquetamos solo los destinos con más interés: el resto satura el mapa y
+    # se consulta con el tooltip. Umbral: top 8 por intensidad.
+    ordered = sorted(active, key=lambda p: p[intensity_key], reverse=True)
+    labelled = {id(p) for p in ordered[:8]}
+
+    rows = []
+    for p in active:
+        value = p[intensity_key]
+        frac = value / max_value
+        # Color propio por comunidad (zona); la opacidad sube con el interés
+        # para que se distinga la zona y a la vez destaque la intensidad.
+        r, g, b = _zone_color(p["ccaa"])
+        alpha = int(150 + 90 * frac)
+        rows.append({
+            "lat": p["lat"],
+            "lon": p["lon"],
+            "destino": p["destination"],
+            "etiqueta": p["destination"] if id(p) in labelled else "",
+            "comunidad": p["ccaa"] or "—",
+            "clics": _fmt_int(p["clicks"]),
+            "impresiones": _fmt_int(p["impressions"]),
+            "usuarios": _fmt_int(p["users"]),
+            "ctr": _fmt_pct(p["ctr"]),
+            "ranking": f"#{p['rank']}",
+            "intensidad": value,
+            "radio": 14000 + 46000 * (frac ** 0.6),
+            "color": [r, g, b, alpha],
+        })
+
+    # Conjunto de caracteres para el TextLayer: sin esto, deck.gl no dibuja las
+    # tildes ni la ñ (usa solo ASCII por defecto y muestra huecos). Lo derivamos
+    # de las propias etiquetas; así incluye acentos/ñ y evitamos caracteres
+    # conflictivos (comillas, backslash) que rompen el parseo JSON de deck.gl.
+    used_chars = set()
+    for row in rows:
+        used_chars.update(row["etiqueta"])
+    used_chars.discard('"')
+    used_chars.discard("'")
+    used_chars.discard("\\")
+    char_set = sorted(used_chars) or [" "]
+
+    view = pdk.ViewState(latitude=39.6, longitude=-3.6, zoom=4.7, min_zoom=3, max_zoom=9, pitch=0)
+    layer = pdk.Layer(
+        "ScatterplotLayer",
+        data=rows,
+        get_position="[lon, lat]",
+        get_radius="radio",
+        get_fill_color="color",
+        get_line_color=[255, 255, 255],
+        line_width_min_pixels=1.5,
+        radius_min_pixels=4,
+        radius_max_pixels=60,
+        stroked=True,
+        pickable=True,
+        opacity=0.9,
+    )
+    # Etiquetas legibles sobre mapa oscuro: texto blanco, negrita, con un
+    # recuadro oscuro translúcido detrás y desplazadas hacia arriba del punto.
+    text_layer = pdk.Layer(
+        "TextLayer",
+        data=rows,
+        get_position="[lon, lat]",
+        get_text="etiqueta",
+        get_size=13,
+        get_color=[255, 255, 255],
+        get_pixel_offset=[0, -14],
+        get_alignment_baseline="'bottom'",
+        get_text_anchor="'middle'",
+        character_set=char_set,
+        font_family="'Arial, sans-serif'",
+        font_weight="'bold'",
+        background=True,
+        get_background_color=[17, 24, 39, 190],
+        background_padding=[5, 3, 5, 3],
+        outline_width=1,
+        outline_color=[17, 24, 39],
+        pickable=False,
+    )
+    tooltip = {
+        "html": (
+            "<div style='font-weight:700;font-size:13px;margin-bottom:2px'>{destino}"
+            "<span style='color:#FBB;font-weight:600'> &middot; {ranking}</span></div>"
+            "<div style='color:#C7CDD9;font-size:11px;margin-bottom:4px'>{comunidad}</div>"
+            "<div>Clics: <b>{clics}</b> &middot; Impresiones: <b>{impresiones}</b></div>"
+            "<div>Usuarios: <b>{usuarios}</b> &middot; CTR: <b>{ctr}</b></div>"
+        ),
+        "style": {
+            "backgroundColor": "rgba(17,24,39,0.95)",
+            "color": "#FFFFFF",
+            "fontSize": "12px",
+            "fontFamily": "system-ui, -apple-system, sans-serif",
+            "borderRadius": "8px",
+            "padding": "9px 12px",
+            "boxShadow": "0 6px 20px rgba(0,0,0,0.28)",
+            "maxWidth": "240px",
+        },
+    }
+    deck = pdk.Deck(
+        layers=[layer, text_layer],
+        initial_view_state=view,
+        map_style="dark",
+        tooltip=tooltip,
+    )
+    st.pydeck_chart(deck, use_container_width=True)
+    _render_map_legend(intensity_name, active)
+
+
+def _render_map_legend(intensity_name: str, active: list[dict]) -> None:
+    """Leyenda del mapa: color por comunidad (zona) y tamaño del punto.
+
+    El color de cada punto identifica su comunidad; el tamaño crece con el
+    interés. Solo listamos las comunidades presentes en el periodo.
+    """
+    zonas = []
+    vistos = set()
+    for p in active:
+        nombre = p["ccaa"] or "Sin comunidad"
+        if nombre in vistos:
+            continue
+        vistos.add(nombre)
+        r, g, b = _zone_color(p["ccaa"])
+        zonas.append((nombre, f"rgb({r},{g},{b})"))
+    zonas.sort(key=lambda z: z[0])
+
+    chips = "".join(
+        f'<span class="mp-legend-item">'
+        f'<span class="mp-legend-dot" style="background:{color};width:12px;height:12px"></span>'
+        f'<span class="mp-legend-label">{escape(nombre)}</span></span>'
+        for nombre, color in zonas
+    )
+    st.markdown(
+        f"""
+        <div class="mp-map-legend">
+          <div class="mp-legend-item">
+            <span class="mp-legend-dot mp-dot-sm"></span>
+            <span class="mp-legend-dot mp-dot-md"></span>
+            <span class="mp-legend-dot mp-dot-lg"></span>
+            <span class="mp-legend-label">El tamaño crece con los {intensity_name}</span>
+          </div>
+        </div>
+        <div class="mp-map-legend mp-legend-zones">{chips}</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _render_spain_map_static(active: list[dict], intensity_key: str,
+                             intensity_name: str, max_value: float) -> None:
+    """Mapa estático de respaldo (matplotlib) por si pydeck no está disponible."""
     cmap = LinearSegmentedColormap.from_list("tui_interest", ["#FBD5D6", "#E8595E", TUI_RED, "#8E0A0E"])
-
     fig, ax = plt.subplots(figsize=(9.6, 6.6))
     _spain_polygons(ax)
-
     for p in active:
         value = p[intensity_key]
         frac = (value / max_value) if max_value else 0
-        size = 90 + 900 * (frac ** 0.6)
-        color = cmap(0.25 + 0.75 * frac)
-        ax.scatter(
-            p["lon"], p["lat"], s=size, color=color,
-            edgecolor="#FFFFFF", linewidth=1.1, alpha=.92, zorder=3,
-        )
-        ax.annotate(
-            f"{p['destination']}\n{_fmt_int(value)}",
-            (p["lon"], p["lat"]),
-            xytext=(6, 6), textcoords="offset points",
-            fontsize=7.5, color=TUI_DARK, fontweight="bold", zorder=4,
-        )
-
-    # Encuadre en la España peninsular + Canarias, con margen.
+        ax.scatter(p["lon"], p["lat"], s=90 + 900 * (frac ** 0.6),
+                   color=cmap(0.25 + 0.75 * frac), edgecolor="#FFFFFF",
+                   linewidth=1.1, alpha=.92, zorder=3)
+        ax.annotate(f"{p['destination']}\n{_fmt_int(value)}", (p["lon"], p["lat"]),
+                    xytext=(6, 6), textcoords="offset points", fontsize=7.5,
+                    color=TUI_DARK, fontweight="bold", zorder=4)
     ax.set_xlim(-19.0, 5.5)
     ax.set_ylim(26.5, 44.5)
     ax.set_facecolor("#FFFFFF")
@@ -217,14 +409,6 @@ def render_spain_map(points: list[dict], metric_label: str = "Clics") -> None:
     ax.set_yticks([])
     for spine in ax.spines.values():
         spine.set_visible(False)
-
-    # Leyenda de intensidad discreta (barra de color) sin recargar.
-    sm = plt.cm.ScalarMappable(cmap=cmap)
-    sm.set_array([0, max_value])
-    cbar = fig.colorbar(sm, ax=ax, fraction=0.03, pad=0.01)
-    cbar.set_label(f"Intensidad de interés ({intensity_name})", fontsize=8, color=MUTED)
-    cbar.ax.tick_params(labelsize=7, colors=MUTED)
-
     fig.tight_layout(pad=.4)
     st.pyplot(fig, width="stretch")
     plt.close(fig)
@@ -276,7 +460,6 @@ def _render_filters() -> tuple[pa.Period, pa.Filters]:
 def _render_kpis(period: pa.Period, filters: pa.Filters) -> dict:
     kpis = pa.get_kpis(period, filters)
     cards = [
-        _kpi_card("Sesiones activas", kpis["active_sessions"]),
         _kpi_card("Sesiones iniciadas", kpis["sessions_started"]),
         _kpi_card("Recomendaciones", kpis["recommendations"]),
         _kpi_card("Impresiones", kpis["impressions"]),
@@ -325,7 +508,7 @@ def _render_evolution(period: pa.Period, filters: pa.Filters) -> None:
 
     c1, c2 = st.columns(2, gap="large")
     with c1:
-        st.caption(f"Recomendaciones, impresiones y clics por {unidad}")
+        _chart_title(f"Recomendaciones, impresiones y clics por {unidad}")
         _line_chart(
             labels,
             {
@@ -335,8 +518,17 @@ def _render_evolution(period: pa.Period, filters: pa.Filters) -> None:
             },
         )
     with c2:
-        st.caption(f"Sesiones activas por {unidad}")
+        _chart_title(f"Sesiones activas por {unidad}")
         _bar_chart(labels, list(plot_df["sessions"]))
+
+
+def _chart_title(text: str) -> None:
+    """Título de gráfico en tono oscuro TUI, para que resalte más que un caption."""
+    st.markdown(
+        f'<div style="font-size:.8rem;font-weight:800;color:{TUI_DARK};margin:.1rem 0 .35rem">'
+        f'{escape(text)}</div>',
+        unsafe_allow_html=True,
+    )
 
 
 def _style_time_axis(ax, labels: list[str]) -> None:
@@ -367,7 +559,9 @@ def _line_chart(labels: list[str], series: dict[str, list], height: float = 2.6)
                 color=SERIE_COLORS.get(name, TUI_RED), label=name)
     _style_time_axis(ax, labels)
     if len(series) > 1:
-        ax.legend(frameon=False, fontsize=7.5, loc="upper right", ncol=len(series),
+        # Leyenda debajo del gráfico para no taparse con las líneas.
+        ax.legend(frameon=False, fontsize=7.5, loc="upper center",
+                  bbox_to_anchor=(0.5, -0.18), ncol=len(series),
                   labelcolor=TUI_DARK)
     fig.tight_layout(pad=.4)
     st.pyplot(fig, width="stretch")
@@ -388,81 +582,16 @@ def _render_ranking(period: pa.Period, filters: pa.Filters) -> list[dict]:
     if st.session_state.get("mp_rank_order") not in RANK_CRITERIA:
         st.session_state.mp_rank_order = "Clics"
 
-    st.markdown('<div class="mp-scope">', unsafe_allow_html=True)
-    cols = st.columns(len(RANK_CRITERIA), gap="small")
-    for idx, label in enumerate(RANK_CRITERIA):
-        selected = st.session_state.mp_rank_order == label
-        if cols[idx].button(label, key=f"mp_rank_btn_{label}", width="stretch",
-                            type="primary" if selected else "secondary"):
-            if not selected:
-                st.session_state.mp_rank_order = label
-                st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
-
     order_key = RANK_CRITERIA[st.session_state.mp_rank_order]
     rows = pa.rank_destinations(period, filters, order_by=order_key)
-    active = [r for r in rows if r["impressions"] > 0 or r["clicks"] > 0]
-    if not active:
-        st.info("Sin datos suficientes para el ranking de destinos.")
-        return rows
-
-    def metric_of(r):
-        if order_key == "ctr":
-            return _fmt_pct(r["ctr"])
-        if order_key == "users":
-            return _fmt_int(r["users"])
-        if order_key == "impressions":
-            return _fmt_int(r["impressions"])
-        return _fmt_int(r["clicks"])
-
-    def metric_num(r):
-        if order_key == "ctr":
-            return r["ctr"] or 0
-        return r.get(order_key, 0) or 0
-
-    max_val = max((metric_num(r) for r in active), default=0) or 1
-    bars = ['<div class="mp-rank">']
-    for i, r in enumerate(active[:12], start=1):
-        frac = metric_num(r) / max_val
-        pos_cls = "mp-rank-pos mp-top" if i <= 3 else "mp-rank-pos"
-        tag = r["ccaa"] or ("Fuera de España" if not r["in_spain"] else "")
-        bars.append(
-            f'<div class="mp-rank-row"><div class="{pos_cls}">{i}</div>'
-            '<div class="mp-rank-main">'
-            f'<div class="mp-rank-name"><span>{escape(r["destination"])}</span>'
-            f'<span class="mp-rank-metric">{metric_of(r)}</span></div>'
-            f'<div class="mp-rank-track"><div class="mp-rank-fill" style="width:{frac * 100:.1f}%"></div></div>'
-            f'<div class="mp-rank-sub">{_fmt_int(r["clicks"])} clics · {_fmt_int(r["impressions"])} impresiones · '
-            f'CTR {_fmt_pct(r["ctr"])} · {_fmt_int(r["users"])} usuarios</div>'
-            '</div>'
-            f'<div class="mp-rank-tag">{escape(str(tag))}</div></div>'
-        )
-    bars.append("</div>")
-    st.markdown("".join(bars), unsafe_allow_html=True)
     return rows
 
 
 def _render_map(period: pa.Period, filters: pa.Filters) -> None:
     points = pa.get_spain_interest_map(period, filters)
-    left, right = st.columns([1.5, 1], gap="large")
-    with left:
-        render_spain_map(points)
-    with right:
-        st.caption("Detalle por destino")
-        active = [p for p in points if p["impressions"] > 0 or p["clicks"] > 0]
-        if active:
-            df = pd.DataFrame([{
-                "Ranking": p["rank"],
-                "Destino": p["destination"],
-                "Clics": p["clicks"],
-                "Usuarios": p["users"],
-                "Impresiones": p["impressions"],
-                "CTR": _fmt_pct(p["ctr"]),
-                "Comunidad": p["ccaa"],
-            } for p in active])
-            st.dataframe(df, width="stretch", hide_index=True, height=320)
-        else:
-            st.info("Sin datos suficientes para el detalle del mapa.")
+    # El mapa interactivo va a todo el ancho (es el protagonista); el detalle
+    # por destino se muestra debajo, en una tabla ordenable.
+    render_spain_map(points)
 
     unmapped = pa.unmapped_interest(period, filters)
     if unmapped:
@@ -480,24 +609,27 @@ def _render_top_destinations(rows: list[dict], period: pa.Period, filters: pa.Fi
     if not active:
         st.info("Sin datos suficientes para el podio de destinos.")
         return
-    cards = ['<div class="mp-quad-legend">']
-    labels = ["1.º", "2.º", "3.º"]
+    cards = ['<div class="mp-podium">']
+    rank_cls = ["gold", "silver", "bronze"]
     for i, r in enumerate(active):
         t = trends.get(r["destination"], {})
         delta = t.get("delta_clicks")
         if delta is None:
-            delta_txt = "Sin comparación de periodo"
+            delta_html = '<span class="mp-podium-delta mp-podium-delta--none">sin histórico</span>'
         elif delta > 0:
-            delta_txt = f"▲ +{_fmt_int(delta)} clics vs. periodo anterior"
+            delta_html = f'<span class="mp-podium-delta mp-podium-delta--up">+{_fmt_int(delta)}</span>'
         elif delta < 0:
-            delta_txt = f"▼ {_fmt_int(delta)} clics vs. periodo anterior"
+            delta_html = f'<span class="mp-podium-delta mp-podium-delta--down">{_fmt_int(delta)}</span>'
         else:
-            delta_txt = "= sin cambio vs. periodo anterior"
+            delta_html = '<span class="mp-podium-delta mp-podium-delta--flat">igual</span>'
         cards.append(
-            f'<div class="mp-quad-item"><div class="mp-quad-name">{labels[i]} · {escape(r["destination"])}</div>'
-            f'<div class="mp-quad-desc">{_fmt_int(r["clicks"])} clics · {_fmt_int(r["users"])} usuarios · '
-            f'CTR {_fmt_pct(r["ctr"])}</div>'
-            f'<div class="mp-quad-dests">{escape(delta_txt)}</div></div>'
+            f'<div class="mp-podium-item mp-podium-item--{rank_cls[i]}">'
+            f'<span class="mp-podium-rank">{i + 1}</span>'
+            f'<span class="mp-podium-body">'
+            f'<span class="mp-podium-name">{escape(r["destination"])}</span>'
+            f'<span class="mp-podium-stats">{_fmt_int(r["clicks"])} clics · {_fmt_int(r["users"])} usuarios · '
+            f'CTR {_fmt_pct(r["ctr"])}</span></span>'
+            f'{delta_html}</div>'
         )
     cards.append("</div>")
     st.markdown("".join(cards), unsafe_allow_html=True)
@@ -507,6 +639,7 @@ def _render_engagement(period: pa.Period, filters: pa.Filters) -> None:
     eng = pa.get_engagement(period)
     cards = [
         _kpi_card("Sesiones activas", {"value": eng["active_sessions"], "available": True, "delta": {}}),
+        _kpi_card("Recomendaciones generadas", {"value": eng["recommendations"], "available": True, "delta": {}}),
         _kpi_card("Recomendaciones/sesión", {"value": eng["recos_per_session"], "available": eng["recos_per_session"] is not None, "delta": {}}, kind="ratio"),
         _kpi_card("Clics/sesión", {"value": eng["clicks_per_session"], "available": eng["clicks_per_session"] is not None, "delta": {}}, kind="ratio"),
         _kpi_card("Páginas/sesión", {"value": eng["views_per_session"], "available": eng["views_per_session"] is not None, "delta": {}}, kind="ratio"),
@@ -522,20 +655,26 @@ def _render_funnel(period: pa.Period, filters: pa.Filters) -> None:
     if top <= 0:
         st.info("Sin datos suficientes para el funnel.")
         return
+    # El primer paso (impresiones) es siempre el mayor: el embudo decrece de
+    # forma monotónica, así que sirve de referencia para el ancho de las barras.
     blocks = ['<div class="mp-funnel">']
     for i, s in enumerate(steps):
         frac = (s["value"] / top) if top else 0
+        width = max(frac, 0.08) * 100
         drop = ""
         if i > 0 and s.get("pct_of_prev") is not None:
             lost = 1 - s["pct_of_prev"]
-            drop = f'<div class="mp-funnel-drop">Conversión desde el paso anterior: {_fmt_pct(s["pct_of_prev"])} · pérdida {_fmt_pct(lost)}</div>'
+            drop = (
+                f'<div class="mp-funnel-drop">Conversión: {_fmt_pct(s["pct_of_prev"])} · '
+                f'pérdida {_fmt_pct(lost)}</div>'
+            )
         blocks.append(
-            f'<div class="mp-funnel-step"><div class="mp-funnel-head">'
+            f'<div class="mp-funnel-step">'
+            f'<div class="mp-funnel-bar" style="width:{width:.1f}%">'
             f'<span class="mp-funnel-label">{escape(s["step"])}</span>'
-            f'<span class="mp-funnel-value">{_fmt_int(s["value"])} '
-            f'<span class="mp-funnel-pct">· {_fmt_pct(frac)} del total</span></span></div>'
-            f'<div class="mp-funnel-track"><div class="mp-funnel-fill" style="width:{max(frac, 0.02) * 100:.1f}%"></div></div>'
-            f'{drop}</div>'
+            f'<span class="mp-funnel-value">{_fmt_int(s["value"])}'
+            f'<span class="mp-funnel-pct"> · {_fmt_pct(frac)}</span></span>'
+            f'</div>{drop}</div>'
         )
     blocks.append("</div>")
     st.markdown("".join(blocks), unsafe_allow_html=True)
@@ -561,15 +700,31 @@ def _render_saturation(period: pa.Period, filters: pa.Filters) -> None:
             "Menor prioridad": "#8D5D00",
             "Oportunidad secundaria": "#4B5563",
         }
+        tx, ty = thr["saturation"], thr["interest"]
+        xs = [p["saturation"] for p in points]
+        ys = [p["interest"] for p in points]
+        x0, x1 = min(xs + [tx]), max(xs + [tx])
+        y0, y1 = min(ys + [ty]), max(ys + [ty])
+        xpad = (x1 - x0) * 0.12 or 1
+        ypad = (y1 - y0) * 0.12 or 1
+        ax.set_xlim(x0 - xpad, x1 + xpad)
+        ax.set_ylim(y0 - ypad, y1 + ypad)
+
+        # Fondo tenue por cuadrante para leer de un vistazo dónde cae cada zona.
+        ax.axvspan(tx, x1 + xpad, ymin=0.5, ymax=1, facecolor="#B80B10", alpha=.05, zorder=0)
+        ax.axvspan(x0 - xpad, tx, ymin=0.5, ymax=1, facecolor="#19865E", alpha=.05, zorder=0)
+        ax.axvspan(tx, x1 + xpad, ymin=0, ymax=0.5, facecolor="#8D5D00", alpha=.05, zorder=0)
+        ax.axvspan(x0 - xpad, tx, ymin=0, ymax=0.5, facecolor="#4B5563", alpha=.05, zorder=0)
+
         for p in points:
-            ax.scatter(p["saturation"], p["interest"], s=140,
-                       color=colors.get(p["quadrant"], MUTED), alpha=.85,
-                       edgecolor="#fff", linewidth=1.1, zorder=3)
+            ax.scatter(p["saturation"], p["interest"], s=150,
+                       color=colors.get(p["quadrant"], MUTED), alpha=.9,
+                       edgecolor="#fff", linewidth=1.2, zorder=3)
             ax.annotate(p["destination"], (p["saturation"], p["interest"]),
-                        xytext=(5, 4), textcoords="offset points", fontsize=7.5,
-                        color=TUI_DARK, zorder=4)
-        ax.axvline(thr["saturation"], color="#C5CBD3", linewidth=1, linestyle="--", zorder=1)
-        ax.axhline(thr["interest"], color="#C5CBD3", linewidth=1, linestyle="--", zorder=1)
+                        xytext=(6, 5), textcoords="offset points", fontsize=7.5,
+                        color=TUI_DARK, fontweight="medium", zorder=4)
+        ax.axvline(tx, color="#B4BCC7", linewidth=1, linestyle="--", zorder=1)
+        ax.axhline(ty, color="#B4BCC7", linewidth=1, linestyle="--", zorder=1)
         ax.set_xlabel("Saturación del destino →", fontsize=8, color=MUTED)
         ax.set_ylabel("Interés del usuario →", fontsize=8, color=MUTED)
         ax.tick_params(labelsize=7, colors=MUTED)
@@ -581,31 +736,47 @@ def _render_saturation(period: pa.Period, filters: pa.Filters) -> None:
         plt.close(fig)
 
     with right:
-        quad_desc = {
-            "Masificado": "Alto interés + alta saturación → destino masificado.",
-            "Oportunidad": "Alto interés + baja saturación → oportunidad.",
-            "Menor prioridad": "Bajo interés + alta saturación → menor prioridad.",
-            "Oportunidad secundaria": "Bajo interés + baja saturación → oportunidad secundaria.",
+        # Cada cuadrante: clave CSS, título, acción sugerida y descripción de la
+        # regla (interés × saturación). El orden refleja prioridad de negocio.
+        quad_meta = {
+            "Masificado": (
+                "masificado", "Descongestionar",
+                "Alto interés y alta saturación. Redirige demanda hacia alternativas.",
+            ),
+            "Oportunidad": (
+                "oportunidad", "Impulsar",
+                "Alto interés y baja saturación. Margen para captar más flujo.",
+            ),
+            "Menor prioridad": (
+                "menor", "Vigilar",
+                "Bajo interés y alta saturación. No requiere acción inmediata.",
+            ),
+            "Oportunidad secundaria": (
+                "secundaria", "Explorar",
+                "Bajo interés y baja saturación. Potencial a futuro.",
+            ),
         }
         grouped: dict[str, list[str]] = {}
         for p in points:
             grouped.setdefault(p["quadrant"], []).append(p["destination"])
-        items = ['<div class="mp-quad-legend">']
-        for quad, desc in quad_desc.items():
+
+        items = ['<div class="mp-quad-grid">']
+        for quad, (cls, action, desc) in quad_meta.items():
             dests = grouped.get(quad, [])
-            dest_txt = ", ".join(dests) if dests else "—"
+            chips = "".join(
+                f'<span class="mp-quad-chip">{escape(d)}</span>' for d in dests
+            ) or '<span class="mp-quad-empty">Sin destinos</span>'
             items.append(
-                f'<div class="mp-quad-item"><div class="mp-quad-name">{escape(quad)}</div>'
+                f'<div class="mp-quad-card mp-quad--{cls}">'
+                f'<div class="mp-quad-top">'
+                f'<span class="mp-quad-name">{escape(quad)}</span></div>'
+                f'<div class="mp-quad-action">{escape(action)}</div>'
                 f'<div class="mp-quad-desc">{escape(desc)}</div>'
-                f'<div class="mp-quad-dests">{escape(dest_txt)}</div></div>'
+                f'<div class="mp-quad-chips">{chips}</div>'
+                f'</div>'
             )
         items.append("</div>")
         st.markdown("".join(items), unsafe_allow_html=True)
-        st.markdown(
-            '<div class="mp-note">Saturación estimada con datos reales de flujo '
-            '(pasajeros aéreos anuales) e impacto local del proyecto.</div>',
-            unsafe_allow_html=True,
-        )
 
 
 def _render_potential(period: pa.Period, filters: pa.Filters) -> None:
@@ -666,17 +837,18 @@ def render_control_web() -> None:
     _section("Seguimiento", "Detecta picos, caídas y cambios de comportamiento por día en el periodo seleccionado.")
     _render_evolution(period, filters)
 
-    _section("Rendimiento de recomendaciones", "Ranking de destinos por interés. Cambia el criterio de ordenación.")
     ranked = _render_ranking(period, filters)
 
-    _section("Mapa de interés turístico", "¿Dónde están interactuando los usuarios? Intensidad por destino en España.")
+    _section("Mapa de interés turístico", "Contrasta dónde se recomiendan los destinos frente a dónde los usuarios realmente hacen clic en España.")
     _render_map(period, filters)
 
-    _section("Destinos más recomendados", "Podio de destinos y su variación respecto al periodo anterior.")
-    _render_top_destinations(ranked, period, filters)
-
-    _section("Funnel de interacción", "Dónde se pierde el usuario a lo largo del recorrido.")
-    _render_funnel(period, filters)
+    left, right = st.columns([1, 1], gap="large")
+    with left:
+        _section("Destinos más recomendados", "Podio de destinos y su variación respecto al periodo anterior.")
+        _render_top_destinations(ranked, period, filters)
+    with right:
+        _section("Funnel de interacción")
+        _render_funnel(period, filters)
 
     _section("Saturación vs. interés", "Oportunidades de redistribución del flujo turístico.")
     _render_saturation(period, filters)

@@ -493,21 +493,26 @@ def get_engagement(period: Period) -> dict:
 # --------------------------------------------------------------------------
 
 def get_funnel(period: Period, filters: Filters | None = None) -> list[dict]:
-    """Funnel con los eventos realmente disponibles.
+    """Funnel a nivel de destino/impresión.
 
-    Sesiones → Recomendaciones generadas → Recomendaciones mostradas
-    (impresiones) → Recomendaciones clicadas. No se incluye «destino consultado»
-    ni «conversión» como pasos con cifras porque no existe un evento propio para
-    ellos; se declaran aparte como pendientes de instrumentar.
+    Recomendaciones mostradas (impresiones) → Recomendaciones clicadas (clics).
+    Ambos pasos comparten unidad (destinos-impresión), así que los clics son un
+    subconjunto de las impresiones y el embudo decrece de forma monotónica: la
+    conversión del paso es exactamente el CTR y nunca supera el 100%.
+
+    «Recomendaciones generadas» (``recommendation_request``) NO se incluye como
+    escalón porque está en otra unidad (peticiones, no impresiones): una sola
+    solicitud genera varias impresiones —una por destino del ranking—, por lo que
+    aparecería por debajo de «mostradas» y rompería el embudo. Se expone como KPI
+    de volumen aparte. Tampoco se incluye «destino consultado» ni «conversión»
+    porque no existe un evento propio para ellos; se declaran como pendientes de
+    instrumentar.
     """
-    counts = _event_counts(period)
     dest_rows = get_destination_performance(period, filters)
     impressions = sum(r["impressions"] for r in dest_rows)
     clicks = sum(r["clicks"] for r in dest_rows)
 
     steps = [
-        {"step": "Sesiones", "value": counts["active_sessions"], "available": True},
-        {"step": "Recomendaciones generadas", "value": counts["requests"], "available": True},
         {"step": "Recomendaciones mostradas", "value": impressions, "available": True},
         {"step": "Recomendaciones clicadas", "value": clicks, "available": True},
     ]
