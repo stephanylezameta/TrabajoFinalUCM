@@ -54,6 +54,7 @@ from services.data_control_service import (  # noqa: E402
     bootstrap_missing_sources,
     seed_data_sources,
 )
+from services.click_tracking import handle_pending_click  # noqa: E402
 from services.tracking_service import create_session, register_event  # noqa: E402
 from views.control_web import render_control_web  # noqa: E402
 from views.recommender import render_assistant_chat_view, render_recommender  # noqa: E402
@@ -97,6 +98,10 @@ def main() -> None:
         st.session_state.session_id = create_session(source="streamlit")
     if "page_views" not in st.session_state:
         st.session_state.page_views = set()
+
+    # Click-through de las CTAs de recomendación: si la URL trae un clic
+    # pendiente, se registra y se redirige a TUI antes de pintar nada.
+    handle_pending_click()
 
     render_sidebar_brand()
     view = st.sidebar.radio(

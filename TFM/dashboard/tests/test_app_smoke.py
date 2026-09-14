@@ -56,11 +56,27 @@ def test_every_view_renders_without_exception(view):
     assert not app.exception, f"{view}: {[str(e) for e in app.exception]}"
 
 
-def test_control_web_shows_commercial_kpis():
+def test_control_web_shows_performance_dashboard():
+    """El panel «Monitor performance» muestra sus secciones y KPIs de analítica.
+
+    Los KPIs se renderizan como tarjetas HTML (no st.metric) para controlar la
+    jerarquía visual, así que se comprueban sobre el markdown renderizado junto
+    a los títulos de sección del panel.
+    """
     app = _run(NAV_CONTROL)
-    labels = [m.label for m in app.metric]
-    for expected in ("Sesiones", "Clics", "Reservas", "Ingresos", "ROI"):
-        assert expected in labels
+    rendered = " ".join(block.value for block in app.markdown)
+    # Secciones clave del panel de analítica turística.
+    for section in (
+        "KPIs principales",
+        "Rendimiento de recomendaciones",
+        "Mapa de interés turístico",
+        "Funnel de interacción",
+        "Saturación vs. interés",
+    ):
+        assert section in rendered, f"falta la sección «{section}»"
+    # KPIs principales presentes como tarjetas.
+    for kpi in ("Sesiones activas", "Recomendaciones", "Clics", "CTR"):
+        assert kpi in rendered, f"falta el KPI «{kpi}»"
 
 
 def test_recommender_view_degrades_without_endpoint():

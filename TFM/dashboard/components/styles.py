@@ -623,6 +623,84 @@ hr { border-color:rgba(17,24,39,.10)!important; }
 .offer--compact .offer-fact{padding:.6rem .45rem}
 .offer--compact .offer-fact-value{font-size:1.2rem}
 
+/* ==========================================================================
+   Monitor performance — panel de analítica turística.
+   Tarjetas limpias, esquinas rectangulares suaves (8px), pocos colores, sin
+   sombras fuertes ni animaciones llamativas. Reutiliza las variables de marca
+   TUI. El mapa de interés es el protagonista visual.
+   ========================================================================== */
+
+/* Cabecera de sección del panel: barrita de acento + título + subtítulo. */
+.mp-section{margin:1.7rem 0 .7rem}
+.mp-section:first-of-type{margin-top:.4rem}
+.mp-section-title{font-size:1.02rem;font-weight:900;color:var(--tui-dark);letter-spacing:-.01em;
+  display:flex;align-items:center;gap:.55rem}
+.mp-section-title:before{content:"";width:4px;height:18px;background:var(--tui-red);border-radius:2px;flex:0 0 auto}
+.mp-section-sub{font-size:.76rem;color:var(--muted);margin:.28rem 0 0;line-height:1.45}
+
+/* Tarjeta base del panel: caja definida, borde suave, esquinas de 8px. */
+.mp-card{background:#fff;border:1px solid rgba(17,24,39,.10);border-radius:8px;
+  padding:.95rem 1.05rem;box-shadow:0 1px 2px rgba(17,24,39,.04)}
+
+/* --- Fila de KPIs --- */
+.mp-kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:.7rem;margin:.2rem 0 .3rem}
+.mp-kpi{background:#fff;border:1px solid rgba(17,24,39,.10);border-radius:8px;padding:.8rem .9rem;
+  display:flex;flex-direction:column;gap:.28rem;min-height:96px}
+.mp-kpi-label{font-size:.62rem;font-weight:900;letter-spacing:.05em;text-transform:uppercase;color:var(--muted)}
+.mp-kpi-value{font-size:1.62rem;font-weight:900;color:var(--tui-dark);line-height:1;letter-spacing:-.02em}
+.mp-kpi-value.mp-muted{font-size:.95rem;font-weight:700;color:var(--muted);letter-spacing:0}
+.mp-kpi-delta{font-size:.7rem;font-weight:700;display:inline-flex;align-items:center;gap:.28rem}
+.mp-delta-up{color:var(--success)}
+.mp-delta-down{color:var(--error)}
+.mp-delta-flat{color:var(--muted)}
+.mp-kpi-foot{font-size:.66rem;color:var(--muted);line-height:1.35}
+.mp-kpi-na{font-size:.68rem;color:var(--muted);font-style:italic;line-height:1.4}
+
+/* --- Barras de ranking (destinos por interés) --- */
+.mp-rank{display:flex;flex-direction:column;gap:.55rem}
+.mp-rank-row{display:grid;grid-template-columns:26px 1fr auto;align-items:center;gap:.7rem}
+.mp-rank-pos{font-size:.78rem;font-weight:900;color:var(--muted);text-align:center}
+.mp-rank-pos.mp-top{color:var(--tui-red)}
+.mp-rank-main{min-width:0}
+.mp-rank-name{font-size:.82rem;font-weight:700;color:var(--tui-dark);display:flex;justify-content:space-between;gap:.6rem;margin-bottom:.22rem}
+.mp-rank-name .mp-rank-metric{color:var(--tui-dark);font-weight:900}
+.mp-rank-track{height:8px;border-radius:3px;background:#EEF1F5;overflow:hidden}
+.mp-rank-fill{height:100%;border-radius:3px;background:var(--tui-red)}
+.mp-rank-tag{font-size:.64rem;color:var(--muted);font-weight:600;white-space:nowrap}
+.mp-rank-sub{font-size:.66rem;color:var(--muted);margin-top:.18rem}
+
+/* --- Funnel --- */
+.mp-funnel{display:flex;flex-direction:column;gap:.5rem}
+.mp-funnel-step{background:#fff;border:1px solid rgba(17,24,39,.10);border-radius:6px;padding:.6rem .8rem}
+.mp-funnel-bar{height:100%;border-radius:5px}
+.mp-funnel-head{display:flex;justify-content:space-between;align-items:baseline;gap:.6rem}
+.mp-funnel-label{font-size:.78rem;font-weight:700;color:var(--tui-dark)}
+.mp-funnel-value{font-size:.95rem;font-weight:900;color:var(--tui-dark)}
+.mp-funnel-pct{font-size:.72rem;font-weight:700;color:var(--muted)}
+.mp-funnel-track{height:10px;border-radius:3px;background:#EEF1F5;overflow:hidden;margin-top:.4rem}
+.mp-funnel-track .mp-funnel-fill{height:100%;border-radius:3px;background:var(--tui-red)}
+.mp-funnel-drop{font-size:.66rem;color:var(--muted);margin-top:.28rem}
+.mp-funnel-pending{font-size:.7rem;color:var(--muted);font-style:italic;margin-top:.5rem;line-height:1.45}
+
+/* --- Cuadrante interés vs saturación --- */
+.mp-quad-legend{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.55rem;margin-top:.6rem}
+.mp-quad-item{border:1px solid rgba(17,24,39,.10);border-radius:6px;padding:.55rem .7rem;background:#fff}
+.mp-quad-name{font-size:.72rem;font-weight:900;color:var(--tui-dark)}
+.mp-quad-desc{font-size:.66rem;color:var(--muted);margin-top:.15rem;line-height:1.4}
+.mp-quad-dests{font-size:.68rem;color:var(--tui-dark);margin-top:.3rem;font-weight:600;line-height:1.4}
+
+/* --- Tabla de detalle del mapa / potencial --- */
+.mp-note{font-size:.72rem;color:var(--muted);line-height:1.45;margin:.4rem 0 0}
+.mp-badge{display:inline-flex;align-items:center;font-size:.62rem;font-weight:800;letter-spacing:.02em;
+  border-radius:5px;padding:.2rem .5rem;background:var(--tui-red-soft);color:var(--tui-red-deep)}
+.mp-badge-ok{background:#DDF3E9;color:#116947}
+.mp-badge-warn{background:#FFF0CC;color:#8D5D00}
+.mp-badge-neutral{background:#EEF1F5;color:#475467}
+
+/* Los botones de criterio del ranking y de periodo mantienen el estilo TUI,
+   pero rectangulares (no píldora) dentro del panel. */
+.mp-scope div.stButton > button{border-radius:8px;min-height:2.4rem}
+
 </style>
 """
 

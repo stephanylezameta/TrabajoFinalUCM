@@ -11,6 +11,7 @@ import unicodedata
 from components.assets import SCENARIO_ICON_URLS, get_local_destination_image
 from services import price_lookup
 from services import recommendation_api_service as reco
+from services.click_tracking import build_click_href
 from services.tracking_service import register_event
 from views.recommender_chat import render_recommender_chat
 
@@ -568,7 +569,16 @@ def _render_hero(row: dict, payload: dict, compact: bool = False) -> None:
         )
     parts.append('</div>')
 
-    parts.append('<a class="offer-cta" href="https://es.tui.com/es/" target="_blank" rel="noopener noreferrer">Ver opciones</a>')
+    cta_href = build_click_href(
+        name,
+        recommendation_id=_current_recommendation_id(),
+        position=1,
+        origin="destacada",
+    )
+    parts.append(
+        f'<a class="offer-cta" href="{escape(cta_href, quote=True)}" '
+        'target="_self" rel="noopener noreferrer">Ver opciones</a>'
+    )
     parts.append('</div>')  # body
     parts.append('</div>')  # offer
 
@@ -648,7 +658,16 @@ def _card_html(row: dict, idx: int, compact: bool = False, payload: dict | None 
                 + "".join(f'<span class="reco-place-item">{escape(s)}</span>' for s in strengths[:2])
                 + '</div>'
             )
-        parts.append('<a class="reco-cta" href="https://es.tui.com/es/" target="_blank" rel="noopener noreferrer">Ver opciones</a>')
+        cta_href = build_click_href(
+            name,
+            recommendation_id=_current_recommendation_id(),
+            position=idx + 1,
+            origin="alternativa",
+        )
+        parts.append(
+            f'<a class="reco-cta" href="{escape(cta_href, quote=True)}" '
+            'target="_self" rel="noopener noreferrer">Ver opciones</a>'
+        )
 
     parts.append('</div>')  # cierra body
     parts.append('</div>')  # cierra card
@@ -779,6 +798,7 @@ def _run(payload: dict, is_custom: bool) -> dict:
     st.session_state[STATE_CUSTOM] = is_custom
 
     form = payload.get("_form") or {}
+    origin = "formulario" if is_custom else "automatica"
     register_event(
         st.session_state.session_id,
         "recommendation_request",
@@ -786,7 +806,7 @@ def _run(payload: dict, is_custom: bool) -> dict:
         metadata={
             "ok": bool(result.get("ok")),
             "error_kind": result.get("error_kind"),
-            "origin": "formulario" if is_custom else "automatica",
+            "origin": origin,
             "interests": form.get("interests"),
             "categoria": form.get("categoria"),
             "presupuesto_max": form.get("presupuesto_max"),
@@ -795,7 +815,61 @@ def _run(payload: dict, is_custom: bool) -> dict:
             "engine_version": (result.get("engine") or {}).get("version"),
         },
     )
+    _track_recommendation_impressions(result, origin)
     return result
+
+
+def _current_recommendation_id() -> str:
+    """ID de la recomendación actualmente en sesión, para unir clics con
+    impresiones. Cadena vacía si aún no hay recomendación."""
+    result = st.session_state.get(STATE_KEY) or {}
+    return str(result.get("recommendation_id") or "")
+
+
+def _track_recommendation_impressions(result: dict, origin: str) -> None:
+    """Registra una impresión por cada destino que el modelo devuelve y que se
+    muestra al usuario en el ranking.
+
+    Instrumentación mínima añadida para poder medir el rendimiento real de las
+    recomendaciones en «Monitor performance»: qué destinos se recomiendan, en
+    qué posición y con qué puntuación. NO altera la lógica de recomendación; solo
+    observa su resultado. Es idempotente por (sesión + recommendation_id +
+    posición) gracias a ``dedupe_key``, así que un rerun de Streamlit que repinte
+    el mismo ranking no infla las cifras.
+    """
+    if not result.get("ok"):
+        return
+    ranking = result.get("ranking") or []
+    if not ranking:
+        return
+    recommendation_id = str(result.get("recommendation_id") or "")
+    session_id = st.session_state.get("session_id")
+    if not session_id:
+        return
+    for position, row in enumerate(ranking, start=1):
+        destination = (row.get("destination") or {}).get("name")
+        if not destination:
+            continue
+        try:
+            score = row.get("recommendation_score")
+            score = round(float(score), 4) if score is not None else None
+        except (TypeError, ValueError):
+            score = None
+        register_event(
+            session_id,
+            "recommendation_impression",
+            VIEW_LABEL,
+            destination=str(destination),
+            metadata={
+                "position": position,
+                "score": score,
+                "origin": origin,
+                "recommendation_id": recommendation_id,
+            },
+            # Una misma recomendación (mismo id) muestra el mismo destino en la
+            # misma posición una sola vez por sesión: los reruns no duplican.
+            dedupe_key=f"reco_impression:{recommendation_id}:{position}:{destination}",
+        )
 
 
 def _autorun_if_needed() -> None:

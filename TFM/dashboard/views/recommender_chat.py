@@ -8,6 +8,7 @@ import streamlit.components.v1 as components
 
 from components.assets import get_local_destination_image
 from services import recommendation_api_service as reco
+from services.tracking_service import register_event
 
 CHAT_HISTORY_KEY = "reco_chat_history"
 # Historial y sesión que mantiene la propia API /chat (formato del backend,
@@ -257,6 +258,7 @@ def _responder_asistente(mensaje_usuario: str) -> dict:
         reco_result = _alinear_con_texto(reco_result, respuesta.get("respuesta") or "")
         st.session_state[RECO_STATE_KEY] = reco_result
         st.session_state[RECO_STATE_CUSTOM] = True
+        _track_chat_impressions(reco_result)
     else:
         # El turno NO trajo un ranking del catálogo (el agente solo hizo una
         # pregunta de perfilado o habló de destinos fuera del catálogo cerrado).
@@ -267,6 +269,40 @@ def _responder_asistente(mensaje_usuario: str) -> dict:
         st.session_state.pop(RECO_STATE_KEY, None)
 
     return {"texto": respuesta["respuesta"], "tarjetas": []}
+
+
+def _track_chat_impressions(reco_result: dict) -> None:
+    """Registra una impresión por cada destino que el asistente propone en el
+    chat, igual que hace el modo filtros. Instrumentación mínima para «Monitor
+    performance»; no toca la lógica de recomendación. Idempotente por sesión +
+    recommendation_id + posición."""
+    ranking = reco_result.get("ranking") or []
+    session_id = st.session_state.get("session_id")
+    if not ranking or not session_id:
+        return
+    recommendation_id = str(reco_result.get("recommendation_id") or "")
+    for position, row in enumerate(ranking, start=1):
+        destination = (row.get("destination") or {}).get("name")
+        if not destination:
+            continue
+        try:
+            score = row.get("recommendation_score")
+            score = round(float(score), 4) if score is not None else None
+        except (TypeError, ValueError):
+            score = None
+        register_event(
+            session_id,
+            "recommendation_impression",
+            "TUI Travel Assistant",
+            destination=str(destination),
+            metadata={
+                "position": position,
+                "score": score,
+                "origin": "asistente",
+                "recommendation_id": recommendation_id,
+            },
+            dedupe_key=f"reco_impression:{recommendation_id}:{position}:{destination}",
+        )
 
 
 def _alinear_con_texto(reco_result: dict, texto_chat: str) -> dict:
