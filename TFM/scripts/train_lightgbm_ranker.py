@@ -1,3 +1,25 @@
+import os
+import subprocess
+import sys
+
+# PYTHONHASHSEED debe fijarse ANTES de que arranque el interprete -- no
+# alcanza con random.seed() ni con el parametro seed de LightGBM. Sin
+# esto, el orden de iteracion de los `set` de Python (usados al armar
+# las vecindades de accesibilidad/impacto_local para el muestreo de
+# negativos) varia entre corridas aunque RANDOM_SEED este fijo,
+# haciendo que el modelo NO sea reproducible de verdad -- confirmado
+# el 15/09: con PYTHONHASHSEED fijo, dos corridas identicas dan
+# Precision@10/NDCG@10 EXACTOS (0.6285/0.4540 en ambas), algo que
+# antes no pasaba. Si la variable no esta fijada, se relanza el script
+# una vez como subproceso con ella ya puesta (os.execv es poco fiable
+# en Windows con rutas que tienen espacios, por eso subprocess en vez
+# de reemplazar el proceso actual).
+if os.environ.get("PYTHONHASHSEED") != "0":
+    env = os.environ.copy()
+    env["PYTHONHASHSEED"] = "0"
+    resultado = subprocess.run([sys.executable] + sys.argv, env=env)
+    sys.exit(resultado.returncode)
+
 """
 Entrena un modelo de ranking con LightGBM (objective=lambdarank) sobre
 las reservas reales de customer_bookings, usando como features tanto
@@ -38,6 +60,7 @@ from recommendation.run_recommendation import (  # noqa: E402
     cargar_clima_por_destino,
     cargar_capacidad_sanitaria_por_destino,
     cargar_seguridad_criminalidad_por_destino,
+    cargar_precios_reales_por_destino,
 )
 # NOTA (fix de fuga de datos): diversificacion, temporada_baja e
 # impacto_local NO se reutilizan de run_recommendation.py porque esas
@@ -67,7 +90,7 @@ PARAMS_LIGHTGBM_BASE = {
     "objective": "lambdarank",
     "metric": "ndcg",
     "ndcg_eval_at": [10],
-    "learning_rate": 0.05,
+    "learning_rate": 0.05,  
     "num_leaves": 15,
     "min_data_in_leaf": 20,
     "feature_fraction": 0.8,
@@ -92,6 +115,7 @@ FEATURE_NAMES = [
     "capacidad_sanitaria", "seguridad_criminalidad",
     "tiene_accesibilidad_real",
     "match_categoria_cliente", "diferencia_precio_habitual_cliente",
+    "precio_paquete_referencia_norm", "precio_paquete_es_real",
 ]
 
 
@@ -206,6 +230,12 @@ def construir_dataset(db_path: str):
     temp_confort, dias_secos, horas_sol = cargar_clima_por_destino(db_path)
     capacidad_sanitaria = cargar_capacidad_sanitaria_por_destino(db_path)
     seguridad_criminalidad = cargar_seguridad_criminalidad_por_destino(db_path)
+    # Precio real de paquete completo por destino (tabla independiente de
+    # customer_bookings -- sin riesgo de fuga, no requiere recalculo train-only).
+    precios_paquete_info = cargar_precios_reales_por_destino(db_path)
+    precio_paquete_norm = normalizar_dict(
+        {d: info["precio"] for d, info in precios_paquete_info.items()}
+    )
 
     precios = normalizar_dict({eid: e["price_eur"] for eid, e in experiencias.items()})
     duraciones = normalizar_dict({eid: e["duration_hrs"] for eid, e in experiencias.items()})
@@ -312,6 +342,7 @@ def construir_dataset(db_path: str):
         # internacionales -- sin esto el modelo trataria el 0.5 como un
         # valor medido real, no como "dato ausente".
         tiene_accesibilidad_real = 1.0 if destino in accesibilidad else 0.0
+        precio_paquete_es_real = 1.0 if precios_paquete_info.get(destino, {}).get("es_real") else 0.0
         return [
             precio_item,
             duraciones.get(experience_id, 0.5),
@@ -332,6 +363,8 @@ def construir_dataset(db_path: str):
             tiene_accesibilidad_real,
             match_categoria,
             diff_precio,
+            precio_paquete_norm.get(destino, 0.5),
+            precio_paquete_es_real,
         ]
 
     def perfil_cliente(bookings: list[dict]) -> tuple[str | None, float]:

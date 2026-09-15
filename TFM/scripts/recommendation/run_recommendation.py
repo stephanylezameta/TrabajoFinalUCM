@@ -86,11 +86,12 @@ def get_reranker() -> ReRankingEngine:
     return _RERANKER
 
 
-def get_lightgbm(metadata: dict) -> dict:
+def get_lightgbm(metadata: dict, precios_paquete_info: dict) -> dict:
     """Devuelve el modelo LightGBM y los diccionarios normalizados de precio,
     duracion, rating y numero de reseñas (features del ranker), calculados una
     sola vez. Estructura:
-        {"model", "feature_names", "precios", "duraciones", "ratings", "reviews"}
+        {"model", "feature_names", "precios", "duraciones", "ratings", "reviews",
+         "precio_paquete_norm"}
     ``model`` es None si el modelo entrenado todavia no existe en disco."""
     global _LIGHTGBM_CACHE
     if _LIGHTGBM_CACHE is None:
@@ -100,13 +101,17 @@ def get_lightgbm(metadata: dict) -> dict:
             duraciones = normalizar_dict({eid: m["duration_hrs"] for eid, m in metadata.items()})
             ratings = normalizar_dict({eid: m["rating"] for eid, m in metadata.items()})
             reviews = normalizar_dict({eid: m["review_count"] for eid, m in metadata.items()})
+            precio_paquete_norm = normalizar_dict(
+                {d: info["precio"] for d, info in precios_paquete_info.items()}
+            )
         else:
-            precios = duraciones = ratings = reviews = {}
+            precios = duraciones = ratings = reviews = precio_paquete_norm = {}
         _LIGHTGBM_CACHE = {
             "model": modelo_lgbm,
             "feature_names": feature_names_lgbm,
             "precios": precios,
             "duraciones": duraciones,
+            "precio_paquete_norm": precio_paquete_norm,
             "ratings": ratings,
             "reviews": reviews,
         }
@@ -162,7 +167,7 @@ def precargar_recursos(db_path: str = "data/tui_recomendador.db") -> None:
     get_tdrs_calculator()
     get_reranker()
     datos = get_datos_destino(db_path)
-    get_lightgbm(datos["metadata"])
+    get_lightgbm(datos["metadata"], datos["precios_reales"])
     get_indice_oportunidades()
 
 
@@ -942,6 +947,7 @@ def calcular_candidato(
     temp_confort_por_destino: dict, dias_secos_por_destino: dict, horas_sol_por_destino: dict,
     capacidad_sanitaria_por_destino: dict, seguridad_criminalidad_por_destino: dict,
     modelo_lgbm, precios: dict, duraciones: dict, ratings: dict, reviews: dict,
+    precio_paquete_norm: dict, precios_paquete_info: dict,
     tdrs_calc: TDRSCalculator,
 ) -> tuple[dict, dict]:
     """Logica de scoring de UN candidato: mezcla de las 3 señales de
@@ -990,6 +996,7 @@ def calcular_candidato(
         # cliente conocido, se usan valores neutros (0.0 = sin
         # coincidencia de categoria, 0.5 = sin diferencia de precio
         # respecto a un habito desconocido).
+        precio_paquete_es_real = 1.0 if precios_paquete_info.get(destino, {}).get("es_real") else 0.0
         features = [[
             precios.get(id_paq, 0.5),
             duraciones.get(id_paq, 0.5),
@@ -1010,6 +1017,8 @@ def calcular_candidato(
             tiene_accesibilidad_real,
             0.0,
             0.5,
+            precio_paquete_norm.get(destino, 0.5),
+            precio_paquete_es_real,
         ]]
         score_lgbm = float(modelo_lgbm.predict(features)[0])
         afinidad_lgbm = 1 / (1 + np.exp(-score_lgbm))
@@ -1140,7 +1149,8 @@ def recomendar(
     datos_humanos_por_destino = datos["datos_humanos"]
     tdrs_calc = get_tdrs_calculator()
 
-    lgbm = get_lightgbm(metadata)
+    precios_reales_por_destino = datos["precios_reales"]
+    lgbm = get_lightgbm(metadata, precios_reales_por_destino)
     modelo_lgbm = lgbm["model"]
     precios = lgbm["precios"]
     duraciones = lgbm["duraciones"]
@@ -1152,8 +1162,6 @@ def recomendar(
     else:
         print("   -> Modelo LightGBM no encontrado (correr train_lightgbm_ranker.py "
               "primero); usando afinidad por coseno solamente.")
-
-    precios_reales_por_destino = datos["precios_reales"]
 
     def _pasa_filtros(id_paq, destino, meta, filtros_activos):
         if id_paq in excluir_ids:
@@ -1195,7 +1203,9 @@ def recomendar(
                 impacto_local_por_destino, sentimiento_por_destino,
                 temp_confort_por_destino, dias_secos_por_destino, horas_sol_por_destino,
                 capacidad_sanitaria_por_destino, seguridad_criminalidad_por_destino,
-                modelo_lgbm, precios, duraciones, ratings, reviews, tdrs_calc,
+                modelo_lgbm, precios, duraciones, ratings, reviews,
+                lgbm.get("precio_paquete_norm", {}), precios_reales_por_destino,
+                tdrs_calc,
             )
             # Datos humanos: valores reales para mostrar en el dashboard
             # (% dias soleados, pasajeros/año, etc.), separados de los
