@@ -575,14 +575,14 @@ def _render_hero(row: dict, payload: dict, compact: bool = False) -> None:
         position=1,
         origin="destacada",
     )
-    parts.append(
-        f'<a class="offer-cta" href="{escape(cta_href, quote=True)}" '
-        'target="_blank" rel="noopener noreferrer">Ver opciones</a>'
-    )
     parts.append('</div>')  # body
     parts.append('</div>')  # offer
 
     st.markdown("".join(parts), unsafe_allow_html=True)
+    # CTA nativa: st.link_button abre el enlace externo en una pestaña nueva de
+    # forma fiable también en Streamlit Cloud (un <a target="_blank"> dentro de
+    # st.markdown se cargaba dentro del iframe de la app y TUI lo rechazaba).
+    st.link_button("Ver opciones", cta_href, use_container_width=True)
 
 
 # --------------------------------------------------------------------------
@@ -609,24 +609,7 @@ def _card_html(row: dict, idx: int, compact: bool = False, payload: dict | None 
     place = _place(destination)
     typology = destination.get("primary_typology")
 
-    # Enlace de oferta de TUI para este destino. En modo compacto la tarjeta
-    # completa es clicable (envuelta en un <a>); en modo normal el enlace va en
-    # el botón «Ver opciones» del cuerpo.
-    cta_href = build_click_href(
-        name,
-        recommendation_id=_current_recommendation_id(),
-        position=idx + 1,
-        origin="alternativa",
-    )
-
-    if compact:
-        parts = [
-            f'<a class="reco-card reco-card-link" '
-            f'href="{escape(cta_href, quote=True)}" '
-            'target="_blank" rel="noopener noreferrer">'
-        ]
-    else:
-        parts = ['<div class="reco-card">']
+    parts = ['<div class="reco-card">']
 
     # Banner: imagen a todo el ancho con el badge «Oferta TUI».
     parts.append('<div class="reco-photo-wrap">')
@@ -675,13 +658,13 @@ def _card_html(row: dict, idx: int, compact: bool = False, payload: dict | None 
                 + "".join(f'<span class="reco-place-item">{escape(s)}</span>' for s in strengths[:2])
                 + '</div>'
             )
-        parts.append(
-            f'<a class="reco-cta" href="{escape(cta_href, quote=True)}" '
-            'target="_blank" rel="noopener noreferrer">Ver opciones</a>'
-        )
+        # La CTA «Ver opciones» ya no va como <a> dentro del HTML: en Streamlit
+        # Cloud ese enlace se abría dentro del iframe de la app y TUI lo
+        # rechazaba. Se renderiza aparte con st.link_button (ver
+        # _render_alternatives), que abre pestaña nueva de forma fiable.
 
     parts.append('</div>')  # cierra body
-    parts.append('</a>' if compact else '</div>')  # cierra card
+    parts.append('</div>')  # cierra card
     return "".join(parts)
 
 
@@ -710,6 +693,22 @@ def _render_alternatives(result: dict, compact: bool = False) -> None:
         f'<div class="{title_cls}">Otras opciones que encajan</div>' + grid,
         unsafe_allow_html=True,
     )
+
+    # CTAs nativas «Ver opciones» debajo del grid, una por tarjeta. Se usa
+    # st.link_button (no un <a> en el HTML) porque en Streamlit Cloud el enlace
+    # embebido se abría dentro del iframe de la app y TUI rechazaba la conexión.
+    # Los botones se reparten en columnas para quedar alineados con las tarjetas.
+    cols = st.columns(len(cards))
+    for position, (col, row) in enumerate(zip(cols, cards)):
+        destino = (row.get("destination") or {})
+        nombre = str(destino.get("name") or "Destino")
+        href = build_click_href(
+            nombre,
+            recommendation_id=_current_recommendation_id(),
+            position=position + 2,
+            origin="alternativa",
+        )
+        col.link_button("Ver opciones", href, use_container_width=True)
 
     footer_bits = []
     if result.get("recommendation_id"):
@@ -1106,20 +1105,30 @@ def _render_random_placeholder() -> None:
             )
         else:
             img_html = f'<div class="reco-photo-fallback">{escape(nombre)}</div>'
-        cta_href = build_click_href(nombre, origin="inspirate")
         cards_html += (
             f'<div class="reco-card">'
             f'<div class="reco-photo-wrap">{img_html}</div>'
             f'<div class="reco-body">'
             f'<div class="reco-name">{escape(nombre)}</div>'
             f'<p class="reco-headline">{escape(headline)}</p>'
-            f'<a class="reco-cta" href="{escape(cta_href, quote=True)}" target="_blank" rel="noopener noreferrer">Ver opciones</a>'
             f'</div>'
             f'</div>'
         )
     st.markdown(
         '<div class="alt-title">Inspírate — destinos destacados</div>'
-        f'<div class="alt-grid">{cards_html}</div>'
+        f'<div class="alt-grid">{cards_html}</div>',
+        unsafe_allow_html=True,
+    )
+    # CTAs nativas debajo del grid (st.link_button abre pestaña nueva de forma
+    # fiable en Streamlit Cloud; un <a> embebido se abría dentro del iframe).
+    cols = st.columns(len(muestra))
+    for col, nombre in zip(cols, muestra):
+        col.link_button(
+            "Ver opciones",
+            build_click_href(nombre, origin="inspirate"),
+            use_container_width=True,
+        )
+    st.markdown(
         '<p style="font-size:.72rem;color:var(--muted);margin-top:.6rem">'
         '✦ Ajusta los filtros y pulsa <strong>Buscar destinos</strong> para ver recomendaciones personalizadas.'
         '</p>',
