@@ -587,34 +587,39 @@ def _render_hero(row: dict, payload: dict, compact: bool = False) -> None:
 # de componente (components.html NO hereda el CSS global de la app). Reproduce
 # el aspecto de .reco-card sin usar variables CSS (que tampoco existen ahí).
 _CARD_IFRAME_CSS = """
-.reco-card{position:relative;overflow:hidden;border-radius:22px;background:#fff;
+*{box-sizing:border-box}
+html,body{height:100%}
+.card-link{height:100%}
+.reco-card{position:relative;overflow:hidden;border-radius:18px;background:#fff;
+  width:100%;height:100%;
   border:1px solid rgba(17,24,39,.07);
   box-shadow:0 4px 14px rgba(17,24,39,.04),0 16px 36px -16px rgba(17,24,39,.16);
   display:flex;flex-direction:column;
   transition:transform .3s cubic-bezier(.16,1,.3,1),box-shadow .3s ease}
-.card-link:hover .reco-card{transform:translateY(-6px);
+.card-link:hover .reco-card{transform:translateY(-5px);
   box-shadow:0 10px 22px rgba(17,24,39,.07),0 32px 56px -18px rgba(17,24,39,.26)}
 .reco-photo-wrap{position:relative;width:100%;aspect-ratio:16/10;overflow:hidden;
-  background:#EEF2F6;display:block;line-height:0;border-radius:21px 21px 0 0}
+  background:#EEF2F6;display:block;line-height:0;border-radius:17px 17px 0 0;flex:0 0 auto}
 .reco-photo{width:100%!important;height:100%!important;object-fit:cover!important;
   object-position:center center;display:block!important;
   transition:transform .55s cubic-bezier(.16,1,.3,1)}
 .card-link:hover .reco-photo{transform:scale(1.08)}
 .reco-photo-fallback{width:100%;height:100%;display:flex;align-items:center;
   justify-content:center;background:linear-gradient(135deg,#243244,#3B4A5E);
-  color:#fff;font-weight:700;font-size:1.3rem}
-.reco-body{padding:1rem 1.15rem 1.15rem;display:flex;flex-direction:column;gap:.5rem;flex:1}
-.reco-name{font-size:1.2rem;font-weight:700;color:rgb(27 17 92);line-height:1.1}
-.reco-place{font-size:.74rem;color:#667085;font-weight:500}
-.reco-typology{align-self:flex-start;font-size:.6rem;font-weight:700;letter-spacing:.05em;
-  text-transform:uppercase;border-radius:999px;padding:.24rem .62rem;
+  color:#fff;font-weight:700;font-size:1.1rem;text-align:center;padding:.4rem}
+.reco-body{padding:.7rem .8rem .85rem;display:flex;flex-direction:column;gap:.4rem;flex:1 1 auto}
+.reco-name{font-size:1rem;font-weight:700;color:rgb(27 17 92);line-height:1.15;
+  word-break:break-word;hyphens:auto}
+.reco-place{font-size:.72rem;color:#667085;font-weight:500}
+.reco-typology{align-self:flex-start;font-size:.56rem;font-weight:700;letter-spacing:.04em;
+  text-transform:uppercase;border-radius:999px;padding:.2rem .55rem;
   background:#FDE8E9;color:#B3121A}
-.reco-headline{font-size:.85rem;color:#5B6472;line-height:1.5;margin:0}
-.reco-facts{display:flex;gap:.6rem;margin-top:.2rem}
-.reco-fact{flex:1;text-align:center;background:#F6F8FB;border-radius:12px;padding:.5rem .3rem}
-.reco-fact-value{font-size:1.05rem;font-weight:700;color:rgb(27 17 92)}
-.reco-fact-label{font-size:.56rem;color:#667085;text-transform:uppercase;letter-spacing:.03em}
-.reco-places{font-size:.78rem;color:rgb(27 17 92);font-weight:600;line-height:1.45}
+.reco-headline{font-size:.8rem;color:#5B6472;line-height:1.45;margin:0}
+.reco-facts{display:flex;gap:.4rem;margin-top:auto}
+.reco-fact{flex:1;text-align:center;background:#F6F8FB;border-radius:10px;padding:.4rem .2rem}
+.reco-fact-value{font-size:.95rem;font-weight:700;color:rgb(27 17 92)}
+.reco-fact-label{font-size:.5rem;color:#667085;text-transform:uppercase;letter-spacing:.02em;line-height:1.2}
+.reco-places{font-size:.74rem;color:rgb(27 17 92);font-weight:600;line-height:1.4}
 .reco-place-item:not(:last-child):after{content:", ";color:#667085}
 """
 
@@ -707,7 +712,9 @@ def _render_alternatives(result: dict, compact: bool = False) -> None:
     # un <a> embebido con st.markdown navegaba dentro del iframe de la app y TUI
     # rechazaba la conexión (X-Frame-Options). Se disponen en columnas (máximo 5
     # por fila) para mantener el aspecto de rejilla.
-    height = 300 if compact else 430
+    # Altura del iframe ajustada al contenido: compacto (solo imagen+nombre) es
+    # más bajo; normal incluye tipología, motivo y datos. Evita huecos grandes.
+    height = 235 if compact else 360
     per_row = min(len(cards), 5)
     for start in range(0, len(cards), per_row):
         fila = cards[start:start + per_row]
@@ -1134,7 +1141,10 @@ def _render_random_placeholder() -> None:
             f'</div>'
         )
         with col:
-            render_card_link(nombre, inner, height=300, extra_css=_CARD_IFRAME_CSS)
+            render_card_link(nombre, inner, height=300, extra_css=_CARD_IFRAME_CSS + """
+              .reco-headline{display:-webkit-box;-webkit-line-clamp:3;
+                -webkit-box-orient:vertical;overflow:hidden}
+            """)
     st.markdown(
         '<p style="font-size:.72rem;color:var(--muted);margin-top:.6rem">'
         '✦ Ajusta los filtros y pulsa <strong>Buscar destinos</strong> para ver recomendaciones personalizadas.'
