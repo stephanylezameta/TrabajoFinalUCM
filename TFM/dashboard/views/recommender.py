@@ -609,7 +609,7 @@ html,body{height:100%}
   color:#fff;font-weight:700;font-size:1.1rem;text-align:center;padding:.4rem}
 .reco-body{padding:.7rem .8rem .85rem;display:flex;flex-direction:column;gap:.4rem;flex:1 1 auto}
 .reco-name{font-size:1rem;font-weight:700;color:rgb(27 17 92);line-height:1.15;
-  word-break:break-word;hyphens:auto}
+  overflow-wrap:break-word}
 .reco-place{font-size:.72rem;color:#667085;font-weight:500}
 .reco-typology{align-self:flex-start;font-size:.56rem;font-weight:700;letter-spacing:.04em;
   text-transform:uppercase;border-radius:999px;padding:.2rem .55rem;
@@ -710,12 +710,18 @@ def _render_alternatives(result: dict, compact: bool = False) -> None:
     # oferta de TUI en pestaña nueva. Se renderiza con render_card_link (iframe
     # de componente), lo único que deriva de forma fiable en Streamlit Cloud:
     # un <a> embebido con st.markdown navegaba dentro del iframe de la app y TUI
-    # rechazaba la conexión (X-Frame-Options). Se disponen en columnas (máximo 5
-    # por fila) para mantener el aspecto de rejilla.
-    # Altura del iframe ajustada al contenido: compacto (solo imagen+nombre) es
-    # más bajo; normal incluye tipología, motivo y datos. Evita huecos grandes.
-    height = 235 if compact else 360
-    per_row = min(len(cards), 5)
+    # rechazaba la conexión (X-Frame-Options).
+    #
+    # En modo compacto (Explora: las alternativas ocupan solo la MITAD derecha
+    # de la pantalla) se usan 2 columnas por fila para que las tarjetas no queden
+    # tan estrechas que corten el nombre. La altura se ajusta al contenido real
+    # (imagen + nombre) para no dejar huecos.
+    if compact:
+        height = 200
+        per_row = min(len(cards), 2)
+    else:
+        height = 360
+        per_row = min(len(cards), 5)
     for start in range(0, len(cards), per_row):
         fila = cards[start:start + per_row]
         cols = st.columns(per_row)
