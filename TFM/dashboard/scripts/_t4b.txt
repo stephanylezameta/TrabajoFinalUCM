@@ -1,0 +1,154 @@
+﻿
+E       AssertionError: TUI Travel Assistant: 
+['Exception(message="name \'func_name\' is not 
+defined", stack_trace=[\'File "C:\\\\Users\\\\St
+eph\\\\AppData\\\\Local\\\\Temp\\\\tmpu_kdv3ct\\
+\\33c370b4c952135c82dbf14230a2ba78", line 13, 
+in <module>\\n    _script(*__args, 
+**__kwargs)\\n    
+~~~~~~~^^^^^^^^^^^^^^^^^^^^^\', \'File "C:\\\\Us
+ers\\\\Steph\\\\AppData\\\\Local\\\\Temp\\\\tmpu
+_kdv3ct\\\\33c370b4c952135c82dbf14230a2ba78", 
+line 11, in _script\\n    getattr(app, 
+func_name)()\\n                 ^^^^^^^^^\'])']
+tests\test_app_smoke.py:92: AssertionError
+  File "D:\Master\TrabajoFinalUCM\TFM\dashboard\
+.venv\Lib\site-packages\streamlit\runtime\script
+runner\exec_code.py", line 136, in 
+exec_func_with_error_handling
+NameError: name 'func_name' is not defined
+ERROR    streamlit.error_util:error_util.py:112 
+Uncaught app execution
+  File "D:\Master\TrabajoFinalUCM\TFM\dashboard\
+.venv\Lib\site-packages\streamlit\runtime\script
+runner\exec_code.py", line 136, in 
+exec_func_with_error_handling
+NameError: name 'func_name' is not defined
+E       AssertionError: Explora: 
+['Exception(message="name \'func_name\' is not 
+defined", stack_trace=[\'File "C:\\\\Users\\\\St
+eph\\\\AppData\\\\Local\\\\Temp\\\\tmpu_kdv3ct\\
+\\33c370b4c952135c82dbf14230a2ba78", line 13, 
+in <module>\\n    _script(*__args, 
+**__kwargs)\\n    
+~~~~~~~^^^^^^^^^^^^^^^^^^^^^\', \'File "C:\\\\Us
+ers\\\\Steph\\\\AppData\\\\Local\\\\Temp\\\\tmpu
+_kdv3ct\\\\33c370b4c952135c82dbf14230a2ba78", 
+line 11, in _script\\n    getattr(app, 
+func_name)()\\n                 ^^^^^^^^^\'])']
+tests\test_app_smoke.py:92: AssertionError
+  File "D:\Master\TrabajoFinalUCM\TFM\dashboard\
+.venv\Lib\site-packages\streamlit\runtime\script
+runner\exec_code.py", line 136, in 
+exec_func_with_error_handling
+NameError: name 'func_name' is not defined
+ERROR    streamlit.error_util:error_util.py:112 
+Uncaught app execution
+  File "D:\Master\TrabajoFinalUCM\TFM\dashboard\
+.venv\Lib\site-packages\streamlit\runtime\script
+runner\exec_code.py", line 136, in 
+exec_func_with_error_handling
+NameError: name 'func_name' is not defined
+E       AssertionError: Monitor performance : 
+['Exception(message="name \'func_name\' is not 
+defined", stack_trace=[\'File "C:\\\\Users\\\\St
+eph\\\\AppData\\\\Local\\\\Temp\\\\tmpu_kdv3ct\\
+\\33c370b4c952135c82dbf14230a2ba78", line 13, 
+in <module>\\n    _script(*__args, 
+**__kwargs)\\n    
+~~~~~~~^^^^^^^^^^^^^^^^^^^^^\', \'File "C:\\\\Us
+ers\\\\Steph\\\\AppData\\\\Local\\\\Temp\\\\tmpu
+_kdv3ct\\\\33c370b4c952135c82dbf14230a2ba78", 
+line 11, in _script\\n    getattr(app, 
+func_name)()\\n                 ^^^^^^^^^\'])']
+tests\test_app_smoke.py:92: AssertionError
+  File "D:\Master\TrabajoFinalUCM\TFM\dashboard\
+.venv\Lib\site-packages\streamlit\runtime\script
+runner\exec_code.py", line 136, in 
+exec_func_with_error_handling
+NameError: name 'func_name' is not defined
+ERROR    streamlit.error_util:error_util.py:112 
+Uncaught app execution
+  File "D:\Master\TrabajoFinalUCM\TFM\dashboard\
+.venv\Lib\site-packages\streamlit\runtime\script
+runner\exec_code.py", line 136, in 
+exec_func_with_error_handling
+NameError: name 'func_name' is not defined
+E           AssertionError: falta la secci├│n 
+┬½KPIs principales┬╗
+tests\test_app_smoke.py:111: AssertionError
+  File "D:\Master\TrabajoFinalUCM\TFM\dashboard\
+.venv\Lib\site-packages\streamlit\runtime\script
+runner\exec_code.py", line 136, in 
+exec_func_with_error_handling
+NameError: name 'func_name' is not defined
+ERROR    streamlit.error_util:error_util.py:112 
+Uncaught app execution
+  File "D:\Master\TrabajoFinalUCM\TFM\dashboard\
+.venv\Lib\site-packages\streamlit\runtime\script
+runner\exec_code.py", line 136, in 
+exec_func_with_error_handling
+NameError: name 'func_name' is not defined
+tests\test_app_smoke.py:120: AssertionError
+  File "D:\Master\TrabajoFinalUCM\TFM\dashboard\
+.venv\Lib\site-packages\streamlit\runtime\script
+runner\exec_code.py", line 136, in 
+exec_func_with_error_handling
+NameError: name 'func_name' is not defined
+ERROR    streamlit.error_util:error_util.py:112 
+Uncaught app execution
+  File "D:\Master\TrabajoFinalUCM\TFM\dashboard\
+.venv\Lib\site-packages\streamlit\runtime\script
+runner\exec_code.py", line 136, in 
+exec_func_with_error_handling
+NameError: name 'func_name' is not defined
+E       AssertionError: 
+['Exception(message="name \'func_name\' is not 
+defined", stack_trace=[\'File "C:\\\\Users\\\\St
+eph\\\\AppData\\\\Local...c370b4c952135c82dbf142
+30a2ba78", line 11, in _script\
+tests\test_app_smoke.py:148: AssertionError
+  File "D:\Master\TrabajoFinalUCM\TFM\dashboard\
+.venv\Lib\site-packages\streamlit\runtime\script
+runner\exec_code.py", line 136, in 
+exec_func_with_error_handling
+NameError: name 'func_name' is not defined
+ERROR    streamlit.error_util:error_util.py:112 
+Uncaught app execution
+  File "D:\Master\TrabajoFinalUCM\TFM\dashboard\
+.venv\Lib\site-packages\streamlit\runtime\script
+runner\exec_code.py", line 136, in 
+exec_func_with_error_handling
+NameError: name 'func_name' is not defined
+E       IndexError: list index out of range
+.venv\Lib\site-packages\streamlit\testing\v1\ele
+ment_tree.py:254: IndexError
+  File "D:\Master\TrabajoFinalUCM\TFM\dashboard\
+.venv\Lib\site-packages\streamlit\runtime\script
+runner\exec_code.py", line 136, in 
+exec_func_with_error_handling
+NameError: name 'func_name' is not defined
+ERROR    streamlit.error_util:error_util.py:112 
+Uncaught app execution
+  File "D:\Master\TrabajoFinalUCM\TFM\dashboard\
+.venv\Lib\site-packages\streamlit\runtime\script
+runner\exec_code.py", line 136, in 
+exec_func_with_error_handling
+NameError: name 'func_name' is not defined
+FAILED tests/test_app_smoke.py::test_every_view_
+renders_without_exception[TUI Travel Assistant]
+FAILED tests/test_app_smoke.py::test_every_view_
+renders_without_exception[Explora]
+FAILED tests/test_app_smoke.py::test_every_view_
+renders_without_exception[Monitor performance ]
+FAILED tests/test_app_smoke.py::test_control_web
+_shows_performance_dashboard
+FAILED tests/test_app_smoke.py::test_recommender
+_view_degrades_without_endpoint
+FAILED tests/test_app_smoke.py::test_recommender
+_shows_visible_recommendation
+FAILED tests/test_app_smoke.py::test_recommender
+_form_offers_documented_vocabulary
+7 failed, 2 passed in 6.24s
+
+

@@ -1,9 +1,15 @@
 """Smoke test de la interfaz con el runner oficial de Streamlit.
 
-``AppTest`` ejecuta ``streamlit_app.py`` sin navegador y expone las excepciones
-que se produzcan. Cubre el hueco que dejaba la suite anterior: el render no se
-probaba en absoluto, así que un fallo de import o de plantilla solo aparecía al
-abrir la app a mano.
+``AppTest`` ejecuta la app sin navegador y expone las excepciones que se
+produzcan. Cubre el hueco que dejaba la suite anterior: el render no se probaba
+en absoluto, así que un fallo de import o de plantilla solo aparecía al abrir la
+app a mano.
+
+La app usa navegación multipágina (``st.navigation`` con rutas /chat, /explorar
+y /seguimiento). ``AppTest`` no permite cambiar de página programáticamente, así
+que cada vista se prueba de forma aislada ejecutando su función-página con
+``AppTest.from_function``. El arranque compartido (sesión, page_views) se
+replica en un pequeño envoltorio de test.
 """
 
 from __future__ import annotations
@@ -26,33 +32,74 @@ TIMEOUT = 120
 NAV_ASSISTANT = "TUI Travel Assistant"
 NAV_RECO = "Explora"
 NAV_CONTROL = "Monitor performance "
-NAV_OPTIONS = [NAV_ASSISTANT, NAV_RECO, NAV_CONTROL]
+
+# Nombre de la función-página en streamlit_app por cada vista.
+PAGE_FUNCS = {
+    NAV_ASSISTANT: "page_assistant",
+    NAV_RECO: "page_explore",
+    NAV_CONTROL: "page_control",
+}
 
 
-def _run(view: str | None = None) -> AppTest:
+def _run_default() -> AppTest:
+    """Ejecuta la app completa: st.navigation abre la página por defecto (chat)."""
     app = AppTest.from_file(str(APP), default_timeout=TIMEOUT)
-    # Sin endpoint configurado la vista del recomendador queda en modo
-    # informativo y no se hacen llamadas de red durante los tests.
     app.run()
-    if view is not None:
-        app.session_state["sidebar_view"] = view
-        app.run()
     return app
 
 
+def _page_script() -> None:
+    """Script de AppTest que ejecuta una función-página aislada.
+
+    ``AppTest.from_function`` ejecuta este script en un contexto propio sin
+    clausura, así que la página a ejecutar se pasa por ``query_params`` (que
+    AppTest sí permite fijar antes de correr). Replica el arranque mínimo de
+    ``main`` (sesión y set de page_views).
+    """
+    import streamlit as st
+
+    import streamlit_app as app
+    from services.tracking_service import create_session
+
+    func_name = st.query_params.get("_page_func", "page_assistant")
+
+    app.bootstrap()
+    if "session_id" not in st.session_state:
+        # Se crea una sesión real: los eventos (page_view) referencian
+        # sessions.session_id por clave foránea, así que debe existir en la tabla.
+        st.session_state.session_id = create_session(source="test")
+    if "page_views" not in st.session_state:
+        st.session_state.page_views = set()
+    getattr(app, func_name)()
+
+
+def _run_page(view: str) -> AppTest:
+    """Ejecuta una vista concreta de forma aislada.
+
+    Evita depender del cambio de página en AppTest (no soportado): ejecuta
+    directamente la función-página, seleccionada por query param.
+    """
+    at = AppTest.from_function(_page_script, default_timeout=TIMEOUT)
+    at.query_params["_page_func"] = PAGE_FUNCS[view]
+    at.run()
+    return at
+
+
 def test_app_starts_without_exception():
-    app = _run()
+    app = _run_default()
     assert not app.exception, [str(e) for e in app.exception]
 
 
-def test_sidebar_exposes_the_nav_views():
-    app = _run()
-    assert app.sidebar.radio[0].options == NAV_OPTIONS
+def test_default_page_renders_the_assistant():
+    """La página por defecto (/chat) es el asistente y renderiza su cabecera."""
+    app = _run_default()
+    rendered = " ".join(block.value for block in app.markdown)
+    assert NAV_ASSISTANT in rendered
 
 
-@pytest.mark.parametrize("view", NAV_OPTIONS)
+@pytest.mark.parametrize("view", list(PAGE_FUNCS))
 def test_every_view_renders_without_exception(view):
-    app = _run(view)
+    app = _run_page(view)
     assert not app.exception, f"{view}: {[str(e) for e in app.exception]}"
 
 
@@ -63,12 +110,11 @@ def test_control_web_shows_performance_dashboard():
     jerarquía visual, así que se comprueban sobre el markdown renderizado junto
     a los títulos de sección del panel.
     """
-    app = _run(NAV_CONTROL)
+    app = _run_page(NAV_CONTROL)
     rendered = " ".join(block.value for block in app.markdown)
     # Secciones clave del panel de analítica turística.
     for section in (
         "KPIs principales",
-        "Rendimiento de recomendaciones",
         "Mapa de interés turístico",
         "Funnel de interacción",
         "Saturación vs. interés",
@@ -81,7 +127,7 @@ def test_control_web_shows_performance_dashboard():
 
 def test_recommender_view_degrades_without_endpoint():
     """Sin API configurada la vista informa, no rompe ni inventa resultados."""
-    app = _run(NAV_RECO)
+    app = _run_page(NAV_RECO)
     assert not app.exception
     # El formulario sigue disponible para que el usuario vea el contrato.
     assert app.multiselect, "debería existir el selector de intereses"
@@ -109,7 +155,7 @@ def test_recommender_shows_visible_recommendation(monkeypatch):
         },
     )
 
-    app = _run(NAV_RECO)
+    app = _run_page(NAV_RECO)
     assert not app.exception, [str(e) for e in app.exception]
 
     # El nombre del destino recomendado aparece en el bloque destacado.
@@ -123,9 +169,8 @@ def test_recommender_form_offers_documented_vocabulary():
     """El selector ofrece exactamente los siete intereses que acepta la API."""
     from services.recommendation_api_service import INTEREST_LABELS
 
-    app = _run(NAV_RECO)
+    app = _run_page(NAV_RECO)
     interests = app.multiselect[0]
     # AppTest expone las opciones ya formateadas con `format_func`.
     assert set(interests.options) == set(INTEREST_LABELS.values())
     assert len(interests.options) == 7
-

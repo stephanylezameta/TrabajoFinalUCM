@@ -1,0 +1,25 @@
+﻿`st.components.v1.html` will be removed after 2026-06-01.
+WARNING  streamlit.deprecation_util:deprecation_util.py:81 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+WARNING  streamlit.deprecation_util:deprecation_util.py:81 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+WARNING  streamlit.deprecation_util:deprecation_util.py:81 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+WARNING  streamlit.deprecation_util:deprecation_util.py:81 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+WARNING  streamlit.deprecation_util:deprecation_util.py:81 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+WARNING  streamlit.deprecation_util:deprecation_util.py:81 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+WARNING  streamlit.deprecation_util:deprecation_util.py:81 Please replace `st.components.v1.html` with `st.iframe`.
+
+`st.components.v1.html` will be removed after 2026-06-01.
+=========================== short test summary info ===========================
+FAILED tests/test_app_smoke.py::test_sidebar_exposes_the_nav_views - IndexErr...
+1 failed in 4.39s

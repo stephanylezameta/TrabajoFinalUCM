@@ -92,6 +92,35 @@ def render_sidebar_brand() -> None:
     )
 
 
+def _track_page_view(view: str) -> None:
+    """Registra la visita a una vista una sola vez por sesión (dedupe)."""
+    if view not in st.session_state.page_views:
+        register_event(
+            st.session_state.session_id,
+            "page_view",
+            view,
+            dedupe_key=f"page_view:{view}",
+        )
+        st.session_state.page_views.add(view)
+
+
+# Páginas de navegación. Cada una registra su page_view y delega en la vista
+# correspondiente. Los títulos coinciden con las etiquetas históricas del menú.
+def page_assistant() -> None:
+    _track_page_view(NAV_ASSISTANT)
+    render_assistant_chat_view()
+
+
+def page_explore() -> None:
+    _track_page_view(NAV_RECO)
+    render_recommender()
+
+
+def page_control() -> None:
+    _track_page_view(NAV_CONTROL)
+    render_control_web()
+
+
 def main() -> None:
     bootstrap()
     if "session_id" not in st.session_state:
@@ -105,26 +134,16 @@ def main() -> None:
     handle_pending_click()
 
     render_sidebar_brand()
-    view = st.sidebar.radio(
-        "Vista", NAV, index=0, key="sidebar_view", label_visibility="collapsed"
-    )
 
-    # La app se instrumenta a sí misma: cada vista visitada queda registrada.
-    if view not in st.session_state.page_views:
-        register_event(
-            st.session_state.session_id,
-            "page_view",
-            view,
-            dedupe_key=f"page_view:{view}",
-        )
-        st.session_state.page_views.add(view)
-
-    if view == NAV_ASSISTANT:
-        render_assistant_chat_view()
-    elif view == NAV_RECO:
-        render_recommender()
-    else:
-        render_control_web()
+    # Navegación multipágina con rutas limpias en la URL: /chat, /explorar y
+    # /seguimiento. st.navigation pinta el selector en el sidebar y sincroniza la
+    # ruta con la barra de direcciones (compartible y con historial de navegador).
+    pages = [
+        st.Page(page_assistant, title=NAV_ASSISTANT, url_path="chat", default=True),
+        st.Page(page_explore, title=NAV_RECO, url_path="explorar"),
+        st.Page(page_control, title=NAV_CONTROL, url_path="seguimiento"),
+    ]
+    st.navigation(pages).run()
 
 
 main()
