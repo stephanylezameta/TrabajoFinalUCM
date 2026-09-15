@@ -577,7 +577,7 @@ def _render_hero(row: dict, payload: dict, compact: bool = False) -> None:
     )
     parts.append(
         f'<a class="offer-cta" href="{escape(cta_href, quote=True)}" '
-        'target="_top" rel="noopener noreferrer">Ver opciones</a>'
+        'target="_blank" rel="noopener noreferrer">Ver opciones</a>'
     )
     parts.append('</div>')  # body
     parts.append('</div>')  # offer
@@ -623,7 +623,7 @@ def _card_html(row: dict, idx: int, compact: bool = False, payload: dict | None 
         parts = [
             f'<a class="reco-card reco-card-link" '
             f'href="{escape(cta_href, quote=True)}" '
-            'target="_top" rel="noopener noreferrer">'
+            'target="_blank" rel="noopener noreferrer">'
         ]
     else:
         parts = ['<div class="reco-card">']
@@ -677,7 +677,7 @@ def _card_html(row: dict, idx: int, compact: bool = False, payload: dict | None 
             )
         parts.append(
             f'<a class="reco-cta" href="{escape(cta_href, quote=True)}" '
-            'target="_top" rel="noopener noreferrer">Ver opciones</a>'
+            'target="_blank" rel="noopener noreferrer">Ver opciones</a>'
         )
 
     parts.append('</div>')  # cierra body
@@ -1113,7 +1113,7 @@ def _render_random_placeholder() -> None:
             f'<div class="reco-body">'
             f'<div class="reco-name">{escape(nombre)}</div>'
             f'<p class="reco-headline">{escape(headline)}</p>'
-            f'<a class="reco-cta" href="{escape(cta_href, quote=True)}" target="_top" rel="noopener noreferrer">Ver opciones</a>'
+            f'<a class="reco-cta" href="{escape(cta_href, quote=True)}" target="_blank" rel="noopener noreferrer">Ver opciones</a>'
             f'</div>'
             f'</div>'
         )
