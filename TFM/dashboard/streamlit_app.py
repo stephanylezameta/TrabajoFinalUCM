@@ -99,8 +99,9 @@ def main() -> None:
     if "page_views" not in st.session_state:
         st.session_state.page_views = set()
 
-    # Click-through de las CTAs de recomendación: si la URL trae un clic
-    # pendiente, se registra y se redirige a TUI antes de pintar nada.
+    # Instrumentación de clics: si la URL trae un clic pendiente en una CTA de
+    # recomendación (la pestaña de TUI ya se abrió en el navegador), se registra
+    # el evento recommendation_click y se limpia la URL.
     handle_pending_click()
 
     render_sidebar_brand()

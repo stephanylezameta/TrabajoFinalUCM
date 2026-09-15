@@ -576,7 +576,14 @@ def _render_hero(row: dict, payload: dict, compact: bool = False) -> None:
     # CTA que abre TUI en pestaña nueva de forma fiable en Streamlit Cloud
     # (ver services.click_tracking.render_cta). Un <a> embebido o st.link_button
     # se cargaban dentro del iframe de la app y TUI rechazaba la conexión.
-    render_cta(name)
+    # El hero es la opción 1 del ranking; pasamos el recommendation_id para poder
+    # unir el clic con su impresión en «Monitor performance».
+    render_cta(
+        name,
+        recommendation_id=_current_recommendation_id(),
+        position=1,
+        origin="hero",
+    )
 
 
 # --------------------------------------------------------------------------
@@ -752,18 +759,25 @@ def _render_alternatives(result: dict, compact: bool = False) -> None:
         per_row = min(len(cards), 2)
     else:
         per_row = min(len(cards), 5)
+    recommendation_id = _current_recommendation_id()
     for start in range(0, len(cards), per_row):
         fila = cards[start:start + per_row]
         cols = st.columns(per_row)
-        for col, row in zip(cols, fila):
+        for offset, (col, row) in enumerate(zip(cols, fila)):
             destino = (row.get("destination") or {})
             nombre = str(destino.get("name") or "Destino")
+            # cards = ranking[1:], así que la posición absoluta en el ranking es
+            # el índice dentro de cards + 2 (la opción 1 es el hero).
+            posicion = start + offset + 2
             with col:
                 render_card_link(
                     nombre,
                     _card_inner_html(row, compact=compact),
                     height=_card_height(row, compact=compact),
                     extra_css=_CARD_IFRAME_CSS,
+                    recommendation_id=recommendation_id,
+                    position=posicion,
+                    origin="alternativa",
                 )
 
     footer_bits = []
@@ -1180,7 +1194,7 @@ def _render_random_placeholder() -> None:
             render_card_link(nombre, inner, height=300, extra_css=_CARD_IFRAME_CSS + """
               .reco-headline{display:-webkit-box;-webkit-line-clamp:3;
                 -webkit-box-orient:vertical;overflow:hidden}
-            """)
+            """, origin="inspiracion")
     st.markdown(
         '<p style="font-size:.72rem;color:var(--muted);margin-top:.6rem">'
         '✦ Ajusta los filtros y pulsa <strong>Buscar destinos</strong> para ver recomendaciones personalizadas.'
