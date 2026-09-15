@@ -835,7 +835,7 @@ def render_control_web() -> None:
 
     ranked = _render_ranking(period, filters)
 
-    _section("Mapa de interés turístico", "Contrasta dónde se recomiendan los destinos frente a dónde los usuarios realmente hacen clic en España.")
+    _section("Mapa de interés turístico")
     _render_map(period, filters)
 
     left, right = st.columns([1, 1], gap="large")

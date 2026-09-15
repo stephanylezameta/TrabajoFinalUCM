@@ -637,9 +637,9 @@ a.reco-card-link:hover{text-decoration:none}
 /* Cabecera de sección del panel: barrita de acento + título + subtítulo. */
 .mp-section{margin:1.7rem 0 .7rem}
 .mp-section:first-of-type{margin-top:.4rem}
-.mp-section-title{font-size:1.02rem;font-weight:900;color:var(--tui-dark);letter-spacing:-.01em;
+.mp-section-title{font-size:1.15rem;font-weight:900;color:var(--tui-dark);letter-spacing:-.01em;
   display:flex;align-items:center;gap:.55rem}
-.mp-section-title:before{content:"";width:4px;height:18px;background:var(--tui-red);border-radius:2px;flex:0 0 auto}
+.mp-section-title:before{content:"";width:4px;height:20px;background:var(--tui-red);border-radius:2px;flex:0 0 auto}
 .mp-section-sub{font-size:.76rem;color:var(--muted);margin:.28rem 0 0;line-height:1.45}
 
 /* Tarjeta base del panel: caja definida, borde suave, esquinas de 8px. */
