@@ -22,7 +22,11 @@ import streamlit as st
 from services.tracking_service import register_event
 
 # Destino externo real de las tarjetas (idéntico al que ya usaban los <a>).
-TUI_TARGET_URL = "https://es.tui.com/es/"
+def _url_destino(destination: str) -> str:
+    """Link de busqueda de TUI para el destino especifico, no la portada
+    generica -- cada tarjeta debe llevar a resultados de ESE destino."""
+    from urllib.parse import quote as _quote
+    return f"https://es.tui.com/es/resultados/{_quote(destination)}/"
 
 # Nombres de los parámetros de consulta del click-through.
 _PARAM_CLICK = "rc"          # destino sobre el que se hizo clic
@@ -81,7 +85,7 @@ def handle_pending_click() -> None:
                 "recommendation_id": recommendation_id,
                 "position": position,
                 "origin": origin,
-                "target_url": TUI_TARGET_URL,
+                "target_url": _url_destino(str(destination)),
             },
             # Un mismo click-through (misma reco + posición + destino) cuenta una
             # vez por sesión: recargar la URL de redirección no infla el CTR.
@@ -91,14 +95,15 @@ def handle_pending_click() -> None:
     # Limpia los parámetros para que un rerun posterior no vuelva a disparar.
     st.query_params.clear()
 
-    # Reenvía el navegador a la web pública de TUI (comportamiento esperado del
-    # enlace «Ver opciones»). Se usa meta refresh + enlace de respaldo.
+    # Reenvía el navegador a la búsqueda de TUI para el destino específico
+    # que el usuario clickeó (antes iba siempre a la portada genérica).
+    url_final = _url_destino(str(destination))
     st.markdown(
         f"""
-        <meta http-equiv="refresh" content="0; url={escape(TUI_TARGET_URL, quote=True)}">
+        <meta http-equiv="refresh" content="0; url={escape(url_final, quote=True)}">
         <p style="font-family:'Gotham',Arial,sans-serif;color:#667085;font-size:.9rem">
-          Abriendo TUI…
-          <a href="{escape(TUI_TARGET_URL, quote=True)}">Continuar</a>
+          Abriendo TUI...
+          <a href="{escape(url_final, quote=True)}">Continuar</a>
         </p>
         """,
         unsafe_allow_html=True,
