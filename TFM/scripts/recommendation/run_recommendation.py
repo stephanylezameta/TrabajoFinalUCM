@@ -144,6 +144,7 @@ def get_datos_destino(db_path: str) -> dict:
             "capacidad_sanitaria": cargar_capacidad_sanitaria_por_destino(db_path),
             "seguridad": cargar_seguridad_criminalidad_por_destino(db_path),
             "datos_humanos": cargar_datos_humanos_por_destino(db_path),
+            "precios_reales": cargar_precios_reales_por_destino(db_path),
         }
         _DATOS_DESTINO_POR_DB[db_path] = cache
     return cache
@@ -241,6 +242,29 @@ def cargar_estancia_media_por_destino(db_path: str) -> dict:
         if viajeros_dict[d] > 0
     }
 
+
+def cargar_precios_reales_por_destino(db_path: str) -> dict:
+    """Precio de referencia de PAQUETE completo por destino: real
+    (recoleccion manual verificada de ofertas de TUI, 24/39 destinos) o
+    estimado (mediana de actividad x razon tipica paquete/actividad,
+    calculada solo con los destinos reales -- ver
+    scripts/cargar_precios_reales.py). Reemplaza la comparacion de
+    presupuesto_max contra el precio de UNA actividad suelta, que
+    subestimaba brutalmente el costo real de un viaje completo."""
+    conn = sqlite3.connect(db_path)
+    try:
+        rows = conn.execute(
+            "SELECT destino_nombre, precio_persona, n_paquetes, es_real, fuente "
+            "FROM paquetes_reales_tui"
+        ).fetchall()
+    except Exception:
+        rows = []
+    finally:
+        conn.close()
+    return {
+        d: {"precio": p, "n_paquetes": n, "es_real": bool(er), "fuente": f}
+        for d, p, n, er, f in rows
+    }
 
 def cargar_ocupacion_por_destino(db_path: str) -> dict:
     """Ocupación real normalizada [0,1] por destino (Eurostat/INE), con
@@ -1129,13 +1153,21 @@ def recomendar(
         print("   -> Modelo LightGBM no encontrado (correr train_lightgbm_ranker.py "
               "primero); usando afinidad por coseno solamente.")
 
+    precios_reales_por_destino = datos["precios_reales"]
+
     def _pasa_filtros(id_paq, destino, meta, filtros_activos):
         if id_paq in excluir_ids:
             return False
         if destino in excluir_destinos:
             return False
-        if "presupuesto_max" in filtros_activos and meta.get("price_eur") is not None:
-            if meta["price_eur"] > filtros_activos["presupuesto_max"]:
+        if "presupuesto_max" in filtros_activos:
+            # Compara contra el precio REAL de paquete del destino cuando
+            # existe (24/39 destinos); si no hay dato real, cae al precio
+            # de la actividad como aproximacion imperfecta pero mejor que
+            # nada (documentado como limitacion, no oculto).
+            precio_real = precios_reales_por_destino.get(destino, {}).get("precio")
+            precio_comparar = precio_real if precio_real is not None else meta.get("price_eur")
+            if precio_comparar is not None and precio_comparar > filtros_activos["presupuesto_max"]:
                 return False
         if "categoria" in filtros_activos and meta.get("category") != filtros_activos["categoria"]:
             return False
@@ -1169,7 +1201,12 @@ def recomendar(
             # (% dias soleados, pasajeros/año, etc.), separados de los
             # scores 0-1 que usa el modelo internamente -- no afecta el
             # scoring, es solo para presentacion.
-            candidato["datos_humanos"] = datos_humanos_por_destino.get(destino, {})
+            datos_humanos_dest = dict(datos_humanos_por_destino.get(destino, {}))
+            precio_ref_info = precios_reales_por_destino.get(destino)
+            if precio_ref_info:
+                datos_humanos_dest["precio_paquete_referencia_eur"] = precio_ref_info["precio"]
+                datos_humanos_dest["precio_paquete_es_real"] = precio_ref_info["es_real"]
+            candidato["datos_humanos"] = datos_humanos_dest
             candidato["precio_eur"] = meta.get("price_eur")
             cands.append(candidato)
             detalles[id_paq] = detalle
