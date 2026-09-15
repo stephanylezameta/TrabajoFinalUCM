@@ -109,6 +109,48 @@ def render_cta(destination: str, label: str = "Ver opciones",
     )
 
 
+def render_card_link(destination: str, inner_html: str, height: int,
+                     extra_css: str = "") -> None:
+    """Renderiza una TARJETA COMPLETA clicable que abre la oferta de TUI.
+
+    Toda la tarjeta (imagen + textos) es el contenido de un ``<a target="_blank">``
+    dentro del iframe del componente (``components.html``). Al hacer clic en la
+    imagen o en cualquier parte de la tarjeta, se abre una pestaña nueva de nivel
+    de navegador con la oferta de TUI. Esto sustituye a los botones sueltos y es
+    fiable en Streamlit Cloud (donde un ``<a>`` embebido con ``st.markdown``
+    navegaba dentro del iframe de la app y TUI rechazaba la conexión).
+
+    ``inner_html`` es el HTML de la tarjeta (sin el ``<a>`` envolvente) y
+    ``extra_css`` los estilos de las clases usadas en ese HTML (se inyectan
+    dentro del iframe del componente, que no hereda el CSS global de la app).
+    """
+    target_url = get_offer_url(str(destination or ""))
+    if not _is_safe_tui_url(target_url):
+        target_url = TUI_TARGET_URL
+    url_attr = escape(target_url, quote=True)
+    components.html(
+        f"""
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8">
+        <style>
+          html,body{{margin:0;padding:0;background:transparent;
+            font-family:'Gotham','Segoe UI',Arial,sans-serif}}
+          a.card-link{{display:block;text-decoration:none;color:inherit;cursor:pointer}}
+          {extra_css}
+        </style>
+        </head>
+        <body>
+          <a class="card-link" href="{url_attr}" target="_blank" rel="noopener noreferrer">
+            {inner_html}
+          </a>
+        </body>
+        </html>
+        """,
+        height=height,
+    )
+
+
 def handle_pending_click() -> None:
     """Compatibilidad: ya no hay click-through que procesar.
 
