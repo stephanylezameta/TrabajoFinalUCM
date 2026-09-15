@@ -349,6 +349,10 @@ hr { border-color:rgba(17,24,39,.10)!important; }
   display:flex;flex-direction:column}
 .reco-card:hover{transform:translateY(-7px);
   box-shadow:0 10px 22px rgba(17,24,39,.07),0 32px 56px -18px rgba(17,24,39,.26)}
+/* Tarjeta compacta clicable: toda la tarjeta es un enlace a la oferta de TUI.
+   Se anula el estilo de enlace (subrayado/color) para que parezca una tarjeta. */
+a.reco-card-link{text-decoration:none;color:inherit;cursor:pointer}
+a.reco-card-link:hover{text-decoration:none}
 /* Banner: imagen pegada a los bordes de la tarjeta, sin franja blanca.
    Ocupa todo el ancho y redondea las esquinas superiores igual que la tarjeta. */
 .reco-photo-wrap{position:relative;width:100%;aspect-ratio:16/10;overflow:hidden;background:#EEF2F6;

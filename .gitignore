@@ -48,3 +48,7 @@ logs/
 
 # Word/Excel temporales
 ~$*
+
+# Presentaciones PowerPoint (no subir al repo)
+*.ppt
+*.pptx

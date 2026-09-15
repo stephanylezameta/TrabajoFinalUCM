@@ -577,7 +577,7 @@ def _render_hero(row: dict, payload: dict, compact: bool = False) -> None:
     )
     parts.append(
         f'<a class="offer-cta" href="{escape(cta_href, quote=True)}" '
-        'target="_self" rel="noopener noreferrer">Ver opciones</a>'
+        'target="_blank" rel="noopener noreferrer">Ver opciones</a>'
     )
     parts.append('</div>')  # body
     parts.append('</div>')  # offer
@@ -609,7 +609,24 @@ def _card_html(row: dict, idx: int, compact: bool = False, payload: dict | None 
     place = _place(destination)
     typology = destination.get("primary_typology")
 
-    parts = ['<div class="reco-card">']
+    # Enlace de oferta de TUI para este destino. En modo compacto la tarjeta
+    # completa es clicable (envuelta en un <a>); en modo normal el enlace va en
+    # el botón «Ver opciones» del cuerpo.
+    cta_href = build_click_href(
+        name,
+        recommendation_id=_current_recommendation_id(),
+        position=idx + 1,
+        origin="alternativa",
+    )
+
+    if compact:
+        parts = [
+            f'<a class="reco-card reco-card-link" '
+            f'href="{escape(cta_href, quote=True)}" '
+            'target="_blank" rel="noopener noreferrer">'
+        ]
+    else:
+        parts = ['<div class="reco-card">']
 
     # Banner: imagen a todo el ancho con el badge «Oferta TUI».
     parts.append('<div class="reco-photo-wrap">')
@@ -658,19 +675,13 @@ def _card_html(row: dict, idx: int, compact: bool = False, payload: dict | None 
                 + "".join(f'<span class="reco-place-item">{escape(s)}</span>' for s in strengths[:2])
                 + '</div>'
             )
-        cta_href = build_click_href(
-            name,
-            recommendation_id=_current_recommendation_id(),
-            position=idx + 1,
-            origin="alternativa",
-        )
         parts.append(
             f'<a class="reco-cta" href="{escape(cta_href, quote=True)}" '
-            'target="_self" rel="noopener noreferrer">Ver opciones</a>'
+            'target="_blank" rel="noopener noreferrer">Ver opciones</a>'
         )
 
     parts.append('</div>')  # cierra body
-    parts.append('</div>')  # cierra card
+    parts.append('</a>' if compact else '</div>')  # cierra card
     return "".join(parts)
 
 
@@ -1092,13 +1103,14 @@ def _render_random_placeholder() -> None:
             )
         else:
             img_html = f'<div class="reco-photo-fallback">{escape(nombre)}</div>'
+        cta_href = build_click_href(nombre, origin="inspirate")
         cards_html += (
             f'<div class="reco-card">'
             f'<div class="reco-photo-wrap">{img_html}</div>'
             f'<div class="reco-body">'
             f'<div class="reco-name">{escape(nombre)}</div>'
             f'<p class="reco-headline">{escape(headline)}</p>'
-            f'<a class="reco-cta" href="https://es.tui.com/es/" target="_blank" rel="noopener noreferrer">Ver opciones</a>'
+            f'<a class="reco-cta" href="{escape(cta_href, quote=True)}" target="_blank" rel="noopener noreferrer">Ver opciones</a>'
             f'</div>'
             f'</div>'
         )

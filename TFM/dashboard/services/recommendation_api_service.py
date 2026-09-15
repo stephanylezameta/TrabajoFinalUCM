@@ -8,6 +8,8 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+from services import destination_facts as facts
+
 # Contrato interno (el que consume la UI). Se mantiene el nombre por
 # compatibilidad con los helpers de presentación, aunque ahora el backend real
 # es la API FastAPI del motor (endpoint /recomendar) y no la antigua Function.
@@ -452,11 +454,19 @@ def _adapt_destino(dest: dict[str, Any], rank: int) -> dict[str, Any]:
         "reason_codes": [],
         "preference_match": {},
         "score_breakdown": {},
-        "what_it_offers": {"poi_count": None},
+        # El backend no envía temperatura media ni nº de POIs; se completan con
+        # la tabla curada de datos base por destino para que la tarjeta no
+        # muestre «—». Si el backend los enviara en el futuro, se respetan.
+        "what_it_offers": {
+            "poi_count": _num(dest.get("poi_count")) or facts.get_poi_count(nombre),
+        },
         "climate_profile": {
             "sunny_days": dias_sol_mes,
             "precipitation_days": None,
-            "temperature_mean_c": None,
+            "temperature_mean_c": (
+                _num(dest.get("temperature_mean_c"))
+                or facts.get_temperature_mean_c(nombre)
+            ),
             "sunshine_hours": _num(dh.get("horas_sol_promedio_dia")),
         },
         "popularity_profile": {

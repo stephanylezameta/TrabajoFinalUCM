@@ -7,6 +7,7 @@ import streamlit as st
 import streamlit.components.v1 as components
 
 from components.assets import get_local_destination_image
+from services import destination_facts
 from services import recommendation_api_service as reco
 from services.tracking_service import register_event
 
@@ -88,6 +89,14 @@ def _tarjetas_desde_session_state() -> list[dict]:
             continue
         climate = row.get("climate_profile") or {}
         offers = row.get("what_it_offers") or {}
+        # Fallback a la tabla de datos base si la fila no trae temp/POIs, para
+        # que la tarjeta del asistente tampoco muestre «—».
+        temp = climate.get("temperature_mean_c")
+        if temp is None:
+            temp = destination_facts.get_temperature_mean_c(str(name))
+        pois = offers.get("poi_count")
+        if pois is None:
+            pois = destination_facts.get_poi_count(str(name))
         tarjetas.append({
             "name": str(name),
             "province": str(destination.get("province") or ""),
@@ -96,8 +105,8 @@ def _tarjetas_desde_session_state() -> list[dict]:
             "headline": row.get("headline")
             or (row.get("strengths") or [""])[0],
             "sunshine_hours": climate.get("sunshine_hours"),
-            "temperature_mean_c": climate.get("temperature_mean_c"),
-            "poi_count": offers.get("poi_count"),
+            "temperature_mean_c": temp,
+            "poi_count": pois,
         })
     return tarjetas
 

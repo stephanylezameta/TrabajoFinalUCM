@@ -419,24 +419,21 @@ def _render_spain_map_static(active: list[dict], intensity_key: str,
 # --------------------------------------------------------------------------
 
 def _render_filters() -> tuple[pa.Period, pa.Filters]:
-    """Barra de filtros: periodo, destino, comunidad autónoma y tipo.
+    """Barra de filtros: periodo, destino y tipo.
 
     Devuelve la ventana temporal resuelta y los filtros de destino. Afectan de
     forma coherente a todas las métricas y gráficos del panel.
     """
     bounds = pa.data_bounds()
     with st.container():
-        c1, c2, c3, c4 = st.columns([1.1, 1, 1, 1], gap="small")
+        c1, c2, c3 = st.columns([1.1, 1, 1], gap="small")
         preset = c1.selectbox("Periodo", pa.PERIOD_PRESETS, index=1, key="mp_period")
 
         dest_options = ["Todos"] + list(spain_reference.SPAIN_DESTINATIONS.keys())
         destination = c2.selectbox("Destino", dest_options, index=0, key="mp_destination")
 
-        comm_options = ["Todas"] + spain_reference.community_options()
-        community = c3.selectbox("Comunidad autónoma", comm_options, index=0, key="mp_community")
-
         type_options = ["Todos"] + spain_reference.type_options()
-        dest_type = c4.selectbox("Tipo de destino", type_options, index=0, key="mp_type")
+        dest_type = c3.selectbox("Tipo de destino", type_options, index=0, key="mp_type")
 
         custom_start = custom_end = None
         if preset == pa.PERIOD_ALL and bounds.get("min"):
@@ -447,7 +444,6 @@ def _render_filters() -> tuple[pa.Period, pa.Filters]:
     period = pa.resolve_period(preset, custom_start=custom_start, custom_end=custom_end)
     filters = pa.Filters(
         destination=destination if destination != "Todos" else None,
-        community=community if community != "Todas" else None,
         dest_type=dest_type if dest_type != "Todos" else None,
     )
     return period, filters

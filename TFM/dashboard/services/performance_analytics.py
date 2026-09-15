@@ -351,7 +351,10 @@ def get_destination_performance(period: Period, filters: Filters | None = None) 
         entry["ccaa"] = ref.get("ccaa") if ref else None
         entry["province"] = ref.get("province") if ref else None
         entry["type"] = ref.get("type") if ref else None
-        entry["in_spain"] = ref is not None
+        entry["country"] = (ref.get("country") or "España") if ref else None
+        # España = destino con ficha y sin país extranjero declarado. Los
+        # internacionales tienen ficha (para ranking/tablas) pero country != España.
+        entry["in_spain"] = ref is not None and entry["country"] == "España"
         out.append(entry)
 
     out.sort(key=lambda r: (-r["clicks"], -r["impressions"], r["destination"]))
@@ -723,7 +726,9 @@ def get_spain_interest_map(period: Period, filters: Filters | None = None) -> li
     points = []
     for r in rows:
         ref = spain_reference.get_reference(r["destination"])
-        if not ref:
+        # Solo destinos españoles: los internacionales tienen ficha (para
+        # ranking y tablas) pero no se dibujan en el mapa de España.
+        if not ref or not r.get("in_spain"):
             continue
         points.append({
             "destination": r["destination"],
