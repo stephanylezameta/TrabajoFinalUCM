@@ -357,7 +357,7 @@ def _ensure_history() -> list[dict]:
             "text": (
                 "¡Hola! Soy tu asistente de viaje de TUI. Cuéntame en tus "
                 "palabras qué viaje te apetece —el ambiente, las fechas, con "
-                "quién vas— y te propongo destinos por España que encajen."
+                "quién vas— y te propongo destinos que encajen contigo."
             ),
             "cards": [],
         }]

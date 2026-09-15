@@ -31,6 +31,47 @@ from src.embeddings.hybrid_vector_builder import HybridVectorBuilder
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
 
+REGION_POR_DESTINO = {
+    "Algarve": "Portugal Europa Atlantico",
+    "Alicante": "España Europa Mediterraneo",
+    "Antalya": "Turquia Europa Asia Mediterraneo",
+    "Bali": "Indonesia Asia Sudeste Asiatico",
+    "Barcelona": "España Europa Mediterraneo",
+    "Bilbao": "España Europa Atlantico Norte Cantabrico",
+    "Cabo Verde": "Cabo Verde Africa Atlantico",
+    "Cancún": "Mexico America Caribe",
+    "Cerdeña": "Italia Europa Mediterraneo",
+    "Costa Amalfitana": "Italia Europa Mediterraneo",
+    "Costa del Sol": "España Europa Mediterraneo",
+    "Creta": "Grecia Europa Mediterraneo",
+    "Cádiz": "España Europa Atlantico",
+    "Córdoba": "España Europa interior",
+    "Dubái": "Emiratos Arabes Unidos Asia Oriente Medio Golfo Persico",
+    "Fuerteventura": "España Europa Canarias Atlantico Africa",
+    "Gran Canaria": "España Europa Canarias Atlantico Africa",
+    "Granada": "España Europa interior",
+    "Hurghada": "Egipto Africa Mar Rojo",
+    "Ibiza": "España Europa Mediterraneo",
+    "Lanzarote": "España Europa Canarias Atlantico Africa",
+    "Madrid": "España Europa interior",
+    "Maldivas": "Maldivas Asia Oceano Indico",
+    "Mallorca": "España Europa Mediterraneo",
+    "Marrakech": "Marruecos Africa Norte de Africa",
+    "Menorca": "España Europa Mediterraneo",
+    "Málaga": "España Europa Mediterraneo",
+    "Phuket": "Tailandia Asia Sudeste Asiatico",
+    "Punta Cana": "Republica Dominicana America Caribe",
+    "Riviera Maya": "Mexico America Caribe",
+    "Rodas": "Grecia Europa Mediterraneo",
+    "San Sebastián": "España Europa Atlantico Norte Cantabrico",
+    "Santorini": "Grecia Europa Mediterraneo",
+    "Sevilla": "España Europa interior",
+    "Sicilia": "Italia Europa Mediterraneo",
+    "Split": "Croacia Europa Mediterraneo Adriatico",
+    "Tenerife": "España Europa Canarias Atlantico Africa",
+    "Túnez": "Tunez Africa Mediterraneo Norte de Africa",
+    "Valencia": "España Europa Mediterraneo",
+}
 
 def cargar_sentimiento_por_destino(conn: sqlite3.Connection) -> dict:
     """Sentimiento real agregado por destino (media del score de resenas_sentimiento)."""
@@ -201,7 +242,8 @@ def main():
 
     logger.info("Generando embeddings de experiencias...")
     textos_experiencias = [
-        f"{prefijo_e5}{e['activity_name']} {e['destination']} {e['category']}"
+        f"{prefijo_e5}{e['activity_name']} {e['destination']} "
+        f"{REGION_POR_DESTINO.get(e['destination'], '')} {e['category']}"
         for e in experiencias
     ]
     package_embeddings = embedder.embed_batch(textos_experiencias, batch_size=batch_size)

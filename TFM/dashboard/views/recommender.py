@@ -35,12 +35,12 @@ def _normalize_place(text: str) -> str:
 _DESTINOS_CONOCIDOS_MAP: dict[str, str] = {
     _normalize_place(n): n for n in [
         "Algarve", "Alicante", "Antalya", "Bali", "Barcelona", "Bilbao",
-        "Cabo Verde", "Cádiz", "Cancún", "Cerdeña", "Córdoba",
-        "Costa Amalfitana", "Creta", "Dubai", "Dubrovnik", "Fuerteventura",
-        "Gran Canaria", "Granada", "Hurghada", "Ibiza", "Lanzarote",
-        "Madrid", "Málaga", "Maldivas", "Mallorca", "Menorca", "Naxos",
-        "Punta Cana", "Rodas", "San Sebastián", "Santorini", "Sevilla",
-        "Split", "Tenerife", "Túnez", "Zadar",
+        "Cabo Verde", "Cancún", "Cerdeña", "Costa Amalfitana", "Costa del Sol",
+        "Creta", "Cádiz", "Córdoba", "Dubái", "Fuerteventura", "Gran Canaria",
+        "Granada", "Hurghada", "Ibiza", "Lanzarote", "Madrid", "Maldivas",
+        "Mallorca", "Marrakech", "Menorca", "Málaga", "Phuket", "Punta Cana",
+        "Riviera Maya", "Rodas", "San Sebastián", "Santorini", "Sevilla",
+        "Sicilia", "Split", "Tenerife", "Túnez", "Valencia",
     ]
 }
 STATE_KEY = "reco_result"
@@ -1067,7 +1067,6 @@ def _render_random_placeholder() -> None:
         "Menorca": "Calas vírgenes, calma y Patrimonio de la Humanidad",
         "Santorini": "Casas blancas, volcán y atardeceres inigualables",
         "Creta": "Minoicos, playas salvajes y cocina mediterránea pura",
-        "Dubrovnik": "La Perla del Adriático y escenario de Juego de Tronos",
         "Split": "Palacio de Diocleciano y nightlife junto al mar",
         "Bali": "Templos entre arrozales y olas para todos los niveles",
         "Cancún": "Playas del Caribe y ruinas mayas a un paso",
@@ -1079,9 +1078,7 @@ def _render_random_placeholder() -> None:
         "Cabo Verde": "Capoeira, música morna y playas de arena volcánica",
         "Hurghada": "Mar Rojo, submarinismo y sol garantizado",
         "Túnez": "Medinas declaradas patrimonio y playas del Mediterráneo",
-        "Zadar": "Órgano marino y el atardecer más bello del mundo",
         "Rodas": "Ciudad medieval amurallada y 300 días de sol al año",
-        "Naxos": "La isla más verde de las Cícladas y queso local",
         "Bilbao": "Guggenheim, pintxos y la ría renovada",
         "San Sebastián": "La Concha, txakoli y la mejor gastronomía de Europa",
         "Cádiz": "La ciudad más antigua de Occidente y carnaval único",
@@ -1089,6 +1086,12 @@ def _render_random_placeholder() -> None:
         "Alicante": "Castillo de Santa Bárbara y playas del Mediterráneo",
         "Cerdeña": "Aguas esmeraldas, nuraghe y queso pecorino",
         "Costa Amalfitana": "Limones, acantilados y pueblos de postal",
+        "Costa del Sol": "Playas doradas y el mejor clima de la Costa Mediterránea",
+        "Marrakech": "Zocos vibrantes, jardines y la Plaza Jemaa el-Fna",
+        "Phuket": "Playas tropicales y templos budistas en el Sudeste Asiático",
+        "Riviera Maya": "Cenotes, ruinas mayas y playas caribeñas",
+        "Sicilia": "Volcanes, historia griega y la mejor cocina italiana",
+        "Valencia": "Ciudad de las Artes y Ciencias y la auténtica paella",
     }
     default_headline = "Descubre este destino con TUI"
 
