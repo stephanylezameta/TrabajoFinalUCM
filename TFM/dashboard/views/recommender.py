@@ -11,7 +11,7 @@ import unicodedata
 from components.assets import SCENARIO_ICON_URLS, get_local_destination_image
 from services import price_lookup
 from services import recommendation_api_service as reco
-from services.click_tracking import build_click_href
+from services.click_tracking import build_click_href, render_cta
 from services.tracking_service import register_event
 from views.recommender_chat import render_recommender_chat
 
@@ -569,20 +569,14 @@ def _render_hero(row: dict, payload: dict, compact: bool = False) -> None:
         )
     parts.append('</div>')
 
-    cta_href = build_click_href(
-        name,
-        recommendation_id=_current_recommendation_id(),
-        position=1,
-        origin="destacada",
-    )
     parts.append('</div>')  # body
     parts.append('</div>')  # offer
 
     st.markdown("".join(parts), unsafe_allow_html=True)
-    # CTA nativa: st.link_button abre el enlace externo en una pestaña nueva de
-    # forma fiable también en Streamlit Cloud (un <a target="_blank"> dentro de
-    # st.markdown se cargaba dentro del iframe de la app y TUI lo rechazaba).
-    st.link_button("Ver opciones", cta_href, use_container_width=True)
+    # CTA que abre TUI en pestaña nueva de forma fiable en Streamlit Cloud
+    # (ver services.click_tracking.render_cta). Un <a> embebido o st.link_button
+    # se cargaban dentro del iframe de la app y TUI rechazaba la conexión.
+    render_cta(name)
 
 
 # --------------------------------------------------------------------------
@@ -694,21 +688,17 @@ def _render_alternatives(result: dict, compact: bool = False) -> None:
         unsafe_allow_html=True,
     )
 
-    # CTAs nativas «Ver opciones» debajo del grid, una por tarjeta. Se usa
-    # st.link_button (no un <a> en el HTML) porque en Streamlit Cloud el enlace
-    # embebido se abría dentro del iframe de la app y TUI rechazaba la conexión.
-    # Los botones se reparten en columnas para quedar alineados con las tarjetas.
+    # CTAs «Ver opciones» debajo del grid, una por tarjeta, repartidas en
+    # columnas para quedar alineadas con las tarjetas. Se usa render_cta (iframe
+    # de componente con window.open) porque en Streamlit Cloud un <a> embebido o
+    # st.link_button navegaban dentro del iframe de la app y TUI rechazaba la
+    # conexión (X-Frame-Options).
     cols = st.columns(len(cards))
-    for position, (col, row) in enumerate(zip(cols, cards)):
+    for col, row in zip(cols, cards):
         destino = (row.get("destination") or {})
         nombre = str(destino.get("name") or "Destino")
-        href = build_click_href(
-            nombre,
-            recommendation_id=_current_recommendation_id(),
-            position=position + 2,
-            origin="alternativa",
-        )
-        col.link_button("Ver opciones", href, use_container_width=True)
+        with col:
+            render_cta(nombre)
 
     footer_bits = []
     if result.get("recommendation_id"):
@@ -1119,15 +1109,13 @@ def _render_random_placeholder() -> None:
         f'<div class="alt-grid">{cards_html}</div>',
         unsafe_allow_html=True,
     )
-    # CTAs nativas debajo del grid (st.link_button abre pestaña nueva de forma
-    # fiable en Streamlit Cloud; un <a> embebido se abría dentro del iframe).
+    # CTAs debajo del grid (render_cta abre pestaña nueva de forma fiable en
+    # Streamlit Cloud; un <a> embebido o st.link_button se abrían dentro del
+    # iframe de la app y TUI rechazaba la conexión).
     cols = st.columns(len(muestra))
     for col, nombre in zip(cols, muestra):
-        col.link_button(
-            "Ver opciones",
-            build_click_href(nombre, origin="inspirate"),
-            use_container_width=True,
-        )
+        with col:
+            render_cta(nombre)
     st.markdown(
         '<p style="font-size:.72rem;color:var(--muted);margin-top:.6rem">'
         '✦ Ajusta los filtros y pulsa <strong>Buscar destinos</strong> para ver recomendaciones personalizadas.'

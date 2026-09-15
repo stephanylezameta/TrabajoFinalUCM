@@ -12,6 +12,11 @@ página, y ese iframe no funciona de forma fiable en todos los entornos
 El mapa destino → URL vive en ``services.offer_links``.
 """
 
+import json
+from html import escape
+
+import streamlit.components.v1 as components
+
 from services.offer_links import FALLBACK_URL, get_offer_url
 
 # Destino externo por defecto si no se resuelve una oferta concreta.
@@ -40,6 +45,62 @@ def build_click_href(destination: str, recommendation_id: str = "",
     if not _is_safe_tui_url(target_url):
         target_url = TUI_TARGET_URL
     return target_url
+
+
+def render_cta(destination: str, label: str = "Ver opciones",
+               key: str = "", height: int = 52) -> None:
+    """Renderiza una CTA que abre la oferta de TUI en una PESTAÑA NUEVA real.
+
+    Por qué así y no un ``<a>`` ni ``st.link_button``:
+
+    En Streamlit Cloud la app se sirve dentro de un ``<iframe>``. Un
+    ``<a target="_blank">`` puesto con ``st.markdown`` (documento principal) o un
+    ``st.link_button`` acababan navegando DENTRO del iframe de la app, y como
+    ``es.tui.com`` no permite mostrarse en un iframe (``X-Frame-Options``), el
+    navegador mostraba «es.tui.com rechazó la conexión».
+
+    ``st.components.v1.html`` crea su PROPIO iframe con ``sandbox`` que incluye
+    ``allow-popups``/``allow-popups-to-escape-sandbox``. Desde ahí,
+    ``window.open(url, "_blank")`` abre una pestaña nueva de navegador de verdad
+    (fuera de cualquier iframe), que es lo único que TUI acepta. Es el patrón
+    fiable para enlaces externos en Streamlit Cloud.
+    """
+    target_url = get_offer_url(str(destination or ""))
+    if not _is_safe_tui_url(target_url):
+        target_url = TUI_TARGET_URL
+
+    url_js = json.dumps(target_url)
+    label_html = escape(str(label))
+    components.html(
+        f"""
+        <!DOCTYPE html>
+        <html>
+        <head><meta charset="utf-8">
+        <style>
+          html,body{{margin:0;padding:0;background:transparent}}
+          .tui-cta{{
+            display:flex;align-items:center;justify-content:center;
+            width:100%;box-sizing:border-box;
+            font-family:'Gotham','Segoe UI',Arial,sans-serif;
+            font-weight:700;font-size:.92rem;letter-spacing:.01em;
+            background:#0064c8;color:#fff;border:none;border-radius:10px;
+            padding:.62rem 1rem;cursor:pointer;text-decoration:none;
+            transition:background .15s ease, transform .15s ease;
+          }}
+          .tui-cta:hover{{background:#004f9e;transform:translateY(-1px)}}
+          .tui-cta:active{{transform:translateY(0)}}
+        </style>
+        </head>
+        <body>
+          <a class="tui-cta" href={url_js} target="_blank" rel="noopener noreferrer"
+             onclick="try{{window.open({url_js},'_blank','noopener');return false;}}catch(e){{}}">
+            {label_html} ↗
+          </a>
+        </body>
+        </html>
+        """,
+        height=height,
+    )
 
 
 def handle_pending_click() -> None:
