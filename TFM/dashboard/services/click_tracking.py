@@ -12,7 +12,6 @@ página, y ese iframe no funciona de forma fiable en todos los entornos
 El mapa destino → URL vive en ``services.offer_links``.
 """
 
-import json
 from html import escape
 
 import streamlit.components.v1 as components
@@ -69,22 +68,30 @@ def render_cta(destination: str, label: str = "Ver opciones",
     if not _is_safe_tui_url(target_url):
         target_url = TUI_TARGET_URL
 
-    url_js = json.dumps(target_url)
+    url_attr = escape(target_url, quote=True)
     label_html = escape(str(label))
+    # El botón es un <a target="_blank"> PURO dentro del iframe del componente.
+    # El clic nativo de un enlace target="_blank" es un gesto de usuario que el
+    # navegador permite: abre una pestaña NUEVA de nivel de navegador (fuera de
+    # cualquier iframe), que es lo único que TUI acepta (X-Frame-Options).
+    #
+    # Clave: NO se usa onclick con window.open + return false. Eso cancelaba el
+    # enlace y, dentro del iframe, window.open podía quedar atrapado o ser
+    # bloqueado por el popup blocker. Dejando actuar al <a> nativo, funciona.
     components.html(
         f"""
         <!DOCTYPE html>
         <html>
         <head><meta charset="utf-8">
         <style>
-          html,body{{margin:0;padding:0;background:transparent}}
+          html,body{{margin:0;padding:0;background:transparent;overflow:hidden}}
           .tui-cta{{
             display:flex;align-items:center;justify-content:center;
-            width:100%;box-sizing:border-box;
+            width:100%;height:40px;box-sizing:border-box;
             font-family:'Gotham','Segoe UI',Arial,sans-serif;
-            font-weight:700;font-size:.92rem;letter-spacing:.01em;
-            background:#0064c8;color:#fff;border:none;border-radius:10px;
-            padding:.62rem 1rem;cursor:pointer;text-decoration:none;
+            font-weight:700;font-size:.9rem;letter-spacing:.01em;
+            background:#0064c8;color:#fff;border-radius:10px;
+            text-decoration:none;cursor:pointer;
             transition:background .15s ease, transform .15s ease;
           }}
           .tui-cta:hover{{background:#004f9e;transform:translateY(-1px)}}
@@ -92,8 +99,7 @@ def render_cta(destination: str, label: str = "Ver opciones",
         </style>
         </head>
         <body>
-          <a class="tui-cta" href={url_js} target="_blank" rel="noopener noreferrer"
-             onclick="try{{window.open({url_js},'_blank','noopener');return false;}}catch(e){{}}">
+          <a class="tui-cta" href="{url_attr}" target="_blank" rel="noopener noreferrer">
             {label_html} ↗
           </a>
         </body>
