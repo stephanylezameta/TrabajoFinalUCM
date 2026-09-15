@@ -598,7 +598,7 @@ html,body{height:100%}
   transition:transform .3s cubic-bezier(.16,1,.3,1),box-shadow .3s ease}
 .card-link:hover .reco-card{transform:translateY(-5px);
   box-shadow:0 10px 22px rgba(17,24,39,.07),0 32px 56px -18px rgba(17,24,39,.26)}
-.reco-photo-wrap{position:relative;width:100%;aspect-ratio:16/10;overflow:hidden;
+.reco-photo-wrap{position:relative;width:100%;height:150px;overflow:hidden;
   background:#EEF2F6;display:block;line-height:0;border-radius:17px 17px 0 0;flex:0 0 auto}
 .reco-photo{width:100%!important;height:100%!important;object-fit:cover!important;
   object-position:center center;display:block!important;
@@ -695,6 +695,38 @@ def _card_inner_html(row: dict, compact: bool = False) -> str:
 # Orquestación
 # --------------------------------------------------------------------------
 
+def _card_height(row: dict, compact: bool = False) -> int:
+    """Altura del iframe ajustada al CONTENIDO REAL de la tarjeta.
+
+    El iframe de ``components.html`` no se autoajusta: si la altura es fija y la
+    tarjeta trae pocos datos (sin tipología, motivo ni métricas), queda un hueco
+    blanco enorme bajo el nombre. Aquí se suma solo lo que de verdad se pinta.
+    """
+    # La imagen tiene altura FIJA de 150px (ver .reco-photo-wrap en el CSS del
+    # iframe). A eso se le suma el cuerpo (nombre y, en no compacto, tipología,
+    # motivo y métricas). El iframe no se autoajusta, así que hay que sumar solo
+    # lo que de verdad se pinta para no cortar el nombre ni dejar hueco.
+    IMG_H = 150
+    base = IMG_H + 58            # imagen + nombre (con margen para 2 líneas)
+
+    place = _place(row.get("destination") or {})
+    if place:
+        base += 22               # línea "📍 lugar"
+
+    if not compact:
+        destination = row.get("destination") or {}
+        if destination.get("primary_typology"):
+            base += 30           # chip de tipología
+        if row.get("headline"):
+            base += 60           # párrafo de motivo (hasta ~3 líneas)
+        # El bloque de métricas siempre se pinta en modo no compacto.
+        base += 70
+        if row.get("strengths"):
+            base += 30           # puntos fuertes
+
+    return base
+
+
 def _render_alternatives(result: dict, compact: bool = False) -> None:
     ranking = result.get("ranking") or []
     cards = ranking[1:]
@@ -717,10 +749,8 @@ def _render_alternatives(result: dict, compact: bool = False) -> None:
     # tan estrechas que corten el nombre. La altura se ajusta al contenido real
     # (imagen + nombre) para no dejar huecos.
     if compact:
-        height = 200
         per_row = min(len(cards), 2)
     else:
-        height = 360
         per_row = min(len(cards), 5)
     for start in range(0, len(cards), per_row):
         fila = cards[start:start + per_row]
@@ -732,7 +762,7 @@ def _render_alternatives(result: dict, compact: bool = False) -> None:
                 render_card_link(
                     nombre,
                     _card_inner_html(row, compact=compact),
-                    height=height,
+                    height=_card_height(row, compact=compact),
                     extra_css=_CARD_IFRAME_CSS,
                 )
 
