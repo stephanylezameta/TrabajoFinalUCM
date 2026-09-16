@@ -27,6 +27,10 @@ from src.embeddings.text_embedder import TextEmbedder
 from src.embeddings.review_aggregator import ReviewAggregator
 from src.embeddings.semantic_fuser import SemanticFuser
 from src.embeddings.hybrid_vector_builder import HybridVectorBuilder
+from scripts.recommendation.run_recommendation import (
+    cargar_accesibilidad_por_destino,
+    cargar_caracteristicas_destino,
+)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -205,6 +209,12 @@ def main():
     logger.info("Cargando sentimiento real y ocupación real por destino...")
     sentimiento_por_destino = cargar_sentimiento_por_destino(conn)
     ocupacion_por_destino = cargar_ocupacion_por_destino(conn)
+    # Accesibilidad (AENA, pasajeros anuales) y sensibilidad ambiental
+    # (destinos_caracteristicas) -- mismas fuentes reales que ya usa
+    # run_recommendation.py, antes nunca conectadas aca (se usaban
+    # placeholders fijos 0.5/0.0 para todos los destinos por igual).
+    accesibilidad_por_destino = cargar_accesibilidad_por_destino(str(db_path))
+    sensibilidad_por_destino = cargar_caracteristicas_destino(str(db_path))
     logger.info("  -> sentimiento real: %d destinos | ocupación real: %d destinos",
                 len(sentimiento_por_destino), len(ocupacion_por_destino))
     conn.close()
@@ -289,14 +299,19 @@ def main():
         else:
             estrellas_final = rating_sintetico
 
+        # Sostenibilidad = inverso de la sensibilidad ambiental (mismo
+        # criterio que calcular_candidato() en run_recommendation.py:
+        # "sostenibilidad": 1.0 - sensibilidad_real) -- menos sensible
+        # el destino, mas sostenible visitarlo.
+        sensibilidad_dest = sensibilidad_por_destino.get(e["destination"], 0.3)
         attrs = {
             "precio_base_eur_norm": norm(e["price_eur"], precio_min, precio_max),
             "duracion_dias_norm": norm(e["duration_hrs"], dur_min, dur_max),
             "nivel_ocupacion": ocupacion_por_destino.get(e["destination"], 0.5),
-            "accesibilidad_destino_norm": 0.5,
+            "accesibilidad_destino_norm": accesibilidad_por_destino.get(e["destination"], 0.5),
             "estrellas_hotel_norm": estrellas_final,
             "num_valoraciones_hotel_norm": norm(e["review_count"], rc_min, rc_max),
-            "indicador_sostenibilidad_tui": 0.0,
+            "indicador_sostenibilidad_tui": 1.0 - sensibilidad_dest,
         }
 
         hybrid = builder.build(fused, attrs)
