@@ -14,6 +14,7 @@ RUN pip install --no-cache-dir --upgrade pip \
 COPY scripts/ ./scripts/
 COPY src/ ./src/
 COPY api/ ./api/
+ARG CACHE_BUST=1
 COPY data/ ./data/
 
 ENV PYTHONUNBUFFERED=1
