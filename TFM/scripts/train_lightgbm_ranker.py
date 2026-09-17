@@ -72,7 +72,7 @@ from recommendation.run_recommendation import (  # noqa: E402
 # vienen de clima_destinos/seguridad_destinos, tablas independientes de
 # customer_bookings, sin riesgo de fuga.
 
-RANDOM_SEED = 42
+RANDOM_SEED = int(os.environ.get("TUI_RANDOM_SEED_OVERRIDE", 42))
 N_NEGATIVOS_POR_CLIENTE = 20  # candidatos "no reservados" de comparacion
 
 # Hiperparametros de produccion (31/08), ajustados tras barrido de 45
@@ -166,6 +166,7 @@ def calcular_senales_train_only(por_cliente_train: dict, experiencias: dict) -> 
     from collections import Counter
 
     ingresos_por_destino = defaultdict(float)
+    n_reservas_por_destino = defaultdict(int)
     paises_por_destino = defaultdict(list)
     meses_por_destino = defaultdict(lambda: defaultdict(int))
 
@@ -176,6 +177,7 @@ def calcular_senales_train_only(por_cliente_train: dict, experiencias: dict) -> 
                 continue
             if r.get("price_paid_eur"):
                 ingresos_por_destino[destino] += r["price_paid_eur"]
+                n_reservas_por_destino[destino] += 1
             if r.get("country"):
                 paises_por_destino[destino].append(r["country"])
             if r.get("travel_date"):
@@ -183,7 +185,17 @@ def calcular_senales_train_only(por_cliente_train: dict, experiencias: dict) -> 
                 if mes:
                     meses_por_destino[destino][mes] += 1
 
-    impacto_local = normalizar_dict(dict(ingresos_por_destino))
+    # Impacto local v2: ingreso PROMEDIO por reserva, no total -- la
+    # version original (SUM) correlacionaba fuertemente con el volumen
+    # bruto de reservas (r=0.779), actuando como via indirecta de
+    # popularidad. El promedio por reserva reduce esa correlacion a
+    # niveles no significativos (r=0.060), manteniendo el sentido
+    # original del componente (valor economico real, no volumen).
+    ingreso_promedio_por_destino = {
+        d: ingresos_por_destino[d] / n_reservas_por_destino[d]
+        for d in ingresos_por_destino if n_reservas_por_destino.get(d)
+    }
+    impacto_local = normalizar_dict(ingreso_promedio_por_destino)
 
     diversificacion_raw = {}
     for destino, paises in paises_por_destino.items():

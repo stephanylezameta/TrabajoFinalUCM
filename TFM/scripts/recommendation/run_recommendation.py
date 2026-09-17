@@ -444,14 +444,21 @@ def cargar_diversificacion_por_destino(db_path: str) -> dict:
 
 
 def cargar_impacto_local_por_destino(db_path: str) -> dict:
-    """Impacto local: ingresos totales generados por destino
-    (SUM(price_paid_eur) en customer_bookings), normalizado [0,1]. Proxy
-    economico real -- antes este componente del TDRS quedaba en valor
-    neutro fijo (0.5) por falta de fuente conectada."""
+    """Impacto local: ingreso PROMEDIO por reserva en el destino
+    (AVG(price_paid_eur) en customer_bookings), normalizado [0,1].
+
+    Version 2 (corregida, dias antes de la defensa): la version original
+    usaba SUM (ingreso total), que correlaciona fuertemente con el
+    volumen bruto de reservas (r=0.779, confirmado con diagnostico
+    dedicado) -- actuaba como una via indirecta de popularidad dentro
+    de un componente pensado para medir impacto economico, no volumen.
+    El promedio por reserva reduce esa correlacion a niveles no
+    significativos (r=0.060), preservando la intencion original del
+    componente (valor economico real generado, no cuantos visitantes)."""
     conn = sqlite3.connect(db_path)
     try:
         rows = conn.execute("""
-            SELECT e.destination, SUM(b.price_paid_eur)
+            SELECT e.destination, AVG(b.price_paid_eur)
             FROM customer_bookings b
             JOIN experiencias e ON b.experience_id = e.experience_id
             GROUP BY e.destination
