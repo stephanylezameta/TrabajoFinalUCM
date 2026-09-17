@@ -282,7 +282,7 @@ def render_spain_map(points: list[dict], metric_label: str = "Clics") -> None:
     used_chars.discard("\\")
     char_set = sorted(used_chars) or [" "]
 
-    view = pdk.ViewState(latitude=39.6, longitude=-3.6, zoom=4.7, min_zoom=3, max_zoom=9, pitch=0)
+    view = pdk.ViewState(latitude=20.0, longitude=10.0, zoom=1.6, min_zoom=1, max_zoom=9, pitch=0)
     layer = pdk.Layer(
         "ScatterplotLayer",
         data=rows,
@@ -402,8 +402,8 @@ def _render_spain_map_static(active: list[dict], intensity_key: str,
         ax.annotate(f"{p['destination']}\n{_fmt_int(value)}", (p["lon"], p["lat"]),
                     xytext=(6, 6), textcoords="offset points", fontsize=7.5,
                     color=TUI_DARK, fontweight="bold", zorder=4)
-    ax.set_xlim(-19.0, 5.5)
-    ax.set_ylim(26.5, 44.5)
+    ax.set_xlim(-120.0, 140.0)
+    ax.set_ylim(-25.0, 55.0)
     ax.set_facecolor("#FFFFFF")
     ax.set_xticks([])
     ax.set_yticks([])

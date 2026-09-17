@@ -726,9 +726,7 @@ def get_spain_interest_map(period: Period, filters: Filters | None = None) -> li
     points = []
     for r in rows:
         ref = spain_reference.get_reference(r["destination"])
-        # Solo destinos españoles: los internacionales tienen ficha (para
-        # ranking y tablas) pero no se dibujan en el mapa de España.
-        if not ref or not r.get("in_spain"):
+        if not ref:
             continue
         points.append({
             "destination": r["destination"],
