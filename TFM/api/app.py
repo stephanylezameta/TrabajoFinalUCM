@@ -357,7 +357,8 @@ def endpoint_chat(req: ChatRequest):
             resultado = [
                 {
                     "destino": r["destino_nombre"],
-                    "precio_eur": r.get("precio_eur"),
+                    "precio_paquete_referencia_eur": (r.get("datos_humanos") or {}).get("precio_paquete_referencia_eur"),
+                    "precio_paquete_es_real": (r.get("datos_humanos") or {}).get("precio_paquete_es_real"),
                     "categoria": r.get("category"),
                     "afinidad": round(r["afinidad"], 3) if r.get("afinidad") is not None else None,
                     "tdrs": round(r["tdrs"], 3) if r.get("tdrs") is not None else None,
